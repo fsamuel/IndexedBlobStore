@@ -130,6 +130,7 @@
     <ClInclude Include="Main.h" />
     <ClInclude Include="SharedMemoryAllocator.h" />
     <ClInclude Include="SharedMemoryBuffer.h" />
+    <ClInclude Include="SharedMemoryVector.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include "SharedMemoryBuffer.h"
 #include "SharedMemoryAllocator.h"
+#include "SharedMemoryVector.h"
+
 
 class BPTreeNode {
 public:
@@ -299,6 +301,18 @@ int main() {
 
         // Create a SharedMemoryAllocator for allocating objects of type int in the buffer
         SharedMemoryAllocator<int> allocator(buffer);
+        SharedMemoryVector<int> v(allocator);
+        v.push_back(10);
+        v.push_back(20);
+        v.push_back(30);
+        v.push_back(40);
+        v.push_back(50);
+        v.push_back(60);
+        v.push_back(70);
+        v.push_back(80);
+        v.push_back(90);
+        v.push_back(100);
+        v.resize(5);
         
         // Allocate 10 ints in the shared memory buffer
         int* ptr1 = allocator.allocate(sizeof(int));
@@ -312,6 +326,10 @@ int main() {
         *ptr4 = 4;
         *ptr5 = 5;
         
+        for (auto i = 0; i < v.size(); ++i) {
+            std::cout << "v[" << i << "] = " << v[i] << std::endl;
+        }
+        std::cout << "v[2] " << v[2] << " v[1] " << v[1] << " v[0] " << v[0] << std::endl;
         // Print the allocated ints
         for (auto it = allocator.begin(); it != allocator.end(); ++it) {
             std::cout << *it << std::endl;
