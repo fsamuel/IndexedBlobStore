@@ -292,14 +292,14 @@ int main() {
 
     try {
         SharedMemoryBuffer buffer("C:\\Users\\fadys\\Documents\\SharedMemoryTest");
-        std::cout << "Shared memory created successfully. Size: " << buffer.size() << std::endl;
+        std::cout << "Shared memory opened successfully. Size: " << buffer.size() << std::endl;
 
        // buffer.resize(2048);
         std::cout << "Shared memory resized successfully. New size: " << buffer.size() << std::endl;
 
         // Create a SharedMemoryAllocator for allocating objects of type int in the buffer
         SharedMemoryAllocator<int> allocator(buffer);
-
+        
         // Allocate 10 ints in the shared memory buffer
         int* ptr1 = allocator.allocate(sizeof(int));
         int* ptr2 = allocator.allocate(sizeof(int));
@@ -311,18 +311,18 @@ int main() {
         *ptr3 = 3;
         *ptr4 = 4;
         *ptr5 = 5;
-
+        
         // Print the allocated ints
         for (auto it = allocator.begin(); it != allocator.end(); ++it) {
             std::cout << *it << std::endl;
         }
 
         // Deallocate the memory
-        allocator.deallocate(ptr1);
-        allocator.deallocate(ptr2);
-        allocator.deallocate(ptr3);
+        //allocator.deallocate(ptr1);
+        ///allocator.deallocate(ptr2);
+        //allocator.deallocate(ptr3);
         allocator.deallocate(ptr4);
-        allocator.deallocate(ptr5);
+        //allocator.deallocate(ptr5);
 
     }
     catch (const std::runtime_error& e) {

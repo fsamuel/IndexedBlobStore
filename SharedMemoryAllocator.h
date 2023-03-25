@@ -7,6 +7,13 @@ public:
     using size_type = std::size_t;
     using offset_type = std::ptrdiff_t;
 
+    // Header for the allocator state in the shared memory buffer
+    struct AllocatorStateHeader {
+        uint32_t magicNumber;      // Magic number for verifying the allocator state header
+        offset_type freeListOffset; // Offset of the first free block in the free list
+        offset_type allocationOffset; // Offset of the first allocation block.
+    };
+
     // Constructor that takes a reference to the shared memory buffer to be used for allocation
     explicit SharedMemoryAllocator(SharedMemoryBuffer& buffer)
         : m_buffer(buffer) {
@@ -16,14 +23,12 @@ public:
             //throw std::runtime_error("Shared memory buffer is too small for the allocator state header");
         }
 
-        // Check if the allocator state header has already been initialized
-        AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
-        if (stateHeaderPtr->magicNumber != 0x12345678) {
-            // Initialize the allocator state header
-            stateHeaderPtr->magicNumber = 0x12345678;
-            stateHeaderPtr->freeListOffset = -1;
-            stateHeaderPtr->allocationOffset = -1;
-        }
+
+        initializeAllocatorStateIfNecessary();
+    }
+
+    AllocatorStateHeader* state() {
+        return reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
     }
 
     // Allocate memory for n objects of type T, and return a pointer to the first object
@@ -35,20 +40,12 @@ public:
         }
 
         // Calculate the number of bytes needed for the memory block
-        size_type bytesNeeded = sizeof(AllocatedNodeHeader) + sizeof(T) * n;
+        size_type bytesNeeded = calculateBytesNeeded(bytes);
 
-        // Check if the allocator state header has already been initialized
+        initializeAllocatorStateIfNecessary();
+
         AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
-        offset_type freeListOffset = -1;
-        if (stateHeaderPtr->magicNumber != 0x12345678) {
-            // Initialize the allocator state header
-            stateHeaderPtr->magicNumber = 0x12345678;
-            stateHeaderPtr->freeListOffset = -1;   
-            stateHeaderPtr->allocationOffset = -1;
-        } else {
-            // Get the free list offset from the allocator state header
-            freeListOffset = stateHeaderPtr->freeListOffset;
-        }
+        offset_type freeListOffset = stateHeaderPtr->freeListOffset;
 
         // Search the free list for a block of sufficient size
         offset_type* prevFreeListOffsetPtr = nullptr;
@@ -63,6 +60,9 @@ public:
                     *prevFreeListOffsetPtr = currentBlockPtr->nextOffset;
                 }
                 else {
+                    if (stateHeaderPtr->freeListOffset == freeListOffset) {
+                        stateHeaderPtr->freeListOffset = currentBlockPtr->nextOffset;
+                    }
                     freeListOffset = currentBlockPtr->nextOffset;
                 }
 
@@ -71,12 +71,12 @@ public:
                 nodeHeaderPtr->nextOffset = stateHeaderPtr->allocationOffset;
                 nodeHeaderPtr->prevOffset = -1;
                 if (stateHeaderPtr->allocationOffset != -1) {
-                    AllocatedNodeHeader* prev = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(stateHeaderPtr->allocationOffset));
-                    prev->nextOffset = ptrToOffset(nodeHeaderPtr);
+                    AllocatedNodeHeader* next = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(stateHeaderPtr->allocationOffset));
+                    next->prevOffset = ptrToOffset(nodeHeaderPtr);
                 }
    
                 stateHeaderPtr->allocationOffset = ptrToOffset(nodeHeaderPtr);
-                return reinterpret_cast<T*>(offsetToPtr(freeListOffset + sizeof(AllocatedNodeHeader)));
+                return reinterpret_cast<T*>(offsetToPtr(ptrToOffset(nodeHeaderPtr) + sizeof(AllocatedNodeHeader)));
             }
 
             // Move to the next block in the free list
@@ -89,6 +89,10 @@ public:
         m_buffer.resize(m_buffer.size() + bytesNeeded);
 
         AllocatedNodeHeader* nodeHeaderPtr = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(dataOffset));
+        if (stateHeaderPtr->allocationOffset != -1) {
+            AllocatedNodeHeader* prevNode = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(stateHeaderPtr->allocationOffset));
+            prevNode->prevOffset = dataOffset;
+        }
         nodeHeaderPtr->size = bytesNeeded;
         nodeHeaderPtr->nextOffset = stateHeaderPtr->allocationOffset;
         nodeHeaderPtr->prevOffset = -1;
@@ -107,10 +111,15 @@ public:
             AllocatedNodeHeader* prevNode = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(currentNode->prevOffset));
             prevNode->nextOffset = currentNode->nextOffset;
         }
+        if (currentNode->nextOffset != -1) {
+            AllocatedNodeHeader* nextNode = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(currentNode->nextOffset));
+            nextNode->prevOffset = currentNode->prevOffset;
+
+        }
         // Add the block to the free list
         AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
         if (stateHeaderPtr->allocationOffset == nodeHeaderOffset) {
-            stateHeaderPtr->allocationOffset = -1;
+            stateHeaderPtr->allocationOffset = currentNode->nextOffset;
         }
         FreeNodeHeader* freeNodePtr = reinterpret_cast<FreeNodeHeader*>(offsetToPtr(nodeHeaderOffset));
         freeNodePtr->size = currentNode->size;
@@ -145,12 +154,27 @@ private:
         offset_type nextOffset; // Offset of the next free block in the free list
     };
 
-    // Header for the allocator state in the shared memory buffer
-    struct AllocatorStateHeader {
-        uint32_t magicNumber;      // Magic number for verifying the allocator state header
-        offset_type freeListOffset; // Offset of the first free block in the free list
-        offset_type allocationOffset; // Offset of the first allocation block.
-    };
+    void initializeAllocatorStateIfNecessary() {
+        // Check if the allocator state header has already been initialized
+        AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+        if (stateHeaderPtr->magicNumber != 0x12345678) {
+            // Initialize the allocator state header
+            stateHeaderPtr->magicNumber = 0x12345678;
+            stateHeaderPtr->freeListOffset = -1;
+            stateHeaderPtr->allocationOffset = -1;
+        }
+    }
+
+    static size_type calculateBytesNeeded(size_type bytes) {
+        // Calculate the number of objects needed based on the requested size and the size of each object
+        size_type n = bytes / sizeof(T);
+        if (bytes % sizeof(T) != 0) {
+            n++;
+        }
+
+        // Calculate the number of bytes needed for the memory block
+        return sizeof(AllocatedNodeHeader) + sizeof(T) * n;
+    }
 
     // Helper method to convert a pointer to an offset relative to the start of the buffer
     offset_type ptrToOffset(const void* ptr) const {
