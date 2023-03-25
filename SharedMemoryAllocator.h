@@ -33,19 +33,12 @@ public:
 
     // Allocate memory for n objects of type T, and return a pointer to the first object
     T* allocate(size_type bytes) {
-        // Calculate the number of objects needed based on the requested size and the size of each object
-        size_type n = bytes / sizeof(T);
-        if (bytes % sizeof(T) != 0) {
-            n++;
-        }
-
         // Calculate the number of bytes needed for the memory block
         size_type bytesNeeded = calculateBytesNeeded(bytes);
 
         initializeAllocatorStateIfNecessary();
 
-        AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
-        offset_type freeListOffset = stateHeaderPtr->freeListOffset;
+        offset_type freeListOffset = state()->freeListOffset;
 
         // Search the free list for a block of sufficient size
         offset_type* prevFreeListOffsetPtr = nullptr;
@@ -53,30 +46,27 @@ public:
             // Get a pointer to the current block and its size
             FreeNodeHeader* currentBlockPtr = reinterpret_cast<FreeNodeHeader*>(offsetToPtr(freeListOffset));
             size_type blockSize = currentBlockPtr->size;
+            
+            if (blockSize > bytesNeeded + sizeof(FreeNodeHeader)) {
+                currentBlockPtr->size = blockSize - bytesNeeded;
+                offset_type dataOffset = freeListOffset + blockSize - bytesNeeded;
+                return newAllocatedNodeAtOffset(dataOffset, bytesNeeded);
 
-            if (blockSize >= bytesNeeded) {
+            } else if (blockSize >= bytesNeeded) {
                 // Found a block that is large enough, remove it from the free list and return a pointer to its data
                 if (prevFreeListOffsetPtr) {
                     *prevFreeListOffsetPtr = currentBlockPtr->nextOffset;
                 }
                 else {
-                    if (stateHeaderPtr->freeListOffset == freeListOffset) {
-                        stateHeaderPtr->freeListOffset = currentBlockPtr->nextOffset;
+                    if (state()->freeListOffset == freeListOffset) {
+                        state()->freeListOffset = currentBlockPtr->nextOffset;
                     }
                     freeListOffset = currentBlockPtr->nextOffset;
                 }
 
+                // Return a pointer to the data in the new block
                 AllocatedNodeHeader* nodeHeaderPtr = reinterpret_cast<AllocatedNodeHeader*>(currentBlockPtr);
-                nodeHeaderPtr->size = bytesNeeded;
-                nodeHeaderPtr->nextOffset = stateHeaderPtr->allocationOffset;
-                nodeHeaderPtr->prevOffset = -1;
-                if (stateHeaderPtr->allocationOffset != -1) {
-                    AllocatedNodeHeader* next = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(stateHeaderPtr->allocationOffset));
-                    next->prevOffset = ptrToOffset(nodeHeaderPtr);
-                }
-   
-                stateHeaderPtr->allocationOffset = ptrToOffset(nodeHeaderPtr);
-                return reinterpret_cast<T*>(offsetToPtr(ptrToOffset(nodeHeaderPtr) + sizeof(AllocatedNodeHeader)));
+                return newAllocatedNodeAtOffset(ptrToOffset(nodeHeaderPtr), max(bytesNeeded, blockSize));              
             }
 
             // Move to the next block in the free list
@@ -88,18 +78,8 @@ public:
         offset_type dataOffset = m_buffer.size();
         m_buffer.resize(m_buffer.size() + bytesNeeded);
 
-        AllocatedNodeHeader* nodeHeaderPtr = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(dataOffset));
-        if (stateHeaderPtr->allocationOffset != -1) {
-            AllocatedNodeHeader* prevNode = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(stateHeaderPtr->allocationOffset));
-            prevNode->prevOffset = dataOffset;
-        }
-        nodeHeaderPtr->size = bytesNeeded;
-        nodeHeaderPtr->nextOffset = stateHeaderPtr->allocationOffset;
-        nodeHeaderPtr->prevOffset = -1;
-        stateHeaderPtr->allocationOffset = ptrToOffset(nodeHeaderPtr);
-
         // Return a pointer to the data in the new block
-        return reinterpret_cast<T*>(offsetToPtr(dataOffset + sizeof(AllocatedNodeHeader)));
+        return newAllocatedNodeAtOffset(dataOffset, bytesNeeded);
     }
 
     // Deallocate memory at the given pointer with the given size
@@ -174,6 +154,20 @@ private:
 
         // Calculate the number of bytes needed for the memory block
         return sizeof(AllocatedNodeHeader) + sizeof(T) * n;
+    }
+
+    T* newAllocatedNodeAtOffset(offset_type offset, size_type size) {
+        AllocatedNodeHeader* nodeHeaderPtr = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(offset));
+        nodeHeaderPtr->size = size;
+        nodeHeaderPtr->nextOffset = state()->allocationOffset;
+        nodeHeaderPtr->prevOffset = -1;
+        if (state()->allocationOffset != -1) {
+            AllocatedNodeHeader* nextNode = reinterpret_cast<AllocatedNodeHeader*>(offsetToPtr(state()->allocationOffset));
+            nextNode->prevOffset = offset;
+        }
+        state()->allocationOffset = offset;
+
+        return reinterpret_cast<T*>(offsetToPtr(offset + sizeof(AllocatedNodeHeader)));
     }
 
     // Helper method to convert a pointer to an offset relative to the start of the buffer
