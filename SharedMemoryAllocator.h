@@ -44,11 +44,11 @@ public:
 	T* allocate(size_type bytes) {
 		// Calculate the number of bytes needed for the memory block
 		size_type bytesNeeded = calculateBytesNeeded(bytes);
-        if (bytes % sizeof(T) != 0) {
-            n++;
-        }
+
+		initializeAllocatorStateIfNecessary();
+
 		offset_type freeListOffset = state()->freeListOffset;
-        size_type bytesNeeded = calculateBytesNeeded(bytes);
+
 		// Search the free list for a block of sufficient size
 		offset_type* prevFreeListOffsetPtr = nullptr;
 		while (freeListOffset != -1) {
@@ -73,7 +73,7 @@ public:
 					}
 					freeListOffset = currentBlockPtr->nextOffset;
 				}
-                else {
+
 				// Return a pointer to the data in the new block
 				AllocatedNodeHeader* nodeHeaderPtr = reinterpret_cast<AllocatedNodeHeader*>(currentBlockPtr);
 				return newAllocatedNodeAtOffset(ToOffset(nodeHeaderPtr), max(bytesNeeded, blockSize));
@@ -83,11 +83,11 @@ public:
 			prevFreeListOffsetPtr = &(currentBlockPtr->nextOffset);
 			freeListOffset = currentBlockPtr->nextOffset;
 		}
-            }
 
-            // Move to the next block in the free list
-            prevFreeListOffsetPtr = &(currentBlockPtr->nextOffset);
-            freeListOffset = currentBlockPtr->nextOffset;
+		// No block of sufficient size was found, resize the buffer and allocate a new block
+		offset_type dataOffset = m_buffer.size();
+		m_buffer.resize(m_buffer.size() + bytesNeeded);
+
 		// Return a pointer to the data in the new block
 		return newAllocatedNodeAtOffset(dataOffset, bytesNeeded);
 	}
@@ -99,12 +99,6 @@ public:
 		T* ptr = ToPtr<T>(offset);
 		deallocate(ptr);
 	}
-        nodeHeaderPtr->prevOffset = -1;
-        stateHeaderPtr->allocationOffset = ptrToOffset(nodeHeaderPtr);
-
-        // Return a pointer to the data in the new block
-        return reinterpret_cast<T*>(offsetToPtr(dataOffset + sizeof(AllocatedNodeHeader)));
-    }
 
 	// Deallocate memory at the given pointer
 	void deallocate(T* ptr) {
@@ -202,6 +196,12 @@ private:
 		size_type n = bytes / sizeof(T);
 		if (bytes % sizeof(T) != 0) {
 			n++;
+		}
+
+		// Calculate the number of bytes needed for the memory block
+		return sizeof(AllocatedNodeHeader) + sizeof(T) * n;
+	}
+
 	T* newAllocatedNodeAtOffset(offset_type offset, size_type size) {
 		AllocatedNodeHeader* nodeHeaderPtr = ToPtr<AllocatedNodeHeader>(offset);
 		nodeHeaderPtr->size = size;
@@ -212,12 +212,6 @@ private:
 			nextNode->prevOffset = offset;
 		}
 		state()->allocationOffset = offset;
-	}
-
-    // Helper method to convert a pointer to an offset relative to the start of the buffer
-    offset_type ptrToOffset(const void* ptr) const {
-        return reinterpret_cast<const char*>(ptr) - m_buffer.data();
-    }
 
 		return ToPtr<T>(offset + sizeof(AllocatedNodeHeader));
 	}
