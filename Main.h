@@ -312,7 +312,7 @@ int main() {
         v.push_back(80);
         v.push_back(90);
         v.push_back(100);
-        v.resize(5);
+        //v.resize(5);
         
         // Allocate 10 ints in the shared memory buffer
         int* ptr1 = allocator.allocate(sizeof(int));

@@ -117,7 +117,12 @@ public:
 		// Add the block to the free list
 		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
 		if (stateHeaderPtr->allocationOffset == nodeHeaderOffset) {
-			stateHeaderPtr->allocationOffset = currentNode->nextOffset;
+			if (currentNode->nextOffset != nodeHeaderOffset) {
+				stateHeaderPtr->allocationOffset = currentNode->nextOffset;
+			}
+			else {
+				stateHeaderPtr->allocationOffset = -1;
+			}
 		}
 		FreeNodeHeader* freeNodePtr = ToPtr<FreeNodeHeader>(nodeHeaderOffset);
 		freeNodePtr->size = currentNode->size;
@@ -163,10 +168,46 @@ public:
 		return Iterator(ToPtr<AllocatedNodeHeader>(stateHeaderPtr->allocationOffset), this);
 	}
 
+	auto begin() const {
+		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+		if (stateHeaderPtr->allocationOffset == -1)
+			return ConstIterator(nullptr, this);
+		return ConstIterator(ToPtr<AllocatedNodeHeader>(stateHeaderPtr->allocationOffset), this);
+	}
+
 	// Return an iterator to the end of the allocated objects
 	auto end() {
 		return Iterator(nullptr, this);
 	}
+
+	auto end() const {
+		return ConstIterator(nullptr, this);
+	}
+
+	auto first() {
+		auto lastAllocation = begin();
+		auto firstAllocation = --lastAllocation;
+		if (firstAllocation == end())
+			return lastAllocation;
+		return firstAllocation;
+	}
+
+	auto first() const{
+		auto lastAllocation = begin();
+		auto firstAllocation = --lastAllocation;
+		if (firstAllocation == end())
+			return lastAllocation;
+		return firstAllocation;
+	}
+
+	auto last() {
+		return begin();
+	}
+
+	auto last() const{
+		return begin();
+	}
+
 private:
 	// Header for an allocated node in the allocator
 	struct AllocatedNodeHeader {
@@ -205,11 +246,14 @@ private:
 	T* newAllocatedNodeAtOffset(offset_type offset, size_type size) {
 		AllocatedNodeHeader* nodeHeaderPtr = ToPtr<AllocatedNodeHeader>(offset);
 		nodeHeaderPtr->size = size;
-		nodeHeaderPtr->nextOffset = state()->allocationOffset;
-		nodeHeaderPtr->prevOffset = -1;
 		if (state()->allocationOffset != -1) {
 			AllocatedNodeHeader* nextNode = ToPtr<AllocatedNodeHeader>(state()->allocationOffset);
+			nodeHeaderPtr->nextOffset = state()->allocationOffset;
+			nodeHeaderPtr->prevOffset = nextNode->prevOffset;
 			nextNode->prevOffset = offset;
+		} else {
+			nodeHeaderPtr->nextOffset = offset;
+			nodeHeaderPtr->prevOffset = offset;
 		}
 		state()->allocationOffset = offset;
 
@@ -235,11 +279,24 @@ private:
 		Iterator& operator++() {
 			if (m_nodePtr == nullptr)
 				return *this;
-			if (m_nodePtr->nextOffset == -1) {
+
+			if ((m_nodePtr->nextOffset == -1) || (m_nodePtr->nextOffset == m_allocator->ToOffset(m_nodePtr))) {
+				m_nodePtr = nullptr;
+			} else {
+				m_nodePtr = m_allocator->ToPtr<AllocatedNodeHeader>(m_nodePtr->nextOffset);
+			}
+			return *this;
+		}
+
+		Iterator& operator--() {
+			if (m_nodePtr == nullptr)
+				return *this;
+
+			if ((m_nodePtr->prevOffset == -1) || (m_nodePtr->prevOffset == m_allocator->ToOffset(m_nodePtr))) {
 				m_nodePtr = nullptr;
 			}
 			else {
-				m_nodePtr = m_allocator->ToPtr<AllocatedNodeHeader>(m_nodePtr->nextOffset);
+				m_nodePtr = m_allocator->ToPtr<AllocatedNodeHeader>(m_nodePtr->prevOffset);
 			}
 			return *this;
 		}
@@ -255,6 +312,59 @@ private:
 	private:
 		AllocatedNodeHeader* m_nodePtr;
 		SharedMemoryAllocator* m_allocator;
+	};
+
+	// Iterator class for iterating over the allocated nodes in the allocator
+	class ConstIterator {
+	public:
+		ConstIterator(const AllocatedNodeHeader* nodePtr,
+			const SharedMemoryAllocator* allocator) :
+			m_nodePtr(nodePtr), m_allocator(allocator) {}
+
+		const T& operator*() const {
+			return *reinterpret_cast<const T*>(m_nodePtr + 1);
+		}
+
+		const T* operator->() const {
+			return reinterpret_cast<const T*>(m_nodePtr + 1);
+		}
+
+		ConstIterator& operator++() {
+			if (m_nodePtr == nullptr)
+				return *this;
+			if (m_nodePtr->nextOffset == -1) {
+				m_nodePtr = nullptr;
+			}
+			else {
+				m_nodePtr = m_allocator->ToPtr<AllocatedNodeHeader>(m_nodePtr->nextOffset);
+			}
+			return *this;
+		}
+
+		ConstIterator& operator--() {
+			if (m_nodePtr == nullptr)
+				return *this;
+
+			if ((m_nodePtr->prevOffset == -1) || (m_nodePtr->prevOffset == m_allocator->ToOffset(m_nodePtr))) {
+				m_nodePtr = nullptr;
+			}
+			else {
+				m_nodePtr = m_allocator->ToPtr<AllocatedNodeHeader>(m_nodePtr->prevOffset);
+			}
+			return *this;
+		}
+
+		bool operator==(const ConstIterator& other) const {
+			return m_nodePtr == other.m_nodePtr;
+		}
+
+		bool operator!=(const ConstIterator& other) const {
+			return m_nodePtr != other.m_nodePtr;
+		}
+
+	private:
+		const AllocatedNodeHeader* m_nodePtr;
+		const SharedMemoryAllocator* m_allocator;
 	};
 
 
