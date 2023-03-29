@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include "BlobStore.h"
 #include "SharedMemoryBuffer.h"
 #include "SharedMemoryAllocator.h"
 #include "SharedMemoryVector.h"
@@ -293,6 +294,19 @@ int main() {
     }
 
     try {
+        SharedMemoryBuffer dataBuffer("C:\\Users\\fadys\\Documents\\DataTest");
+        SharedMemoryBuffer metadataBuffer("C:\\Users\\fadys\\Documents\\MetadataTest");
+        BlobStore blobStore(std::move(metadataBuffer), std::move(dataBuffer));
+        char* ptr = nullptr;
+        blobStore.Drop(2);
+        blobStore.Drop(3);
+        char* last = blobStore.Get(1);
+        if (last != nullptr) {
+            std::cout << "Last Blob: " << *reinterpret_cast<int*>(last) << std::endl;
+        }
+        size_t index = blobStore.Put(sizeof(int), ptr);
+        *reinterpret_cast<int*>(ptr) = 1337;
+
         SharedMemoryBuffer buffer("C:\\Users\\fadys\\Documents\\SharedMemoryTest");
         std::cout << "Shared memory opened successfully. Size: " << buffer.size() << std::endl;
 
@@ -300,7 +314,7 @@ int main() {
         std::cout << "Shared memory resized successfully. New size: " << buffer.size() << std::endl;
 
         // Create a SharedMemoryAllocator for allocating objects of type int in the buffer
-        SharedMemoryAllocator<int> allocator(buffer);
+        SharedMemoryAllocator<int> allocator(std::move(buffer));
         SharedMemoryVector<int> v(allocator);
         v.push_back(10);
         v.push_back(20);

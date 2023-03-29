@@ -127,12 +127,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="BlobStore.h" />
     <ClInclude Include="Main.h" />
     <ClInclude Include="SharedMemoryAllocator.h" />
     <ClInclude Include="SharedMemoryBuffer.h" />
     <ClInclude Include="SharedMemoryVector.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BlobStore.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="SharedMemoryBuffer.cpp" />
   </ItemGroup>

@@ -1,6 +1,8 @@
 #ifndef __SHARED_MEMORY_ALLOCATOR_H_
 #define __SHARED_MEMORY_ALLOCATOR_H_
 
+#include "SharedMemoryBuffer.h"
+
 template <typename T>
 class SharedMemoryAllocator {
 public:
@@ -14,7 +16,12 @@ public:
 
 	// Helper method to convert an offset relative to the start of the buffer to a pointer
 	template<class U>
-	U* ToPtr(offset_type offset) const {
+	const U* ToPtr(offset_type offset) const {
+		return reinterpret_cast<const U*>(reinterpret_cast<const char*>(m_buffer.data()) + offset);
+	}
+
+	template<class U>
+	U* ToPtr(offset_type offset)  {
 		return reinterpret_cast<U*>(reinterpret_cast<char*>(m_buffer.data()) + offset);
 	}
 
@@ -26,7 +33,7 @@ public:
 	};
 
 	// Constructor that takes a reference to the shared memory buffer to be used for allocation
-	explicit SharedMemoryAllocator(SharedMemoryBuffer& buffer)
+	explicit SharedMemoryAllocator(SharedMemoryBuffer&& buffer)
 		: m_buffer(buffer) {
 		// Check if the buffer is large enough to hold the allocator state header
 		if (m_buffer.size() < sizeof(AllocatorStateHeader)) {
@@ -38,6 +45,10 @@ public:
 
 	AllocatorStateHeader* state() {
 		return reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+	}
+
+	const std::string& bufferName() const {
+		return m_buffer.name();
 	}
 
 	// Allocate memory for n objects of type T, and return a pointer to the first object
@@ -135,7 +146,7 @@ public:
 			return 0;
 		}
 		offset_type nodeHeaderOffset = offset - sizeof(AllocatedNodeHeader);
-		AllocatedNodeHeader* currentNode = ToPtr<AllocatedNodeHeader>(nodeHeaderOffset);
+		const AllocatedNodeHeader* currentNode = ToPtr<AllocatedNodeHeader>(nodeHeaderOffset);
 		return (currentNode->size - sizeof(AllocatedNodeHeader)) / sizeof(T);
 	}
 
@@ -169,7 +180,7 @@ public:
 	}
 
 	auto begin() const {
-		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+		const AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<const AllocatorStateHeader*>(m_buffer.data());
 		if (stateHeaderPtr->allocationOffset == -1)
 			return ConstIterator(nullptr, this);
 		return ConstIterator(ToPtr<AllocatedNodeHeader>(stateHeaderPtr->allocationOffset), this);
@@ -368,7 +379,7 @@ private:
 	};
 
 
-	SharedMemoryBuffer& m_buffer;  // Reference to the shared memory buffer used for allocation
+	SharedMemoryBuffer m_buffer;  // Reference to the shared memory buffer used for allocation
 };
 
 

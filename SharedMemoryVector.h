@@ -1,6 +1,7 @@
 #ifndef __SHARED_MEMORY_VECTOR_H
 #define __SHARED_MEMORY_VECTOR_H
 
+#include <stdexcept> 
 #include "SharedMemoryAllocator.h"
 
 template<typename T, typename Allocator = SharedMemoryAllocator<T>>

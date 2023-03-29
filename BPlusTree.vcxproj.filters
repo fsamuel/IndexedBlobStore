@@ -27,12 +27,18 @@
     <ClInclude Include="SharedMemoryVector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BlobStore.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="SharedMemoryBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BlobStore.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
