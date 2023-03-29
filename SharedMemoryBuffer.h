@@ -19,13 +19,27 @@ public:
     SharedMemoryBuffer(const std::string& name, std::size_t size);
     ~SharedMemoryBuffer();
 
-    const std::string& name() const;
-    std::size_t size() const;
-    std::size_t size_on_disk() const;
     void resize(std::size_t new_size);
 
-    void* data();
-    const void* data() const;
+    const std::string& name() const {
+        return m_name;
+    }
+
+    std::size_t size() const {
+        return m_size;
+    }
+
+    std::size_t size_on_disk() const {
+        return m_file_size;
+    }
+
+        void* data() {
+        return m_data;
+    }
+
+    const void*data() const {
+        return m_data;
+    }
 
 private:
     void open_file();

@@ -197,7 +197,7 @@ public:
 
 	auto first() {
 		auto lastAllocation = begin();
-		auto firstAllocation = --lastAllocation;
+		auto firstAllocation = --begin();
 		if (firstAllocation == end())
 			return lastAllocation;
 		return firstAllocation;
@@ -205,7 +205,7 @@ public:
 
 	auto first() const{
 		auto lastAllocation = begin();
-		auto firstAllocation = --lastAllocation;
+		auto firstAllocation = --begin();
 		if (firstAllocation == end())
 			return lastAllocation;
 		return firstAllocation;

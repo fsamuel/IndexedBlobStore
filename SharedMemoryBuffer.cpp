@@ -50,18 +50,6 @@ SharedMemoryBuffer::~SharedMemoryBuffer() {
     close_file();
 }
 
-const std::string& SharedMemoryBuffer::name() const {
-    return m_name;
-}
-
-std::size_t SharedMemoryBuffer::size() const {
-    return m_size;
-}
-
-std::size_t SharedMemoryBuffer::size_on_disk() const {
-    return m_file_size;
-}
-
 void SharedMemoryBuffer::resize(std::size_t new_size) {
     new_size = max(new_size, size_on_disk());
 
@@ -94,14 +82,6 @@ void SharedMemoryBuffer::resize(std::size_t new_size) {
     map_memory(new_size);
 
 
-}
-
-void* SharedMemoryBuffer::data() {
-    return m_data;
-}
-
-const void* SharedMemoryBuffer::data() const {
-    return m_data;
 }
 
 void SharedMemoryBuffer::open_file() {
