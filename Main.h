@@ -306,56 +306,6 @@ int main() {
         }
         size_t index = blobStore.Put(sizeof(int), ptr);
         *reinterpret_cast<int*>(ptr) = 1337;
-
-        SharedMemoryBuffer buffer("C:\\Users\\fadys\\Documents\\SharedMemoryTest");
-        std::cout << "Shared memory opened successfully. Size: " << buffer.size() << std::endl;
-
-       // buffer.resize(2048);
-        std::cout << "Shared memory resized successfully. New size: " << buffer.size() << std::endl;
-
-        // Create a SharedMemoryAllocator for allocating objects of type int in the buffer
-        SharedMemoryAllocator<int> allocator(std::move(buffer));
-        SharedMemoryVector<int> v(allocator);
-        v.push_back(10);
-        v.push_back(20);
-        v.push_back(30);
-        v.push_back(40);
-        v.push_back(50);
-        v.push_back(60);
-        v.push_back(70);
-        v.push_back(80);
-        v.push_back(90);
-        v.push_back(100);
-        //v.resize(5);
-        
-        // Allocate 10 ints in the shared memory buffer
-        int* ptr1 = allocator.allocate(sizeof(int));
-        int* ptr2 = allocator.allocate(sizeof(int));
-        int* ptr3 = allocator.allocate(sizeof(int));
-        int* ptr4 = allocator.allocate(sizeof(int));
-        int* ptr5 = allocator.allocate(sizeof(int));
-        *ptr1 = 1;
-        *ptr2 = 2;
-        *ptr3 = 3;
-        *ptr4 = 4;
-        *ptr5 = 5;
-        
-        for (auto i = 0; i < v.size(); ++i) {
-            std::cout << "v[" << i << "] = " << v[i] << std::endl;
-        }
-        std::cout << "v[2] " << v[2] << " v[1] " << v[1] << " v[0] " << v[0] << std::endl;
-        // Print the allocated ints
-        for (auto it = allocator.begin(); it != allocator.end(); ++it) {
-            std::cout << *it << std::endl;
-        }
-
-        // Deallocate the memory
-        //allocator.deallocate(ptr1);
-        ///allocator.deallocate(ptr2);
-        //allocator.deallocate(ptr3);
-        allocator.deallocate(ptr4);
-        //allocator.deallocate(ptr5);
-
     }
     catch (const std::runtime_error& e) {
         std::cerr << "Error: " << e.what() << std::endl;

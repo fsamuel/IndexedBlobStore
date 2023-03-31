@@ -28,7 +28,7 @@ private:
 		offset_type data;
 	};
 
-	allocator_type m_allocator;
+	allocator_type& m_allocator;
 
 	void initializeVectorStateIfNecessary() {
 		auto it = m_allocator.first();
@@ -54,7 +54,7 @@ private:
 	}
 
 public:
-	explicit SharedMemoryVector(const allocator_type& alloc) : m_allocator(alloc) {
+	explicit SharedMemoryVector(allocator_type& alloc) : m_allocator(alloc) {
 		initializeVectorStateIfNecessary();
 	}
 

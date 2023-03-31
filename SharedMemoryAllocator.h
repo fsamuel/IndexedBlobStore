@@ -34,13 +34,17 @@ public:
 
 	// Constructor that takes a reference to the shared memory buffer to be used for allocation
 	explicit SharedMemoryAllocator(SharedMemoryBuffer&& buffer)
-		: m_buffer(buffer) {
+		: m_buffer(std::move(buffer)) {
 		// Check if the buffer is large enough to hold the allocator state header
 		if (m_buffer.size() < sizeof(AllocatorStateHeader)) {
 			m_buffer.resize(sizeof(AllocatorStateHeader));
 		}
 
 		initializeAllocatorStateIfNecessary();
+	}
+
+	explicit SharedMemoryAllocator(SharedMemoryAllocator&& other)
+		: m_buffer(std::move(m_buffer)) {
 	}
 
 	AllocatorStateHeader* state() {
@@ -169,6 +173,11 @@ public:
 	void destroy(U* p)
 	{
 		p->~U();
+	}
+
+	SharedMemoryAllocator& operator=(SharedMemoryAllocator&& other) noexcept {
+		m_buffer = std::move(other.m_buffer);
+		return *this;
 	}
 
 	// Return an iterator to the first allocated object

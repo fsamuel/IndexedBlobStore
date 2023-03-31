@@ -83,7 +83,8 @@ public:
         }
 
         // Swap the new allocator with the old one and remove the old shared memory file
-        std::swap(allocator, newAllocator);
+       // std::swap(allocator, newAllocator);
+        allocator = std::move(newAllocator);
         std::remove(bufferName.c_str());
 
         // Rename the new shared memory file to the original name
