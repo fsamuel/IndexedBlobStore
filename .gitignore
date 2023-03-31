@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/test_buffer
+/MetadataBuffer
+/DataBuffer_data_compact
