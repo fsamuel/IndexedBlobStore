@@ -206,8 +206,3 @@ TEST_F(SharedMemoryBufferTest, MultipleInstancesDifferentSizes) {
 		EXPECT_EQ(data1[i], data2[i]);
 	}
 }
-
-int main(int argc, char** argv) {
-	::testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
-}

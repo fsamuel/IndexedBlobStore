@@ -154,8 +154,6 @@ void SharedMemoryBuffer::map_memory(std::size_t size) {
 	m_file_mapping = CreateFileMappingA(m_file_handle, nullptr, PAGE_READWRITE, 0, size, nullptr);
 	if (m_file_mapping == nullptr) {
 		m_data = nullptr;
-		CloseHandle(m_file_handle);
-		m_file_handle = nullptr;
 		return;
 	}
 	// Map the file into memory
