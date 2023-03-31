@@ -183,6 +183,20 @@ public:
 		state()->data = m_allocator.ToOffset(new_data);
 	}
 
+	const T* data() const noexcept {
+		if (state()->data == -1) {
+			return nullptr;
+		}
+		return m_allocator.ToPtr<T>(state()->data);
+	}
+
+	T* data() noexcept {
+		if (state()->data == -1) {
+			return nullptr;
+		}
+		return m_allocator.ToPtr<T>(state()->data);
+	}
+
 	reference operator[](size_type pos) {
 		return *(begin() + pos);
 	}

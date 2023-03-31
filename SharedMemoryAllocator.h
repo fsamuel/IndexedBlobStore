@@ -160,7 +160,7 @@ public:
 		}
 		offset_type nodeHeaderOffset = ToOffset(reinterpret_cast<AllocatedNodeHeader*>(ptr) - 1);
 		AllocatedNodeHeader* currentNode = ToPtr<AllocatedNodeHeader>(nodeHeaderOffset);
-		return currentNode->size;
+		return (currentNode->size - sizeof(AllocatedNodeHeader)) / sizeof(T);
 	}
 
 	template<typename U, typename... Args>
