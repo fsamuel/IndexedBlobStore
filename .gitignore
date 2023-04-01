@@ -365,3 +365,6 @@ FodyWeavers.xsd
 /MetadataBuffer
 /DataBuffer_data_compact
 /DataBuffer
+/testfile2
+/testfile1
+/sized_file.bin
