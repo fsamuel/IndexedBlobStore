@@ -17,14 +17,6 @@ size_t BlobStore::Put(size_t size, char*& ptr) {
     return index;
 }
 
-char* BlobStore::Get(size_t index) {
-    if (index >= metadata.size() || metadata[index].nextFreeIndex != -1) {
-        return nullptr;
-    }
-    BlobMetadata& metadataEntry = metadata[index];
-    return allocator.ToPtr<char>(metadataEntry.offset);
-}
-
 void BlobStore::Drop(size_t index) {
     if (index >= metadata.size() || metadata[index].nextFreeIndex != -1) {
         return;
@@ -73,4 +65,15 @@ size_t BlobStore::findFreeSlot() {
         metadata.push_back({ 0, -1, -1 });
         return metadata.size() - 1;
     }
+}
+
+// Returns the number of free slots in the metadata vector
+size_t BlobStore::freeSlotCount() const {
+	size_t count = 0;
+	size_t index = metadata[0].nextFreeIndex;
+    while (index != -1) {
+		++count;
+		index = metadata[index].nextFreeIndex;
+	}
+	return count;
 }

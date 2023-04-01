@@ -300,7 +300,7 @@ int main() {
         char* ptr = nullptr;
         blobStore.Drop(2);
         blobStore.Drop(3);
-        char* last = blobStore.Get(1);
+        char* last = blobStore.Get<char>(1);
         if (last != nullptr) {
             std::cout << "Last Blob: " << *reinterpret_cast<int*>(last) << std::endl;
         }

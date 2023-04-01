@@ -22,7 +22,7 @@ protected:
 
 TEST_F(BlobStoreTest, CreateEmptyBlobStore) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	EXPECT_EQ(store.size(), 0);
+	EXPECT_EQ(store.GetSize(), 0);
 }
 
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
@@ -33,9 +33,20 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 	char* ptr2 = nullptr;
 	size_t token2 = store.Put(100, ptr2);
 	strcpy(ptr2, "Hello World!");
-	EXPECT_EQ(store.size(), 2);
-	EXPECT_EQ(store.Get(token1), ptr1);
-	EXPECT_EQ(store.Get(token2), ptr2);
+	EXPECT_EQ(store.GetSize(), 2);
+	EXPECT_EQ(store[token1], ptr1);
+	EXPECT_EQ(store[token2], ptr2);
+}
+
+// Creates two blobs with the templatized Put method, and then gets them back.
+TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsUsingTemplatizedPut) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	size_t token1 = store.Put<int>(sizeof(int), 100);
+	size_t token2 = store.Put<int>(sizeof(int), 1337);
+
+	EXPECT_EQ(store.GetSize(), 2);
+	EXPECT_EQ(*store.Get<int>(token1), 100);
+	EXPECT_EQ(*store.Get<int>(token2), 1337);
 }
 
 // Creates a few blobs, deletes some in the middle, and the compacts the store.
@@ -59,25 +70,28 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSome) {
 	char* ptr6 = nullptr;
 	size_t token6 = store.Put(100, ptr6);
 	strcpy(ptr6, "Hello World!");
-	EXPECT_EQ(store.size(), 6);
-	EXPECT_EQ(store.Get(token1), ptr1);
-	EXPECT_EQ(store.Get(token2), ptr2);
-	EXPECT_EQ(store.Get(token3), ptr3);
-	EXPECT_EQ(store.Get(token4), ptr4);
-	EXPECT_EQ(store.Get(token5), ptr5);
-	EXPECT_EQ(store.Get(token6), ptr6);
+	EXPECT_EQ(store.GetSize(), 6);
+	EXPECT_EQ(store.Get<char>(token1), ptr1);
+	EXPECT_EQ(store.Get<char>(token2), ptr2);
+	EXPECT_EQ(store.Get<char>(token3), ptr3);
+	EXPECT_EQ(store.Get<char>(token4), ptr4);
+	EXPECT_EQ(store.Get<char>(token5), ptr5);
+	EXPECT_EQ(store.Get<char>(token6), ptr6);
 	store.Drop(token2);
+	EXPECT_EQ(store.GetSize(), 5);
 	store.Drop(token4);
+	EXPECT_EQ(store.GetSize(), 4);
 	store.Drop(token6);
-	EXPECT_EQ(store.Get(token1), ptr1);
-	EXPECT_EQ(store.Get(token3), ptr3);
-	EXPECT_EQ(store.Get(token5), ptr5);
+	EXPECT_EQ(store.GetSize(), 3);
+	EXPECT_EQ(store.Get<char>(token1), ptr1);
+	EXPECT_EQ(store.Get<char>(token3), ptr3);
+	EXPECT_EQ(store.Get<char>(token5), ptr5);
 	store.Compact();
-	ptr1 = store.Get(token1);
+	ptr1 = store.Get<char>(token1);
 	EXPECT_EQ(strcmp(ptr1, "This is a test."), 0);
-	ptr3 = store.Get(token3);
+	ptr3 = store.Get<char>(token3);
 	EXPECT_EQ(strcmp(ptr3, "This is a test."), 0);
-	ptr5 = store.Get(token5);
+	ptr5 = store.Get<char>(token5);
 	EXPECT_EQ(strcmp(ptr5, "This is a test."), 0);
 }
 
@@ -102,25 +116,25 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 	char* ptr6 = nullptr;
 	size_t token6 = store.Put(100, ptr6);
 	strcpy(ptr6, "Hello World!");
-	EXPECT_EQ(store.size(), 6);
-	EXPECT_EQ(store.Get(token1), ptr1);
-	EXPECT_EQ(store.Get(token2), ptr2);
-	EXPECT_EQ(store.Get(token3), ptr3);
-	EXPECT_EQ(store.Get(token4), ptr4);
-	EXPECT_EQ(store.Get(token5), ptr5);
-	EXPECT_EQ(store.Get(token6), ptr6);
+	EXPECT_EQ(store.GetSize(), 6);
+	EXPECT_EQ(store.Get<char>(token1), ptr1);
+	EXPECT_EQ(store.Get<char>(token2), ptr2);
+	EXPECT_EQ(store.Get<char>(token3), ptr3);
+	EXPECT_EQ(store.Get<char>(token4), ptr4);
+	EXPECT_EQ(store.Get<char>(token5), ptr5);
+	EXPECT_EQ(store.Get<char>(token6), ptr6);
 	store.Drop(token2);
 	store.Drop(token4);
 	store.Drop(token6);
-	EXPECT_EQ(store.Get(token1), ptr1);
-	EXPECT_EQ(store.Get(token3), ptr3);
-	EXPECT_EQ(store.Get(token5), ptr5);
+	EXPECT_EQ(store.Get<char>(token1), ptr1);
+	EXPECT_EQ(store.Get<char>(token3), ptr3);
+	EXPECT_EQ(store.Get<char>(token5), ptr5);
 	store.Compact();
-	ptr1 = store.Get(token1);
+	ptr1 = store.Get<char>(token1);
 	EXPECT_EQ(strcmp(ptr1, "This is a test."), 0);
-	ptr3 = store.Get(token3);
+	ptr3 = store.Get<char>(token3);
 	EXPECT_EQ(strcmp(ptr3, "This is a test."), 0);
-	ptr5 = store.Get(token5);
+	ptr5 = store.Get<char>(token5);
 	EXPECT_EQ(strcmp(ptr5, "This is a test."), 0);
 	char* ptr7 = nullptr;
 	size_t token7 = store.Put(100, ptr7);
