@@ -6,7 +6,7 @@ BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& d
     metadata(metadataAllocator)
 {
     if (metadata.empty()) {
-        metadata.push_back({ 0, -1, -1 });
+        metadata.push_back({ 0, -1, 0 });
     }
 }
 
@@ -56,7 +56,7 @@ void BlobStore::Compact() {
 }
 
 size_t BlobStore::findFreeSlot() {
-    if (metadata[0].nextFreeIndex != -1) {
+    if (metadata[0].nextFreeIndex != 0) {
         size_t freeIndex = metadata[0].nextFreeIndex;
         metadata[0].nextFreeIndex = metadata[freeIndex].nextFreeIndex;
         return freeIndex;
@@ -71,7 +71,8 @@ size_t BlobStore::findFreeSlot() {
 size_t BlobStore::freeSlotCount() const {
 	size_t count = 0;
 	size_t index = metadata[0].nextFreeIndex;
-    while (index != -1) {
+    // The free list is a circular linked list with a dummy node at the head.
+    while (index !=0) {
 		++count;
 		index = metadata[index].nextFreeIndex;
 	}

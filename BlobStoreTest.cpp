@@ -148,3 +148,34 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 	char* ptr10 = nullptr;
 	size_t token10 = store.Put(100, ptr10);
 }
+
+// Creates a few blobs of ints, iterates, deletes a few then iterates again.
+TEST_F(BlobStoreTest, BlobIteration) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	size_t token1 = store.Put<int>(100);
+	size_t token2 = store.Put<int>(200);
+	size_t token3 = store.Put<int>(300);
+	auto it = store.begin();
+	EXPECT_EQ(it.index(), token1);
+	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
+	EXPECT_EQ(it.size(), sizeof(int));
+	++it;
+	EXPECT_EQ(it.index(), token2);
+	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 200);
+	EXPECT_EQ(it.size(), sizeof(int));
+	++it;
+	EXPECT_EQ(it.index(), token3);
+	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 300);
+	EXPECT_EQ(it.size(), sizeof(int));
+	store.Drop(token2);
+
+	it = store.begin();
+	EXPECT_EQ(it.index(), token1);
+	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
+	EXPECT_EQ(it.size(), sizeof(int));
+	++it;
+
+	EXPECT_EQ(it.index(), token3);
+	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 300);
+	EXPECT_EQ(it.size(), sizeof(int));
+}

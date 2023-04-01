@@ -44,6 +44,16 @@ public:
 
     // Puts an object of type T with the provided arguments into the BlobStore and returns its index.
     template <typename T, typename... Args>
+    size_t Put(Args&&... args) {
+        size_t index = findFreeSlot();
+        char* ptr = allocator.allocate(sizeof(T));
+        allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+        metadata[index] = { sizeof(T), allocator.ToOffset(ptr), -1};
+        return index;
+    }
+
+    // Puts an object of type T with the provided arguments into the BlobStore and returns its index.
+    template <typename T, typename... Args>
     size_t Put(size_t size, Args&&... args) {
         size_t index = findFreeSlot();
         char* ptr = allocator.allocate(size);
@@ -51,6 +61,8 @@ public:
         metadata[index] = { size, allocator.ToOffset(ptr), -1 };
         return index;
     }
+
+
 
     // Gets the object of type T at the specified index.
     template<typename T>
@@ -93,6 +105,95 @@ public:
         size_t size = metadata.size() - 1;
         size -= freeSlotCount();
         return size;
+    }
+
+    // Iterator class for BlobStore
+    class Iterator {
+    public:
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type = char;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+        Iterator(BlobStore* store, size_t index) : store_(store), index_(index) {
+            advanceToValidIndex();
+        }
+
+        size_t size() const {
+            return store_->metadata[index_].size;
+        }
+
+        size_t index() const {
+            return index_;
+        }
+
+        Iterator& operator++() {
+            ++index_;
+            advanceToValidIndex();
+            return *this;
+        }
+
+        Iterator operator++(int) {
+            Iterator temp = *this;
+            ++(*this);
+            return temp;
+        }
+
+        Iterator& operator--() {
+            do {
+                --index_;
+            } while (store_->metadata[index_].nextFreeIndex != -1);
+            return *this;
+        }
+
+        Iterator operator--(int) {
+            Iterator temp = *this;
+            --(*this);
+            return temp;
+        }
+
+        bool operator==(const Iterator& other) const {
+            return store_ == other.store_ && index_ == other.index_;
+        }
+
+        bool operator!=(const Iterator& other) const {
+            return !(*this == other);
+        }
+
+        reference operator*() {
+            return *store_->Get<char>(index_);
+        }
+
+        pointer operator->() {
+            return store_->Get<char>(index_);
+        }
+
+    private:
+        void advanceToValidIndex() {
+            while (index_ < store_->metadata.size() && store_->metadata[index_].nextFreeIndex != -1) {
+                ++index_;
+            }
+        }
+
+        BlobStore* store_;
+        size_t index_;
+    };
+
+    Iterator begin() {
+        return Iterator(this, 1);
+    }
+
+    Iterator end() {
+        return Iterator(this, metadata.size());
+    }
+
+    Iterator cbegin() const {
+        return Iterator(const_cast<BlobStore*>(this), 1);
+    }
+
+    Iterator cend() const {
+        return Iterator(const_cast<BlobStore*>(this), metadata.size());
     }
 
 private:
