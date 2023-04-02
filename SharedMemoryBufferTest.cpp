@@ -15,9 +15,17 @@ protected:
 	virtual ~SharedMemoryBufferTest() {
 	}
 
-	virtual void SetUp() override {}
+	virtual void SetUp() override {
+		std::remove(existing_file.c_str());
+		std::remove(file_name.c_str());
+		std::remove(test_file.c_str());
+	}
 
 	virtual void TearDown() override {
+
+	}
+
+	void remoteTestFiles() {
 		std::remove(existing_file.c_str());
 		std::remove(file_name.c_str());
 		std::remove(test_file.c_str());
@@ -204,4 +212,25 @@ TEST_F(SharedMemoryBufferTest, MultipleInstancesDifferentSizes) {
 	for (std::size_t i = 0; i < buffer1.size(); i++) {
 		EXPECT_EQ(data1[i], data2[i]);
 	}
+}
+
+// Tests SharedMemoryBuffer by writing to the buffer, flushing it to disk, closing
+// the buffer, and then reading the file to check that the data was written.
+TEST_F(SharedMemoryBufferTest, WriteToFile) {
+	// Define test data and memory-mapped file name
+	const std::string test_data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+	const std::string test_file_name = "testfile";
+	{
+		// Create a SharedMemoryBuffer object with a new name and size
+		SharedMemoryBuffer buffer(test_file_name, test_data.size());
+		std::memcpy(buffer.data(), test_data.data(), test_data.size());
+
+		// Flush the buffer to ensure the data is written to disk
+		buffer.flush();
+	}
+	// Read the file and check that the data was written
+	std::ifstream file(test_file_name);
+	std::string content((std::istreambuf_iterator<char>(file)),
+		(std::istreambuf_iterator<char>()));
+	EXPECT_EQ(content, test_data);
 }

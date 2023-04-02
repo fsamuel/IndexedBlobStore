@@ -24,8 +24,14 @@ public:
     // Constructor that creates a new memory-mapped file with the given name and size
     SharedMemoryBuffer(const std::string& name, std::size_t size);
 
+    // Disable copy constructor
+    SharedMemoryBuffer(const SharedMemoryBuffer&) = delete;
+
+    // Disable copy assignment operator
+    SharedMemoryBuffer& operator=(const SharedMemoryBuffer&) = delete;
+
     // Destructor
-    ~SharedMemoryBuffer();
+    ~SharedMemoryBuffer() noexcept;
 
     // Resize the memory-mapped file to the given size
     void resize(std::size_t new_size);
@@ -49,6 +55,9 @@ public:
     const void* data() const {
         return m_data;
     }
+
+    // Flush the memory-mapped buffer to disk
+    void flush();
 
     // Move assignment operator
     SharedMemoryBuffer& operator=(SharedMemoryBuffer&& other) noexcept {

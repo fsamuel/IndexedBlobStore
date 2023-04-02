@@ -37,7 +37,7 @@ SharedMemoryBuffer::SharedMemoryBuffer(const std::string& name)
 {
 	// Get the size of the file on disk
 	std::ifstream file(m_name, std::ios::binary | std::ios::ate);
-	size_t size_on_disk = file.tellg();
+	std::streampos size_on_disk = file.tellg();
 	file.close();
 
 	// If the file doesn't exist, set the size to 0
@@ -99,6 +99,30 @@ void SharedMemoryBuffer::resize(std::size_t new_size) {
 	map_memory(new_size);
 
 
+}
+
+void SharedMemoryBuffer::flush() {
+	if (m_data == nullptr || m_size == 0) {
+		return;
+	}
+
+#ifdef _WIN32
+	// Windows implementation
+	if (!FlushViewOfFile(m_data, m_size)) {
+		throw std::runtime_error("Failed to flush memory-mapped file: FlushViewOfFile");
+	}
+	if (!FlushFileBuffers(m_file_handle)) {
+		throw std::runtime_error("Failed to flush memory-mapped file: FlushFileBuffers");
+	}
+#else
+	// Linux implementation
+	if (msync(m_data, m_size, MS_SYNC) == -1) {
+		throw std::runtime_error("Failed to flush memory-mapped file: msync");
+	}
+	if (fsync(m_file_descriptor) == -1) {
+		throw std::runtime_error("Failed to flush memory-mapped file: fsync");
+	}
+#endif
 }
 
 void SharedMemoryBuffer::open_file() {
