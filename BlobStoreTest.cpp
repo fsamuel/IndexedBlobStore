@@ -41,12 +41,12 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 // Creates two blobs with the templatized Put method, and then gets them back.
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsUsingTemplatizedPut) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	size_t token1 = store.Put<int>(sizeof(int), 100);
-	size_t token2 = store.Put<int>(sizeof(int), 1337);
+	BlobStoreObject<int> ptr1 = store.Put<int>(100);
+	BlobStoreObject<int> ptr2 = store.Put<int>(1337);
 
 	EXPECT_EQ(store.GetSize(), 2);
-	EXPECT_EQ(*store.Get<int>(token1), 100);
-	EXPECT_EQ(*store.Get<int>(token2), 1337);
+	EXPECT_EQ(*ptr1, 100);
+	EXPECT_EQ(*ptr2, 1337);
 }
 
 // Creates a few blobs, deletes some in the middle, and the compacts the store.
@@ -152,30 +152,30 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 // Creates a few blobs of ints, iterates, deletes a few then iterates again.
 TEST_F(BlobStoreTest, BlobIteration) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	size_t token1 = store.Put<int>(100);
-	size_t token2 = store.Put<int>(200);
-	size_t token3 = store.Put<int>(300);
+	BlobStoreObject<int> ptr1 = store.Put<int>(100);
+	BlobStoreObject<int> ptr2 = store.Put<int>(200);
+	BlobStoreObject<int> ptr3 = store.Put<int>(300);
 	auto it = store.begin();
-	EXPECT_EQ(it.index(), token1);
+	EXPECT_EQ(it.index(), ptr1.Index());
 	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
-	EXPECT_EQ(it.index(), token2);
+	EXPECT_EQ(it.index(), ptr2.Index());
 	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 200);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
-	EXPECT_EQ(it.index(), token3);
+	EXPECT_EQ(it.index(), ptr3.Index());
 	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 300);
 	EXPECT_EQ(it.size(), sizeof(int));
-	store.Drop(token2);
+	store.Drop(ptr2.Index());
 
 	it = store.begin();
-	EXPECT_EQ(it.index(), token1);
+	EXPECT_EQ(it.index(), ptr1.Index());
 	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 
-	EXPECT_EQ(it.index(), token3);
+	EXPECT_EQ(it.index(), ptr3.Index());
 	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 300);
 	EXPECT_EQ(it.size(), sizeof(int));
 }

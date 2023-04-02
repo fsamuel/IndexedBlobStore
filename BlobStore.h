@@ -15,10 +15,106 @@ typedef __int64 ssize_t;
 typedef int ssize_t;
 #endif
 
+class BlobStore;
+
+class BlobStoreObserver {
+public:
+    // Indicates that memory has been reallocated either through compaction
+    // or buffer remapping. This means that any pointers to memory in the
+    // allocator are no longer valid.
+    virtual void OnMemoryReallocated() = 0;
+};
+
+
+// BlobStoreObject is a wrapper around BlobStore that provides a safe way to access
+// objects stored in a BlobStore instance. It automatically updates its internal
+// pointer to the object whenever the memory in BlobStore is reallocated, ensuring
+// that the clients don't store stale pointers. It also implements the BlobStoreObserver
+// interface to receive notifications from the BlobStore when the memory is reallocated.
+//
+// Usage:
+//   BlobStoreObject<MyClass> obj(&blobStore, index);
+//   obj->myMethod();
+//   MyClass& obj = *obj;
+//
+template <typename T>
+class BlobStoreObject : public BlobStoreObserver {
+public:
+    // Constructor: Initializes the object with a nullptr.
+    BlobStoreObject()
+        : store_(nullptr)
+        , index_(BlobStore::InvalidIndex)
+        , ptr_(nullptr) {
+	}
+
+    // Constructor: Initializes the object with a pointer to the BlobStore and the
+    // index of the object. It also registers itself as an observer to the BlobStore
+    // and updates the internal pointer to the object.
+    BlobStoreObject(BlobStore* store, size_t index);
+
+    // Destructor: Unregisters the object from the BlobStore's observer list.
+    ~BlobStoreObject() {
+        if (store_) {
+            store_->RemoveObserver(this);
+        }
+    }
+
+    // Arrow operator: Provides access to the object's methods.
+    T* operator->() {
+        return ptr_;
+    }
+
+    const T* operator->() const {
+
+    }
+
+    // Dereference operator: Provides access to the object itself.
+    T& operator*() {
+        return *ptr_;
+    }
+
+    const T& operator*() const {
+        return *ptr_;
+    }
+
+    // Returns the index of the Blob.
+    size_t Index() const {
+		return index_;
+	}
+
+    template<typename U>
+    BlobStoreObject<U> To() {
+		return BlobStoreObject<U>(store_, index_);
+	}
+
+    BlobStoreObject& operator=(const BlobStoreObject& other) {
+        store_ = other.store_;
+        index_ = other.index_;
+        ptr_ = other.ptr_;
+    }
+
+    // OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
+    // when the memory in the BlobStore is reallocated. Updates the internal pointer
+    // to the object.
+    void OnMemoryReallocated() override {
+        UpdatePointer();
+    }
+
+private:
+    // UpdatePointer: Helper method to update the internal pointer to the object using
+    // the BlobStore's GetPointer method.
+    void UpdatePointer();
+
+    BlobStore* store_; // Pointer to the BlobStore instance
+    size_t index_;     // Index of the object in the BlobStore
+    T* ptr_;           // Pointer to the object
+};
+
+
 // BlobStore is a class that manages the storage and retrieval of objects
 // (blobs) in shared memory. It supports storing, getting, and deleting
 // objects while maintaining a compact memory footprint.
-class BlobStore {
+class BlobStore : public SharedMemoryAllocatorObserver {
 public:
     using Allocator = SharedMemoryAllocator<char>;
     using offset_type = typename Allocator::offset_type;
@@ -38,29 +134,19 @@ public:
     // Constructor that initializes the BlobStore with the provided metadata and data shared memory buffers.
     BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& dataBuffer);
 
+    // BlobStore destructor
+    ~BlobStore();
+
     // Puts an object of size `size` into the BlobStore and returns its index.
     // The object's memory location is stored in `ptr`.
     size_t Put(size_t size, char*& ptr);
 
-    // Puts an object of type T with the provided arguments into the BlobStore and returns its index.
+    // Puts an object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
     template <typename T, typename... Args>
-    size_t Put(Args&&... args) {
-        size_t index = findFreeSlot();
-        char* ptr = allocator.allocate(sizeof(T));
-        allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-        metadata[index] = { sizeof(T), allocator.ToOffset(ptr), -1};
-        return index;
-    }
+    BlobStoreObject<T> Put(Args&&... args);
 
-    // Puts an object of type T with the provided arguments into the BlobStore and returns its index.
     template <typename T, typename... Args>
-    size_t Put(size_t size, Args&&... args) {
-        size_t index = findFreeSlot();
-        char* ptr = allocator.allocate(size);
-        allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-        metadata[index] = { size, allocator.ToOffset(ptr), -1 };
-        return index;
-    }
+    size_t Put(size_t size, Args&&... args);
 
     // Gets the object of type T at the specified index.
     template<typename T>
@@ -109,6 +195,12 @@ public:
     bool IsEmpty() const {
 		return GetSize() == 0;
 	}
+    
+    // Adds a BlobStoreObserver.
+    void AddObserver(BlobStoreObserver* observer);
+
+    // Removes a BlobStoreObserver.
+    void RemoveObserver(BlobStoreObserver* observer);
 
     // Iterator class for BlobStore
     class Iterator {
@@ -206,9 +298,47 @@ private:
     // Returns the number of free slots in the metadata vector.
     size_t freeSlotCount() const;
 
+    // SharedMemoryAllocatorObserver overrides.
+    void OnBufferResize() override;
+
+    void NotifyObservers();
+
     Allocator allocator;
     BlobMetadataAllocator metadataAllocator;
     MetadataVector metadata;
+    std::vector<BlobStoreObserver*> m_observers;
 };
+
+template<typename T>
+BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index)
+: store_(store), index_(index), ptr_(nullptr) {
+    if (store_) {
+        store_->AddObserver(this);
+        UpdatePointer();
+    }
+}
+
+template<typename T>
+void BlobStoreObject<T>::UpdatePointer() {
+    ptr_ = store_->Get<T>(index_);
+}
+
+template <typename T, typename... Args>
+BlobStoreObject<T> BlobStore::Put(Args&&... args) {
+    size_t index = findFreeSlot();
+    char* ptr = allocator.allocate(sizeof(T));
+    allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+    metadata[index] = { sizeof(T), allocator.ToOffset(ptr), -1 };
+    return BlobStoreObject<T>(this, index);
+}
+
+template <typename T, typename... Args>
+size_t BlobStore::Put(size_t size, Args&&... args) {
+    size_t index = findFreeSlot();
+    char* ptr = allocator.allocate(size);
+    allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+    metadata[index] = { size, allocator.ToOffset(ptr), -1 };
+    return index;
+}
 
 #endif  // __BLOB_STORE_H_

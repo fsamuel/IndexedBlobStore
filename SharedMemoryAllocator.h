@@ -2,6 +2,12 @@
 #define __SHARED_MEMORY_ALLOCATOR_H_
 
 #include "SharedMemoryBuffer.h"
+#include <vector>
+
+class SharedMemoryAllocatorObserver {
+public:
+	virtual void OnBufferResize() = 0;
+};
 
 template <typename T>
 class SharedMemoryAllocator {
@@ -44,7 +50,8 @@ public:
 	}
 
 	explicit SharedMemoryAllocator(SharedMemoryAllocator&& other)
-		: m_buffer(std::move(m_buffer)) {
+		: m_buffer(std::move(other.m_buffer)),
+		  m_observers(std::move(other.m_observers)){
 	}
 
 	AllocatorStateHeader* state() {
@@ -53,6 +60,14 @@ public:
 
 	const std::string& bufferName() const {
 		return m_buffer.name();
+	}
+
+	void AddObserver(SharedMemoryAllocatorObserver* observer) {
+		m_observers.push_back(observer);
+	}
+
+	void RemoveObserver(SharedMemoryAllocatorObserver* observer) {
+		m_observers.erase(std::remove(m_observers.begin(), m_observers.end(), observer), m_observers.end());
 	}
 
 	// Allocate memory for n objects of type T, and return a pointer to the first object
@@ -104,7 +119,10 @@ public:
 		m_buffer.resize(m_buffer.size() + bytesNeeded);
 
 		// Return a pointer to the data in the new block
-		return newAllocatedNodeAtOffset(dataOffset, bytesNeeded);
+		T* newNode = newAllocatedNodeAtOffset(dataOffset, bytesNeeded);
+		NotifyObserversOfResize();
+
+		return newNode;
 	}
 
 	// Deallocate memory at the given pointer offset
@@ -229,6 +247,11 @@ public:
 	}
 
 private:
+	void NotifyObserversOfResize() {
+		for (SharedMemoryAllocatorObserver* observer : m_observers) {
+			observer->OnBufferResize();
+		}
+	}
 	// Header for an allocated node in the allocator
 	struct AllocatedNodeHeader {
 		size_type size; // Size of the allocated block, including the header
@@ -389,6 +412,7 @@ private:
 
 
 	SharedMemoryBuffer m_buffer;  // Reference to the shared memory buffer used for allocation
+	std::vector<SharedMemoryAllocatorObserver*> m_observers;
 };
 
 
