@@ -62,8 +62,6 @@ public:
         return index;
     }
 
-
-
     // Gets the object of type T at the specified index.
     template<typename T>
     T* Get(size_t index) {
@@ -106,6 +104,11 @@ public:
         size -= freeSlotCount();
         return size;
     }
+
+    // Returns whether the BlobStore is empty.
+    bool IsEmpty() const {
+		return GetSize() == 0;
+	}
 
     // Iterator class for BlobStore
     class Iterator {

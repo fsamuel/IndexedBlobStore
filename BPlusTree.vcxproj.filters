@@ -30,6 +30,9 @@
     <ClInclude Include="BlobStore.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BPlusTree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
