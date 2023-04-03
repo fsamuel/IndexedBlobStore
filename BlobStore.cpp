@@ -15,13 +15,6 @@ BlobStore::~BlobStore() {
     allocator.RemoveObserver(this);
 }
 
-size_t BlobStore::Put(size_t size, char*& ptr) {
-    size_t index = findFreeSlot();
-    ptr = allocator.allocate(size);
-    metadata[index] = { size, allocator.ToOffset(ptr), -1 };
-    return index;
-}
-
 void BlobStore::Drop(size_t index) {
     if (index >= metadata.size() || metadata[index].nextFreeIndex != -1) {
         return;
@@ -29,6 +22,7 @@ void BlobStore::Drop(size_t index) {
     allocator.deallocate(allocator.ToPtr<char>(metadata[index].offset));
     metadata[index].nextFreeIndex = metadata[0].nextFreeIndex;
     metadata[0].nextFreeIndex = index;
+    NotifyObserversOnDroppedBlob(index);
 }
 
 void BlobStore::Compact() {
@@ -57,7 +51,7 @@ void BlobStore::Compact() {
     // Rename the new shared memory file to the original name
     std::rename((bufferName + "_data_compact").c_str(), bufferName.c_str());
 
-    NotifyObservers();
+    NotifyObserversOnMemoryReallocated();
 }
 
 void BlobStore::AddObserver(BlobStoreObserver* observer) {
@@ -68,11 +62,18 @@ void BlobStore::RemoveObserver(BlobStoreObserver* observer) {
     m_observers.erase(std::remove(m_observers.begin(), m_observers.end(), observer), m_observers.end());
 }
 
-void BlobStore::NotifyObservers() {
+void BlobStore::NotifyObserversOnMemoryReallocated() {
     for (BlobStoreObserver* observer : m_observers) {
         observer->OnMemoryReallocated();
     }
 }
+
+void BlobStore::NotifyObserversOnDroppedBlob(size_t index) {
+    for (BlobStoreObserver* observer : m_observers) {
+        observer->OnDroppedBlob(index);
+    }
+}
+
 
 size_t BlobStore::findFreeSlot() {
     if (metadata[0].nextFreeIndex != 0) {
@@ -99,5 +100,5 @@ size_t BlobStore::freeSlotCount() const {
 }
 
 void BlobStore::OnBufferResize() {
-    NotifyObservers();
+    NotifyObserversOnMemoryReallocated();
 }

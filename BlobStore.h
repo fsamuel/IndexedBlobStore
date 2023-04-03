@@ -23,6 +23,9 @@ public:
 	// or buffer remapping. This means that any pointers to memory in the
 	// allocator are no longer valid.
 	virtual void OnMemoryReallocated() = 0;
+
+	// Indicates that a Blob with the given index has been removed from the store.
+	virtual void OnDroppedBlob(size_t index) = 0;
 };
 
 
@@ -126,6 +129,16 @@ public:
 		UpdatePointer();
 	}
 
+	// OnDroppedBlob: Method from BlobStoreObserver interface that gets called when a blob
+	// is dropped from the BlobStore. If the dropped blob is the one that this object points to
+	// then it sets the internal pointer to nullptr.
+	void OnDroppedBlob(size_t index) override {
+		if (index == index_) {
+			ptr_ = nullptr;
+			index = BlobStore::InvalidIndex;
+		}
+	}
+
 private:
 	// UpdatePointer: Helper method to update the internal pointer to the object using
 	// the BlobStore's GetPointer method.
@@ -162,10 +175,6 @@ public:
 
 	// BlobStore destructor
 	~BlobStore();
-
-	// Puts an object of size `size` into the BlobStore and returns its index.
-	// The object's memory location is stored in `ptr`.
-	size_t Put(size_t size, char*& ptr);
 
 	// Puts an object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
@@ -327,7 +336,8 @@ private:
 	// SharedMemoryAllocatorObserver overrides.
 	void OnBufferResize() override;
 
-	void NotifyObservers();
+	void NotifyObserversOnMemoryReallocated();
+	void NotifyObserversOnDroppedBlob(size_t index);
 
 	Allocator allocator;
 	BlobMetadataAllocator metadataAllocator;

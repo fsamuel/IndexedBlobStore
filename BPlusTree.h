@@ -241,7 +241,6 @@ void BPlusTree<KeyType, ValueType, Order>::insertNonFull(BlobStoreObject<BaseNod
 		i += 1;
 		BlobStoreObject<BaseNode> childNode = BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[i]);
 		if (childNode->n == Order - 1) {
-			// splitChild can allocate nodes which can invalidate pointers.
 			splitChild(internalNode, i);
 			if (key > *m_blobStore[internalNode->keys[i]]) {
 				i += 1;
