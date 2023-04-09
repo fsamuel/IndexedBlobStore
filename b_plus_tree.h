@@ -24,7 +24,7 @@ private:
 			}
 		}
 
-		bool isFull() const { return n == Order - 1; }
+		bool IsFull() const { return n == Order - 1; }
 
 		size_t GetNumKeys() const {
 			size_t count = 0;
@@ -137,8 +137,7 @@ ValueType* BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<BaseNode
 			}
 		}
 		return nullptr;
-	}
-	else {
+	} else {
 		auto internal_node = node.To<InternalNode>();
 		int i = 0;
 
