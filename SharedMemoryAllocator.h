@@ -1,7 +1,7 @@
 #ifndef __SHARED_MEMORY_ALLOCATOR_H_
 #define __SHARED_MEMORY_ALLOCATOR_H_
 
-#include "SharedMemoryBuffer.h"
+#include "shared_memory_buffer.h"
 #include <vector>
 
 #ifdef _WIN32
@@ -24,18 +24,18 @@ public:
 
 	// Helper method to convert a pointer to an offset relative to the start of the buffer
 	offset_type ToOffset(const void* ptr) const {
-		return reinterpret_cast<const char*>(ptr) - reinterpret_cast<const char*>(m_buffer.data());
+		return reinterpret_cast<const char*>(ptr) - reinterpret_cast<const char*>(buffer_.data());
 	}
 
 	// Helper method to convert an offset relative to the start of the buffer to a pointer
 	template<class U>
 	const U* ToPtr(offset_type offset) const {
-		return reinterpret_cast<const U*>(reinterpret_cast<const char*>(m_buffer.data()) + offset);
+		return reinterpret_cast<const U*>(reinterpret_cast<const char*>(buffer_.data()) + offset);
 	}
 
 	template<class U>
 	U* ToPtr(offset_type offset)  {
-		return reinterpret_cast<U*>(reinterpret_cast<char*>(m_buffer.data()) + offset);
+		return reinterpret_cast<U*>(reinterpret_cast<char*>(buffer_.data()) + offset);
 	}
 
 	// Header for the allocator state in the shared memory buffer
@@ -47,34 +47,34 @@ public:
 
 	// Constructor that takes a reference to the shared memory buffer to be used for allocation
 	explicit SharedMemoryAllocator(SharedMemoryBuffer&& buffer)
-		: m_buffer(std::move(buffer)) {
+		: buffer_(std::move(buffer)) {
 		// Check if the buffer is large enough to hold the allocator state header
-		if (m_buffer.size() < sizeof(AllocatorStateHeader)) {
-			m_buffer.resize(sizeof(AllocatorStateHeader));
+		if (buffer_.size() < sizeof(AllocatorStateHeader)) {
+			buffer_.Resize(sizeof(AllocatorStateHeader));
 		}
 
 		initializeAllocatorStateIfNecessary();
 	}
 
 	explicit SharedMemoryAllocator(SharedMemoryAllocator&& other)
-		: m_buffer(std::move(other.m_buffer)),
-		  m_observers(std::move(other.m_observers)){
+		: buffer_(std::move(other.buffer_)),
+		  observers_(std::move(other.observers_)){
 	}
 
 	AllocatorStateHeader* state() {
-		return reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+		return reinterpret_cast<AllocatorStateHeader*>(buffer_.data());
 	}
 
 	const std::string& bufferName() const {
-		return m_buffer.name();
+		return buffer_.name();
 	}
 
 	void AddObserver(SharedMemoryAllocatorObserver* observer) {
-		m_observers.push_back(observer);
+		observers_.push_back(observer);
 	}
 
 	void RemoveObserver(SharedMemoryAllocatorObserver* observer) {
-		m_observers.erase(std::remove(m_observers.begin(), m_observers.end(), observer), m_observers.end());
+		observers_.erase(std::remove(observers_.begin(), observers_.end(), observer), observers_.end());
 	}
 
 	// Allocate memory for n objects of type T, and return a pointer to the first object
@@ -122,8 +122,8 @@ public:
 		}
 
 		// No block of sufficient size was found, resize the buffer and allocate a new block
-		offset_type dataOffset = m_buffer.size();
-		m_buffer.resize(m_buffer.size() + bytesNeeded);
+		offset_type dataOffset = buffer_.size();
+		buffer_.Resize(buffer_.size() + bytesNeeded);
 
 		// Return a pointer to the data in the new block
 		T* newNode = newAllocatedNodeAtOffset(dataOffset, bytesNeeded);
@@ -155,7 +155,7 @@ public:
 
 		}
 		// Add the block to the free list
-		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(buffer_.data());
 		if (stateHeaderPtr->allocationOffset == nodeHeaderOffset) {
 			if (currentNode->nextOffset != nodeHeaderOffset) {
 				stateHeaderPtr->allocationOffset = currentNode->nextOffset;
@@ -201,20 +201,20 @@ public:
 	}
 
 	SharedMemoryAllocator& operator=(SharedMemoryAllocator&& other) noexcept {
-		m_buffer = std::move(other.m_buffer);
+		buffer_ = std::move(other.buffer_);
 		return *this;
 	}
 
 	// Return an iterator to the first allocated object
 	auto begin() {
-		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(buffer_.data());
 		if (stateHeaderPtr->allocationOffset == -1)
 			return Iterator(nullptr, this);
 		return Iterator(ToPtr<AllocatedNodeHeader>(stateHeaderPtr->allocationOffset), this);
 	}
 
 	auto begin() const {
-		const AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<const AllocatorStateHeader*>(m_buffer.data());
+		const AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<const AllocatorStateHeader*>(buffer_.data());
 		if (stateHeaderPtr->allocationOffset == -1)
 			return ConstIterator(nullptr, this);
 		return ConstIterator(ToPtr<AllocatedNodeHeader>(stateHeaderPtr->allocationOffset), this);
@@ -255,7 +255,7 @@ public:
 
 private:
 	void NotifyObserversOfResize() {
-		for (SharedMemoryAllocatorObserver* observer : m_observers) {
+		for (SharedMemoryAllocatorObserver* observer : observers_) {
 			observer->OnBufferResize();
 		}
 	}
@@ -289,7 +289,7 @@ private:
 
 	void initializeAllocatorStateIfNecessary() {
 		// Check if the allocator state header has already been initialized
-		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(m_buffer.data());
+		AllocatorStateHeader* stateHeaderPtr = reinterpret_cast<AllocatorStateHeader*>(buffer_.data());
 		if (stateHeaderPtr->magicNumber != 0x12345678) {
 			// Initialize the allocator state header
 			stateHeaderPtr->magicNumber = 0x12345678;
@@ -433,8 +433,8 @@ private:
 		const SharedMemoryAllocator* m_allocator;
 	};
 
-	SharedMemoryBuffer m_buffer;  // Reference to the shared memory buffer used for allocation
-	std::vector<SharedMemoryAllocatorObserver*> m_observers;
+	SharedMemoryBuffer buffer_;  // Reference to the shared memory buffer used for allocation
+	std::vector<SharedMemoryAllocatorObserver*> observers_;
 };
 
 

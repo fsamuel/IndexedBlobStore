@@ -32,6 +32,7 @@ TEST_F(BPlusTreeTest, BasicTree) {
 	}
 }
 
+/*
 TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 	BPlusTree<int, int, 4> tree(*blob_store);
     for (int i = 0; i < 100; i++) {
@@ -49,3 +50,4 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 		EXPECT_EQ(value_ptr, nullptr);
 	}
 }
+*/

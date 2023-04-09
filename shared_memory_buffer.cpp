@@ -1,42 +1,42 @@
-#include "SharedMemoryBuffer.h"
+#include "shared_memory_buffer.h"
 #include <algorithm>
 #include <stdexcept>
 #include <fstream>
 
 SharedMemoryBuffer::SharedMemoryBuffer(SharedMemoryBuffer&& other) noexcept
-	: m_name(std::move(other.m_name))
-	, m_size(other.m_size)
-	, m_data(other.m_data)
+	: name_(std::move(other.name_))
+	, size_(other.size_)
+	, data_(other.data_)
 #ifdef _WIN32
-	, m_file_handle(other.m_file_handle)
-	, m_file_mapping(other.m_file_mapping)
+	, file_handle_(other.file_handle_)
+	, file_mapping_(other.file_mapping_)
 #else
-	, m_file_descriptor(other.m_file_descriptor)
+	, file_descriptor_(other.file_descriptor_)
 #endif 
 {
-	other.m_size = 0;
-	other.m_data = nullptr;
+	other.size_ = 0;
+	other.data_ = nullptr;
 #ifdef _WIN32
-	other.m_file_handle = nullptr;
-	other.m_file_mapping = nullptr;
+	other.file_handle_ = nullptr;
+	other.file_mapping_ = nullptr;
 #else
-	other.m_file_descriptor = -1;
+	other.file_descriptor_ = -1;
 #endif
 }
 
 SharedMemoryBuffer::SharedMemoryBuffer(const std::string& name)
-	: m_name(name)
-	, m_size(0)
-	, m_data(nullptr)
+	: name_(name)
+	, size_(0)
+	, data_(nullptr)
 #ifdef _WIN32
-	, m_file_handle(nullptr)
-	, m_file_mapping(nullptr)
+	, file_handle_(nullptr)
+	, file_mapping_(nullptr)
 #else
-	, m_file_descriptor(-1)
+	, file_descriptor_(-1)
 #endif
 {
 	// Get the size of the file on disk
-	std::ifstream file(m_name, std::ios::binary | std::ios::ate);
+	std::ifstream file(name_, std::ios::binary | std::ios::ate);
 	std::streampos size_on_disk = file.tellg();
 	file.close();
 
@@ -45,73 +45,73 @@ SharedMemoryBuffer::SharedMemoryBuffer(const std::string& name)
 		size_on_disk = 0;
 	}
 
-	open_file();
-	map_memory(size_on_disk);
+	OpenFile();
+	MapMemory(size_on_disk);
 }
 
 SharedMemoryBuffer::SharedMemoryBuffer(const std::string& name, std::size_t size)
-	: m_name(name)
-	, m_size(size)
-	, m_data(nullptr)
+	: name_(name)
+	, size_(size)
+	, data_(nullptr)
 #ifdef _WIN32
-	, m_file_handle(nullptr)
-	, m_file_mapping(nullptr)
+	, file_handle_(nullptr)
+	, file_mapping_(nullptr)
 #else
-	, m_file_descriptor(-1)
+	, file_descriptor_(-1)
 #endif
 {
-	open_file();
-	resize(size);
+	OpenFile();
+	Resize(size);
 }
 
 SharedMemoryBuffer::~SharedMemoryBuffer() {
-	unmap_memory();
-	close_file();
+	UnmapMemory();
+	CloseFile();
 }
 
-void SharedMemoryBuffer::resize(std::size_t new_size) {
+void SharedMemoryBuffer::Resize(std::size_t new_size) {
 	// Unmap the memory-mapped file
-	unmap_memory();
+	UnmapMemory();
 
 #ifdef _WIN32
 	// Windows implementation
 	// Resize the file
 	LARGE_INTEGER file_size{};
 	file_size.QuadPart = new_size;
-	if (!SetFilePointerEx(m_file_handle, file_size, nullptr, FILE_BEGIN)) {
+	if (!SetFilePointerEx(file_handle_, file_size, nullptr, FILE_BEGIN)) {
 		throw std::runtime_error("Failed to resize memory-mapped file: SetFilePointerEx");
 	}
-	if (!SetEndOfFile(m_file_handle)) {
+	if (!SetEndOfFile(file_handle_)) {
 		throw std::runtime_error("Failed to resize memory-mapped file: SetEndOfFile");
 	}
 
 	// Update the size
-	m_size = new_size;
+	size_ = new_size;
 
 #else
 	// Linux implementation
 	// Resize the file
-	if (ftruncate(m_file_descriptor, new_size) == -1) {
+	if (ftruncate(file_descriptor_, new_size) == -1) {
 		throw std::runtime_error("Failed to resize memory-mapped file");
 	}
 #endif
 	// Map the memory-mapped file into memory
-	map_memory(new_size);
+	MapMemory(new_size);
 
 
 }
 
 void SharedMemoryBuffer::flush() {
-	if (m_data == nullptr || m_size == 0) {
+	if (data_ == nullptr || size_ == 0) {
 		return;
 	}
 
 #ifdef _WIN32
 	// Windows implementation
-	if (!FlushViewOfFile(m_data, m_size)) {
+	if (!FlushViewOfFile(data_, size_)) {
 		throw std::runtime_error("Failed to flush memory-mapped file: FlushViewOfFile");
 	}
-	if (!FlushFileBuffers(m_file_handle)) {
+	if (!FlushFileBuffers(file_handle_)) {
 		throw std::runtime_error("Failed to flush memory-mapped file: FlushFileBuffers");
 	}
 #else
@@ -119,99 +119,99 @@ void SharedMemoryBuffer::flush() {
 	if (msync(m_data, m_size, MS_SYNC) == -1) {
 		throw std::runtime_error("Failed to flush memory-mapped file: msync");
 	}
-	if (fsync(m_file_descriptor) == -1) {
+	if (fsync(file_descriptor_) == -1) {
 		throw std::runtime_error("Failed to flush memory-mapped file: fsync");
 	}
 #endif
 }
 
-void SharedMemoryBuffer::open_file() {
+void SharedMemoryBuffer::OpenFile() {
 #ifdef _WIN32
 	// Windows implementation
 	// Open the file for reading and writing
-	m_file_handle = CreateFileA(m_name.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-	if (m_file_handle == INVALID_HANDLE_VALUE) {
+	file_handle_ = CreateFileA(name_.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (file_handle_ == INVALID_HANDLE_VALUE) {
 		throw std::runtime_error("Failed to open memory-mapped file");
 	}
 
 	// Get the file size
-	m_size = GetFileSize(m_file_handle, nullptr);
+	size_ = GetFileSize(file_handle_, nullptr);
 
 #else
 	// Linux implementation
 	// Open the file for reading and writing
-	m_file_descriptor = open(m_name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-	if (m_file_descriptor == -1) {
+	file_descriptor_ = open(m_name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	if (file_descriptor_ == -1) {
 		throw std::runtime_error("Failed to open memory-mapped file");
 	}
 
 	// Get the file size
 	struct stat fileInfo;
-	if (fstat(m_file_descriptor, &fileInfo) == -1) {
-		close(m_file_descriptor);
+	if (fstat(file_descriptor_, &fileInfo) == -1) {
+		close(file_descriptor_);
 		throw std::runtime_error("Failed to get memory-mapped file size");
 	}
 	m_file_size = fileInfo.st_size;
 
 	// Map the file into memory
-	map_memory(m_file_size);
+	MapMemory(m_file_size);
 #endif
 }
 
-void SharedMemoryBuffer::close_file() {
+void SharedMemoryBuffer::CloseFile() {
 #ifdef _WIN32
 	// Windows implementation
 	// Close the file mapping handle and file handle
-	CloseHandle(m_file_mapping);
-	CloseHandle(m_file_handle);
+	CloseHandle(file_mapping_);
+	CloseHandle(file_handle_);
 #else
 	// Linux implementation
 	// Close the file descriptor
-	close(m_file_descriptor);
+	close(file_descriptor_);
 #endif
 }
 
-void SharedMemoryBuffer::map_memory(std::size_t size) {
+void SharedMemoryBuffer::MapMemory(std::size_t size) {
 #ifdef _WIN32
 	// Windows implementation
 	// Create or open the file mapping
-	m_file_mapping = CreateFileMappingA(m_file_handle, nullptr, PAGE_READWRITE, 0, size, nullptr);
-	if (m_file_mapping == nullptr) {
-		m_data = nullptr;
+	file_mapping_ = CreateFileMappingA(file_handle_, nullptr, PAGE_READWRITE, 0, size, nullptr);
+	if (file_mapping_ == nullptr) {
+		data_ = nullptr;
 		return;
 	}
 	// Map the file into memory
-	m_data = MapViewOfFile(m_file_mapping, FILE_MAP_ALL_ACCESS, 0, 0, size);
-	if (m_data == nullptr) {
-		CloseHandle(m_file_mapping);
-		CloseHandle(m_file_handle);
-		m_data = nullptr;
-		m_file_mapping = nullptr;
-		m_file_handle = nullptr;
+	data_ = MapViewOfFile(file_mapping_, FILE_MAP_ALL_ACCESS, 0, 0, size);
+	if (data_ == nullptr) {
+		CloseHandle(file_mapping_);
+		CloseHandle(file_handle_);
+		data_ = nullptr;
+		file_mapping_ = nullptr;
+		file_handle_ = nullptr;
 		return;
 	}
 #else
 	// Linux implementation
 	// Map the file into memory
-	m_data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, m_file_descriptor, 0);
+	m_data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, file_descriptor_, 0);
 	if (m_data == MAP_FAILED) {
-		close(m_file_descriptor);
+		close(file_descriptor_);
 		throw std::runtime_error("Failed to memory-map file");
 	}
 #endif
 }
 
-void SharedMemoryBuffer::unmap_memory() {
+void SharedMemoryBuffer::UnmapMemory() {
 #ifdef _WIN32
 	// Windows implementation
 	// Unmap the memory-mapped file
-	if (m_data != nullptr) {
-		UnmapViewOfFile(m_data);
-		m_data = nullptr;
+	if (data_ != nullptr) {
+		UnmapViewOfFile(data_);
+		data_ = nullptr;
 	}
-	if (m_file_mapping != nullptr) {
-		CloseHandle(m_file_mapping);
-		m_file_mapping = nullptr;
+	if (file_mapping_ != nullptr) {
+		CloseHandle(file_mapping_);
+		file_mapping_ = nullptr;
 	}
 #else
 	// Linux implementation

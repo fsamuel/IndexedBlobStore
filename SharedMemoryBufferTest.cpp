@@ -82,22 +82,22 @@ TEST_F(SharedMemoryBufferTest, Resize) {
 	SharedMemoryBuffer buffer(file_name);
 
 	// Test resizing to a larger size.
-	buffer.resize(64);
+	buffer.Resize(64);
 	ASSERT_EQ(buffer.size(), 64);
 	ASSERT_EQ(std::memcmp(buffer.data(), "InitialContent", 14), 0);
 
 	// Test resizing to a smaller size.
-	buffer.resize(8);
+	buffer.Resize(8);
 	ASSERT_EQ(buffer.size(), 8);
 	ASSERT_EQ(std::memcmp(buffer.data(), "InitialC", 8), 0);
 
 	// Test resizing to the same size.
-	buffer.resize(8);
+	buffer.Resize(8);
 	ASSERT_EQ(buffer.size(), 8);
 	ASSERT_EQ(std::memcmp(buffer.data(), "InitialC", 8), 0);
 
 	// Test resizing to a size smaller than the initial file size.
-	buffer.resize(12);
+	buffer.Resize(12);
 	ASSERT_EQ(buffer.size(), 12);
 	ASSERT_EQ(std::memcmp(buffer.data(), "InitialC", 12), 0);
 }
@@ -154,7 +154,7 @@ TEST_F(SharedMemoryBufferTest, ResizeToZero) {
 	SharedMemoryBuffer buffer("testfile", 100);
 
 	// Resize the buffer to zero
-	buffer.resize(0);
+	buffer.Resize(0);
 
 	// Check that the buffer has the correct size
 	EXPECT_EQ(buffer.size(), 0);

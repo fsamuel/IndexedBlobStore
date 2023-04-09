@@ -1,5 +1,5 @@
-#ifndef __SHARED_MEMORY_BUFFER_H
-#define __SHARED_MEMORY_BUFFER_H
+#ifndef SHARED_MEMORY_BUFFER_H_
+#define SHARED_MEMORY_BUFFER_H_
 
 #include <cstddef>
 #include <string>
@@ -34,26 +34,26 @@ public:
     ~SharedMemoryBuffer() noexcept;
 
     // Resize the memory-mapped file to the given size
-    void resize(std::size_t new_size);
+    void Resize(std::size_t new_size);
 
     // Return the name of the memory-mapped file
     const std::string& name() const {
-        return m_name;
+        return name_;
     }
 
     // Return the size of the memory-mapped file
     std::size_t size() const {
-        return m_size;
+        return size_;
     }
 
     // Return a pointer to the start of the memory-mapped file
     void* data() {
-        return m_data;
+        return data_;
     }
 
     // Return a const pointer to the start of the memory-mapped file
     const void* data() const {
-        return m_data;
+        return data_;
     }
 
     // Flush the memory-mapped buffer to disk
@@ -61,48 +61,48 @@ public:
 
     // Move assignment operator
     SharedMemoryBuffer& operator=(SharedMemoryBuffer&& other) noexcept {
-        unmap_memory();
-        close_file();
-        m_name = std::move(other.m_name);
-        m_size = other.m_size;
-        m_data = other.m_data;
-        other.m_size = 0;
-        other.m_data = nullptr;
-        other.m_name.clear();
+        UnmapMemory();
+        CloseFile();
+        name_ = std::move(other.name_);
+        size_ = other.size_;
+        data_ = other.data_;
+        other.size_ = 0;
+        other.data_ = nullptr;
+        other.name_.clear();
 #ifdef _WIN32
-        m_file_handle = other.m_file_handle;
-        m_file_mapping = other.m_file_mapping;
-        other.m_file_handle = 0;
-        other.m_file_mapping = 0;
+        file_handle_ = other.file_handle_;
+        file_mapping_ = other.file_mapping_;
+        other.file_handle_ = 0;
+        other.file_mapping_ = 0;
 #else
-        m_file_descriptor = other.m_file_descriptor;
-        other.m_file_descriptor = -1;
+        file_descriptor_ = other.file_descriptor_;
+        other.file_descriptor_ = -1;
 #endif
         return *this;
     }
 
 private:
     // Open the memory-mapped file
-    void open_file();
+    void OpenFile();
 
     // Close the memory-mapped file
-    void close_file();
+    void CloseFile();
 
     // Map the memory-mapped file into memory
-    void map_memory(std::size_t size);
+    void MapMemory(std::size_t size);
 
     // Unmap the memory-mapped file from memory
-    void unmap_memory();
+    void UnmapMemory();
 
-    std::string m_name;     // The name of the memory-mapped file
-    std::size_t m_size;     // The size of the memory-mapped file
-    void* m_data;           // A pointer to the start of the memory-mapped file
+    std::string name_;     // The name of the memory-mapped file
+    std::size_t size_;     // The size of the memory-mapped file
+    void* data_;           // A pointer to the start of the memory-mapped file
 #ifdef _WIN32
-    HANDLE m_file_handle;   // The Windows file handle
-    HANDLE m_file_mapping;  // The Windows file mapping handle
+    HANDLE file_handle_;   // The Windows file handle
+    HANDLE file_mapping_;  // The Windows file mapping handle
 #else
-    int m_file_descriptor;  // The Linux file descriptor
+    int file_descriptor_;  // The Linux file descriptor
 #endif
 };
 
-#endif // __SHARED_MEMORY_BUFFER_H
+#endif // SHARED_MEMORY_BUFFER_H_

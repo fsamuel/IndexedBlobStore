@@ -18,7 +18,7 @@
     <ClInclude Include="Main.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SharedMemoryBuffer.h">
+    <ClInclude Include="shared_memory_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SharedMemoryAllocator.h">
@@ -38,7 +38,7 @@
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SharedMemoryBuffer.cpp">
+    <ClCompile Include="shared_memory_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="BlobStore.cpp">

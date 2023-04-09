@@ -38,13 +38,13 @@
   </PropertyGroup>
   <ItemGroup>
     <ClInclude Include="..\BPlusTree\SharedMemoryAllocator.h" />
-    <ClInclude Include="..\BPlusTree\SharedMemoryBuffer.h" />
+    <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="..\BPlusTree\SharedMemoryVector.h" />
     <ClInclude Include="BlobStore.h" />
     <ClInclude Include="BPlusTree.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\BPlusTree\SharedMemoryBuffer.cpp" />
+    <ClCompile Include="shared_memory_buffer.cpp" />
     <ClCompile Include="BlobStore.cpp" />
     <ClCompile Include="BlobStoreTest.cpp" />
     <ClCompile Include="BPlusTreeTest.cpp" />

@@ -92,7 +92,7 @@ TEST_F(SharedMemoryVectorTest, FillAndResize) {
 	for (int i = 0; i < 1000; i++) {
 		EXPECT_EQ(vec[i], i);
 	}
-	vec.resize(500);
+	vec.Resize(500);
 	EXPECT_EQ(vec.size(), 500);
 	// Iterates over the vector to make sure the elements are there.
 	for (int i = 0; i < 500; i++) {
@@ -111,7 +111,7 @@ TEST_F(SharedMemoryVectorTest, FillAndResizeLarger) {
 	for (int i = 0; i < 100; i++) {
 		EXPECT_EQ(vec[i], i);
 	}
-	vec.resize(500);
+	vec.Resize(500);
 	EXPECT_EQ(vec.size(), 500);
 	// Iterates over the vector to make sure the elements are there.
 	for (int i = 0; i < 100; i++) {

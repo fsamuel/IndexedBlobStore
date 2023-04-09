@@ -2,7 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include "BlobStore.h"
-#include "SharedMemoryBuffer.h"
+#include "shared_memory_buffer.h"
 #include "SharedMemoryAllocator.h"
 #include "SharedMemoryVector.h"
 

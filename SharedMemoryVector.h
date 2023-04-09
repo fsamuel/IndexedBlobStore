@@ -280,7 +280,7 @@ public:
 		return begin() + index;
 	}
 
-	void resize(size_type count, const value_type& value = value_type()) {
+	void Resize(size_type count, const value_type& value = value_type()) {
 		if (count > state()->size) {
 			reserve(count);
 			for (size_type i = state()->size; i < count; ++i) {
