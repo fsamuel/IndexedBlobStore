@@ -39,18 +39,18 @@
   <ItemGroup>
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
-    <ClInclude Include="..\BPlusTree\SharedMemoryVector.h" />
-    <ClInclude Include="BlobStore.h" />
+    <ClInclude Include="shared_memory_vector.h" />
+    <ClInclude Include="blob_store.h" />
     <ClInclude Include="BPlusTree.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="shared_memory_buffer.cpp" />
-    <ClCompile Include="BlobStore.cpp" />
-    <ClCompile Include="BlobStoreTest.cpp" />
+    <ClCompile Include="blob_store.cpp" />
+    <ClCompile Include="blob_store_test.cpp" />
     <ClCompile Include="BPlusTreeTest.cpp" />
     <ClCompile Include="shared_memory_buffer_test.cpp" />
     <ClCompile Include="shared_memory_allocator_test.cpp" />
-    <ClCompile Include="SharedMemoryVectorTest.cpp" />
+    <ClCompile Include="shared_memory_vector_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BPlusTree\BPlusTree.vcxproj">

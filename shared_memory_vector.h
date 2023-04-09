@@ -1,5 +1,5 @@
-#ifndef __SHARED_MEMORY_VECTOR_H
-#define __SHARED_MEMORY_VECTOR_H
+#ifndef SHARED_MEMORY_VECTOR_H_
+#define SHARED_MEMORY_VECTOR_H_
 
 #include <stdexcept> 
 #include "shared_memory_allocator.h"
@@ -29,7 +29,7 @@ private:
 
 	allocator_type& allocator_;
 
-	void initializeVectorStateIfNecessary() {
+	void InitializeVectorStateIfNecessary() {
 		auto it = allocator_.first();
 		VectorStateHeader* stateHeaderPtr = reinterpret_cast<VectorStateHeader*>(&*it);
 		if (it == allocator_.end()) {
@@ -54,12 +54,12 @@ private:
 
 public:
 	explicit SharedMemoryVector(allocator_type& alloc) : allocator_(alloc) {
-		initializeVectorStateIfNecessary();
+		InitializeVectorStateIfNecessary();
 	}
 
 	explicit SharedMemoryVector(size_type count, const T& value = T(), const allocator_type& alloc = allocator_type())
 		: allocator_(alloc) {
-		initializeVectorStateIfNecessary();
+		InitializeVectorStateIfNecessary();
 		state()->size = count;
 		state()->data = allocator_.ToOffset(allocator_.Allocate(count * sizeof(T)));
 
@@ -70,7 +70,7 @@ public:
 
 	SharedMemoryVector(const SharedMemoryVector& other)
 		: allocator_(other.allocator_) {
-		initializeVectorStateIfNecessary();
+		InitializeVectorStateIfNecessary();
 		state()->size = other.state()->size;
 		state()->data = allocator_.ToOffset(allocator_.Allocate(state()->state * sizeof(T)));
 		for (size_type i = 0; i < state()->size; ++i) {
@@ -81,7 +81,7 @@ public:
 	SharedMemoryVector(SharedMemoryVector&& other)
 		: allocator_(std::move(other.allocator_))
 	{
-		initializeVectorStateIfNecessary();
+		InitializeVectorStateIfNecessary();
 		state()->size = other.state()->size;
 		state()->data = other.state()->data;
 		other.state()->size = 0;
@@ -296,5 +296,4 @@ public:
 	}
 };
 
-
-#endif  // __SHARED_MEMORY_VECTOR_H
+#endif  // SHARED_MEMORY_VECTOR_H_

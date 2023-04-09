@@ -1,5 +1,5 @@
-#ifndef __BLOB_STORE_H_
-#define __BLOB_STORE_H_
+#ifndef BLOB_STORE_H_
+#define BLOB_STORE_H_
 
 #include <cstdio>
 #include <sys/types.h>
@@ -7,7 +7,7 @@
 #include <cstring>
 
 #include "shared_Memory_allocator.h"
-#include "SharedMemoryVector.h"
+#include "shared_memory_vector.h"
 
 #ifdef _WIN64
 typedef __int64 ssize_t;
@@ -164,7 +164,7 @@ public:
 	struct BlobMetadata {
 		size_t size;
 		offset_type offset;
-		ssize_t nextFreeIndex; // -1 if the slot is occupied, or the index of the next free slot in the free list
+		ssize_t next_free_index; // -1 if the slot is occupied, or the index of the next free slot in the free list
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
@@ -186,14 +186,14 @@ public:
 	// Gets the object of type T at the specified index.
 	template<typename T>
 	T* Get(size_t index) {
-		if (index >= metadata.size() || metadata[index].nextFreeIndex != -1) {
+		if (index >= metadata_.size() || metadata_[index].next_free_index != -1) {
 			return nullptr;
 		}
-		BlobMetadata& metadataEntry = metadata[index];
-		if (metadataEntry.size == 0) {
+		BlobMetadata& metadata_entry = metadata_[index];
+		if (metadata_entry.size == 0) {
 			return nullptr;
 		}
-		return allocator.ToPtr<T>(metadataEntry.offset);
+		return allocator_.ToPtr<T>(metadata_entry.offset);
 	}
 
 	// Gets the object of type T at the specified index as a constant.
@@ -221,8 +221,8 @@ public:
 	// Returns the number of stored objects in the BlobStore.
 	size_t GetSize() const {
 		// The first slot in the metadata vector is always reserved for the free list.
-		size_t size = metadata.size() - 1;
-		size -= freeSlotCount();
+		size_t size = metadata_.size() - 1;
+		size -= GetFreeSlotCount();
 		return size;
 	}
 
@@ -247,11 +247,11 @@ public:
 		using reference = value_type&;
 
 		Iterator(BlobStore* store, size_t index) : store_(store), index_(index) {
-			advanceToValidIndex();
+			AdvanceToValidIndex();
 		}
 
 		size_t size() const {
-			return store_->metadata[index_].size;
+			return store_->metadata_[index_].size;
 		}
 
 		size_t index() const {
@@ -260,7 +260,7 @@ public:
 
 		Iterator& operator++() {
 			++index_;
-			advanceToValidIndex();
+			AdvanceToValidIndex();
 			return *this;
 		}
 
@@ -273,7 +273,7 @@ public:
 		Iterator& operator--() {
 			do {
 				--index_;
-			} while (store_->metadata[index_].nextFreeIndex != -1);
+			} while (store_->metadata_[index_].next_free_index != -1);
 			return *this;
 		}
 
@@ -300,8 +300,8 @@ public:
 		}
 
 	private:
-		void advanceToValidIndex() {
-			while (index_ < store_->metadata.size() && store_->metadata[index_].nextFreeIndex != -1) {
+		void AdvanceToValidIndex() {
+			while (index_ < store_->metadata_.size() && store_->metadata_[index_].next_free_index != -1) {
 				++index_;
 			}
 		}
@@ -315,7 +315,7 @@ public:
 	}
 
 	Iterator end() {
-		return Iterator(this, metadata.size());
+		return Iterator(this, metadata_.size());
 	}
 
 	Iterator cbegin() const {
@@ -323,15 +323,15 @@ public:
 	}
 
 	Iterator cend() const {
-		return Iterator(const_cast<BlobStore*>(this), metadata.size());
+		return Iterator(const_cast<BlobStore*>(this), metadata_.size());
 	}
 
 private:
 	// Returns the index of the first free slot in the metadata vector.
-	size_t findFreeSlot();
+	size_t FindFreeSlot();
 
 	// Returns the number of free slots in the metadata vector.
-	size_t freeSlotCount() const;
+	size_t GetFreeSlotCount() const;
 
 	// SharedMemoryAllocatorObserver overrides.
 	void OnBufferResize() override;
@@ -339,10 +339,10 @@ private:
 	void NotifyObserversOnMemoryReallocated();
 	void NotifyObserversOnDroppedBlob(size_t index);
 
-	Allocator allocator;
-	BlobMetadataAllocator metadataAllocator;
-	MetadataVector metadata;
-	std::vector<BlobStoreObserver*> m_observers;
+	Allocator allocator_;
+	BlobMetadataAllocator metadata_allocator_;
+	MetadataVector metadata_;
+	std::vector<BlobStoreObserver*> observers_;
 };
 
 template<typename T>
@@ -361,20 +361,20 @@ void BlobStoreObject<T>::UpdatePointer() {
 
 template <typename T, typename... Args>
 BlobStoreObject<T> BlobStore::Put(Args&&... args) {
-	size_t index = findFreeSlot();
-	char* ptr = allocator.Allocate(sizeof(T));
-	allocator.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-	metadata[index] = { sizeof(T), allocator.ToOffset(ptr), -1 };
+	size_t index = FindFreeSlot();
+	char* ptr = allocator_.Allocate(sizeof(T));
+	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+	metadata_[index] = { sizeof(T), allocator_.ToOffset(ptr), -1 };
 	return BlobStoreObject<T>(this, index);
 }
 
 template <typename T, typename... Args>
 BlobStoreObject<T> BlobStore::Put(size_t size, Args&&... args) {
-	size_t index = findFreeSlot();
-	char* ptr = allocator.Allocate(size);
-	allocator.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-	metadata[index] = { size, allocator.ToOffset(ptr), -1 };
+	size_t index = FindFreeSlot();
+	char* ptr = allocator_.Allocate(size);
+	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+	metadata_[index] = { size, allocator_.ToOffset(ptr), -1 };
 	return BlobStoreObject<T>(this, index);
 }
 
-#endif  // __BLOB_STORE_H_
+#endif  // BLOB_STORE_H_

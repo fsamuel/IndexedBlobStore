@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <algorithm>
 #include <array>
-#include "BlobStore.h"
+#include "blob_store.h"
 
 class BaseNode;
 

@@ -24,10 +24,10 @@
     <ClInclude Include="shared_memory_allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SharedMemoryVector.h">
+    <ClInclude Include="shared_memory_vector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="BlobStore.h">
+    <ClInclude Include="blob_store.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="BPlusTree.h">
@@ -41,7 +41,7 @@
     <ClCompile Include="shared_memory_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="BlobStore.cpp">
+    <ClCompile Include="blob_store.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 #include "shared_memory_allocator.h"
-#include "SharedMemoryVector.h"
+#include "shared_memory_vector.h"
 
 class SharedMemoryVectorTest : public ::testing::Test {
 protected:

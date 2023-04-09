@@ -1,10 +1,10 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include "BlobStore.h"
+#include "blob_store.h"
 #include "shared_memory_allocator.h"
 #include "shared_memory_buffer.h"
-#include "SharedMemoryVector.h"
+#include "shared_memory_vector.h"
 
 int main() {
     try {

@@ -1,4 +1,4 @@
-#include "BlobStore.h"
+#include "blob_store.h"
 #include "gtest/gtest.h"
 
 class BlobStoreTest : public ::testing::Test {
