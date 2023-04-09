@@ -2,7 +2,7 @@
 #define __SHARED_MEMORY_VECTOR_H
 
 #include <stdexcept> 
-#include "SharedMemoryAllocator.h"
+#include "shared_memory_allocator.h"
 
 template<typename T, typename Allocator = SharedMemoryAllocator<T>>
 class SharedMemoryVector {
@@ -22,64 +22,64 @@ public:
 private:
 	// Header for the allocator state in the shared memory buffer
 	struct VectorStateHeader {
-		uint32_t magicNumber;
+		uint32_t magic_number;
 		size_type size;
 		offset_type data;
 	};
 
-	allocator_type& m_allocator;
+	allocator_type& allocator_;
 
 	void initializeVectorStateIfNecessary() {
-		auto it = m_allocator.first();
+		auto it = allocator_.first();
 		VectorStateHeader* stateHeaderPtr = reinterpret_cast<VectorStateHeader*>(&*it);
-		if (it == m_allocator.end()) {
-			stateHeaderPtr = reinterpret_cast<VectorStateHeader*>(m_allocator.allocate(sizeof(VectorStateHeader)));
+		if (it == allocator_.end()) {
+			stateHeaderPtr = reinterpret_cast<VectorStateHeader*>(allocator_.Allocate(sizeof(VectorStateHeader)));
 		}
 		// Check if the vector state header has already been initialized
-		if (stateHeaderPtr->magicNumber != 0xfeedfeed) {
+		if (stateHeaderPtr->magic_number != 0xfeedfeed) {
 			// Initialize the allocator state header
-			stateHeaderPtr->magicNumber = 0xfeedfeed;
+			stateHeaderPtr->magic_number = 0xfeedfeed;
 			stateHeaderPtr->size = 0;
 			stateHeaderPtr->data = -1;
 		}
 	}
 
 	VectorStateHeader* state() {
-		return reinterpret_cast<VectorStateHeader*>(&*m_allocator.first());
+		return reinterpret_cast<VectorStateHeader*>(&*allocator_.first());
 	}
 
 	const VectorStateHeader* state() const {
-		return reinterpret_cast<const VectorStateHeader*>(&*m_allocator.first());
+		return reinterpret_cast<const VectorStateHeader*>(&*allocator_.first());
 	}
 
 public:
-	explicit SharedMemoryVector(allocator_type& alloc) : m_allocator(alloc) {
+	explicit SharedMemoryVector(allocator_type& alloc) : allocator_(alloc) {
 		initializeVectorStateIfNecessary();
 	}
 
 	explicit SharedMemoryVector(size_type count, const T& value = T(), const allocator_type& alloc = allocator_type())
-		: m_allocator(alloc) {
+		: allocator_(alloc) {
 		initializeVectorStateIfNecessary();
 		state()->size = count;
-		state()->data = m_allocator.ToOffset(m_allocator.allocate(count * sizeof(T)));
+		state()->data = allocator_.ToOffset(allocator_.Allocate(count * sizeof(T)));
 
 		for (size_type i = 0; i < state()->size; ++i) {
-			m_allocator.construct(m_allocator.ToPtr<T>(state()->data) + i, value);
+			allocator_.Construct(allocator_.ToPtr<T>(state()->data) + i, value);
 		}
 	}
 
 	SharedMemoryVector(const SharedMemoryVector& other)
-		: m_allocator(other.m_allocator) {
+		: allocator_(other.allocator_) {
 		initializeVectorStateIfNecessary();
 		state()->size = other.state()->size;
-		state()->data = m_allocator.ToOffset(m_allocator.allocate(state()->state * sizeof(T)));
+		state()->data = allocator_.ToOffset(allocator_.Allocate(state()->state * sizeof(T)));
 		for (size_type i = 0; i < state()->size; ++i) {
-			m_allocator.construct(m_allocator.ToPtr<T>(state()->data) + i, other[i]);
+			allocator_.Construct(allocator_.ToPtr<T>(state()->data) + i, other[i]);
 		}
 	}
 
 	SharedMemoryVector(SharedMemoryVector&& other)
-		: m_allocator(std::move(other.m_allocator))
+		: allocator_(std::move(other.allocator_))
 	{
 		initializeVectorStateIfNecessary();
 		state()->size = other.state()->size;
@@ -91,12 +91,12 @@ public:
 	SharedMemoryVector& operator=(const SharedMemoryVector& other) {
 		if (this != &other) {
 			clear();
-			m_allocator.deallocate(m_allocator.ToPtr<T>(state()->data));
+			allocator_.Deallocate(allocator_.ToPtr<T>(state()->data));
 			state()->size = other.state()->size;
-			m_allocator = other.m_allocator;
-			state()->data = m_allocator.ToOffset(m_allocator.allocate(state()->size));
+			allocator_ = other.allocator_;
+			state()->data = allocator_.ToOffset(allocator_.Allocate(state()->size));
 			for (size_type i = 0; i < state()->size; ++i) {
-				m_allocator.construct(m_allocator.ToPtr(state()->data) + i, other[i]);
+				allocator_.Construct(allocator_.ToPtr(state()->data) + i, other[i]);
 			}
 		}
 		return *this;
@@ -105,9 +105,9 @@ public:
 	SharedMemoryVector& operator=(SharedMemoryVector&& other) noexcept {
 		if (this != &other) {
 			clear();
-			m_allocator.deallocate(m_allocator.ToPtr<T>(state()->data));
+			allocator_.Deallocate(allocator_.ToPtr<T>(state()->data));
 			state()->size = other.state()->size;
-			m_allocator = std::move(other.m_allocator);
+			allocator_ = std::move(other.allocator_);
 			state()->data = other.state()->data;
 			other.state()->data = -1;
 			other.state()->size = 0;
@@ -128,25 +128,25 @@ public:
 
 	void clear() noexcept
 	{
-		m_allocator.deallocate(m_allocator.ToPtr<T>(state()->data));
+		allocator_.Deallocate(allocator_.ToPtr<T>(state()->data));
 		state()->size = 0;
 		state()->data = -1;
 	}
 
 	iterator begin() noexcept {
-		return m_allocator.ToPtr<T>(state()->data);
+		return allocator_.ToPtr<T>(state()->data);
 	}
 
 	const_iterator begin() const noexcept {
-		return m_allocator.ToPtr<T>(state()->data);
+		return allocator_.ToPtr<T>(state()->data);
 	}
 
 	iterator end() noexcept {
-		return m_allocator.ToPtr<T>(state()->data + state()->size * sizeof(T));
+		return allocator_.ToPtr<T>(state()->data + state()->size * sizeof(T));
 	}
 
 	const_iterator end() const noexcept {
-		return m_allocator.ToPtr<T>(state()->data + state()->size * sizeof(T));
+		return allocator_.ToPtr<T>(state()->data + state()->size * sizeof(T));
 	}
 
 	reverse_iterator rbegin() noexcept {
@@ -165,35 +165,35 @@ public:
 		return const_reverse_iterator(begin());
 	}
 
-	size_type capacity() const noexcept {
-		return m_allocator.capacity(state()->data);
+	size_type GetCapacity() const noexcept {
+		return allocator_.GetCapacity(state()->data);
 	}
 
 	void reserve(size_type new_cap) {
-		if (new_cap <= capacity()) {
+		if (new_cap <= GetCapacity()) {
 			return;
 		}
-		T* new_data = reinterpret_cast<T*>(m_allocator.allocate(new_cap * sizeof(T)));
+		T* new_data = reinterpret_cast<T*>(allocator_.Allocate(new_cap * sizeof(T)));
 		for (size_type i = 0; i < state()->size; ++i) {
-			m_allocator.construct(new_data + i, std::move_if_noexcept(m_allocator.ToPtr<T>(state()->data)[i]));
-			m_allocator.destroy(m_allocator.ToPtr<T>(state()->data) + i);
+			allocator_.Construct(new_data + i, std::move_if_noexcept(allocator_.ToPtr<T>(state()->data)[i]));
+			allocator_.Destroy(allocator_.ToPtr<T>(state()->data) + i);
 		}
-		m_allocator.deallocate(state()->data);
-		state()->data = m_allocator.ToOffset(new_data);
+		allocator_.Deallocate(state()->data);
+		state()->data = allocator_.ToOffset(new_data);
 	}
 
 	const T* data() const noexcept {
 		if (state()->data == -1) {
 			return nullptr;
 		}
-		return m_allocator.ToPtr<T>(state()->data);
+		return allocator_.ToPtr<T>(state()->data);
 	}
 
 	T* data() noexcept {
 		if (state()->data == -1) {
 			return nullptr;
 		}
-		return m_allocator.ToPtr<T>(state()->data);
+		return allocator_.ToPtr<T>(state()->data);
 	}
 
 	reference operator[](size_type pos) {
@@ -219,27 +219,27 @@ public:
 	}
 
 	reference front() {
-		return m_allocator.ToPtr<T>(state()->data)[0];
+		return allocator_.ToPtr<T>(state()->data)[0];
 	}
 
 	const_reference front() const {
-		return m_allocator.ToPtr<T>(state()->data)[0];
+		return allocator_.ToPtr<T>(state()->data)[0];
 	}
 
 	reference back() {
-		return m_allocator.ToPtr<T>(state()->data)[state()->size - 1];
+		return allocator_.ToPtr<T>(state()->data)[state()->size - 1];
 	}
 
 	const_reference back() const {
-		return m_allocator.ToPtr<T>(state()->data)[state()->size - 1];
+		return allocator_.ToPtr<T>(state()->data)[state()->size - 1];
 	}
 
 	template <typename... Args>
 	void emplace_back(Args&&... args) {
-		if (state()->size == capacity()) {
-			reserve(2 * capacity() + 1);
+		if (state()->size == GetCapacity()) {
+			reserve(2 * GetCapacity() + 1);
 		}
-		m_allocator.construct(m_allocator.ToPtr<T>(state()->data + state()->size * sizeof(T)), std::forward<Args>(args)...);
+		allocator_.Construct(allocator_.ToPtr<T>(state()->data + state()->size * sizeof(T)), std::forward<Args>(args)...);
 		++state()->size;
 	}
 
@@ -255,7 +255,7 @@ public:
 		if (empty()) {
 			return;
 		}
-		m_allocator.destroy(m_allocator.ToPtr<T>(state()->data) + state()->size - 1);
+		allocator_.Destroy(allocator_.ToPtr<T>(state()->data) + state()->size - 1);
 		--state()->size;
 	}
 
@@ -284,12 +284,12 @@ public:
 		if (count > state()->size) {
 			reserve(count);
 			for (size_type i = state()->size; i < count; ++i) {
-				m_allocator.construct(m_allocator.ToPtr<T>(state()->data) + i, value);
+				allocator_.Construct(allocator_.ToPtr<T>(state()->data) + i, value);
 			}
 		}
 		else if (count < state()->size) {
 			for (size_type i = count; i < state()->size; ++i) {
-				m_allocator.destroy(m_allocator.ToPtr<T>(state()->data) + i);
+				allocator_.Destroy(allocator_.ToPtr<T>(state()->data) + i);
 			}
 		}
 		state()->size = count;

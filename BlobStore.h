@@ -6,8 +6,8 @@
 #include <string>
 #include <cstring>
 
+#include "shared_Memory_allocator.h"
 #include "SharedMemoryVector.h"
-#include "SharedMemoryAllocator.h"
 
 #ifdef _WIN64
 typedef __int64 ssize_t;
@@ -362,8 +362,8 @@ void BlobStoreObject<T>::UpdatePointer() {
 template <typename T, typename... Args>
 BlobStoreObject<T> BlobStore::Put(Args&&... args) {
 	size_t index = findFreeSlot();
-	char* ptr = allocator.allocate(sizeof(T));
-	allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+	char* ptr = allocator.Allocate(sizeof(T));
+	allocator.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
 	metadata[index] = { sizeof(T), allocator.ToOffset(ptr), -1 };
 	return BlobStoreObject<T>(this, index);
 }
@@ -371,8 +371,8 @@ BlobStoreObject<T> BlobStore::Put(Args&&... args) {
 template <typename T, typename... Args>
 BlobStoreObject<T> BlobStore::Put(size_t size, Args&&... args) {
 	size_t index = findFreeSlot();
-	char* ptr = allocator.allocate(size);
-	allocator.construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
+	char* ptr = allocator.Allocate(size);
+	allocator.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
 	metadata[index] = { size, allocator.ToOffset(ptr), -1 };
 	return BlobStoreObject<T>(this, index);
 }

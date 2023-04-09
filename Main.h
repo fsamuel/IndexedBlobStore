@@ -2,8 +2,8 @@
 #include <vector>
 #include <algorithm>
 #include "BlobStore.h"
+#include "shared_memory_allocator.h"
 #include "shared_memory_buffer.h"
-#include "SharedMemoryAllocator.h"
 #include "SharedMemoryVector.h"
 
 int main() {

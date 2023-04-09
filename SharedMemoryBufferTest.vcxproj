@@ -37,7 +37,7 @@
     <IncludePath>C:\Users\fadys\source\repos\BPlusTree;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
-    <ClInclude Include="..\BPlusTree\SharedMemoryAllocator.h" />
+    <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="..\BPlusTree\SharedMemoryVector.h" />
     <ClInclude Include="BlobStore.h" />
@@ -48,8 +48,8 @@
     <ClCompile Include="BlobStore.cpp" />
     <ClCompile Include="BlobStoreTest.cpp" />
     <ClCompile Include="BPlusTreeTest.cpp" />
-    <ClCompile Include="SharedMemoryBufferTest.cpp" />
-    <ClCompile Include="SharedMemoryAllocatorTest.cpp" />
+    <ClCompile Include="shared_memory_buffer_test.cpp" />
+    <ClCompile Include="shared_memory_allocator_test.cpp" />
     <ClCompile Include="SharedMemoryVectorTest.cpp" />
   </ItemGroup>
   <ItemGroup>

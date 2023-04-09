@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "SharedMemoryBuffer.h"
+#include "shared_memory_buffer.h"
 #include <fstream>
 #include <fstream>
 #include <cstring>

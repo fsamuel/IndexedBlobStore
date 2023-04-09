@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "SharedMemoryAllocator.h"
+#include "shared_memory_allocator.h"
 #include "SharedMemoryVector.h"
 
 class SharedMemoryVectorTest : public ::testing::Test {
@@ -22,7 +22,7 @@ protected:
 TEST_F(SharedMemoryVectorTest, CreateEmptyVector) {
 	SharedMemoryVector<int> vec(*shared_mem_allocator);
 	EXPECT_EQ(vec.size(), 0);
-	EXPECT_EQ(vec.capacity(), 0);
+	EXPECT_EQ(vec.GetCapacity(), 0);
 	EXPECT_EQ(vec.data(), nullptr);
 }
 
@@ -54,16 +54,16 @@ TEST_F(SharedMemoryVectorTest, PushBackAndPopMultipleWithCapacity) {
 	vec.push_back(2);
 	vec.push_back(3);
 	EXPECT_EQ(vec.size(), 3);
-	size_t capacity = vec.capacity();
+	size_t GetCapacity = vec.GetCapacity();
 	vec.pop_back();
 	EXPECT_EQ(vec.size(), 2);
-	EXPECT_EQ(vec.capacity(), capacity);
+	EXPECT_EQ(vec.GetCapacity(), GetCapacity);
 	vec.pop_back();
 	EXPECT_EQ(vec.size(), 1);
-	EXPECT_EQ(vec.capacity(), capacity);
+	EXPECT_EQ(vec.GetCapacity(), GetCapacity);
 	vec.pop_back();
 	EXPECT_EQ(vec.size(), 0);
-	EXPECT_EQ(vec.capacity(), capacity);
+	EXPECT_EQ(vec.GetCapacity(), GetCapacity);
 }
 
 // Creates a vector, fills it with 1000 elements, then clears it.

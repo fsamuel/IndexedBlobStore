@@ -21,7 +21,7 @@
     <ClInclude Include="shared_memory_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SharedMemoryAllocator.h">
+    <ClInclude Include="shared_memory_allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SharedMemoryVector.h">

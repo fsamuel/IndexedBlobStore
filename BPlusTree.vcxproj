@@ -130,7 +130,7 @@
     <ClInclude Include="BlobStore.h" />
     <ClInclude Include="BPlusTree.h" />
     <ClInclude Include="Main.h" />
-    <ClInclude Include="SharedMemoryAllocator.h" />
+    <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="SharedMemoryVector.h" />
   </ItemGroup>

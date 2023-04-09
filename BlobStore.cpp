@@ -19,15 +19,15 @@ void BlobStore::Drop(size_t index) {
     if (index >= metadata.size() || metadata[index].nextFreeIndex != -1) {
         return;
     }
-    allocator.deallocate(allocator.ToPtr<char>(metadata[index].offset));
+    allocator.Deallocate(allocator.ToPtr<char>(metadata[index].offset));
     metadata[index].nextFreeIndex = metadata[0].nextFreeIndex;
     metadata[0].nextFreeIndex = index;
     NotifyObserversOnDroppedBlob(index);
 }
 
 void BlobStore::Compact() {
-    std::string bufferName = allocator.bufferName();
-    SharedMemoryBuffer tempBuffer(bufferName + "_data_compact");
+    std::string buffer_name = allocator.buffer_name();
+    SharedMemoryBuffer tempBuffer(buffer_name + "_data_compact");
     Allocator newAllocator(std::move(tempBuffer));
     for (size_t i = 0; i < metadata.size(); ++i) {
         BlobMetadata& metadataEntry = metadata[i];
@@ -38,7 +38,7 @@ void BlobStore::Compact() {
         }
 
         // Allocate memory in the new allocator and copy the data
-        char* newPtr = newAllocator.allocate(metadataEntry.size);
+        char* newPtr = newAllocator.Allocate(metadataEntry.size);
         std::memcpy(newPtr, allocator.ToPtr<char>(metadataEntry.offset), metadataEntry.size);
 
         // Update metadata with the new pointer
@@ -46,10 +46,10 @@ void BlobStore::Compact() {
     }
 
     allocator = std::move(newAllocator);
-    std::remove(bufferName.c_str());
+    std::remove(buffer_name.c_str());
 
     // Rename the new shared memory file to the original name
-    std::rename((bufferName + "_data_compact").c_str(), bufferName.c_str());
+    std::rename((buffer_name + "_data_compact").c_str(), buffer_name.c_str());
 
     NotifyObserversOnMemoryReallocated();
 }
