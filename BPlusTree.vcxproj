@@ -128,7 +128,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="blob_store.h" />
-    <ClInclude Include="BPlusTree.h" />
+    <ClInclude Include="b_plus_tree.h" />
     <ClInclude Include="Main.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />

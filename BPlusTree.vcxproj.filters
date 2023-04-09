@@ -30,7 +30,7 @@
     <ClInclude Include="blob_store.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="BPlusTree.h">
+    <ClInclude Include="b_plus_tree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
