@@ -74,7 +74,6 @@ void BlobStore::NotifyObserversOnDroppedBlob(size_t index) {
     }
 }
 
-
 size_t BlobStore::findFreeSlot() {
     if (metadata[0].nextFreeIndex != 0) {
         size_t freeIndex = metadata[0].nextFreeIndex;

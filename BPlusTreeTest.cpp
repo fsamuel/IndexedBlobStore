@@ -31,3 +31,21 @@ TEST_F(BPlusTreeTest, BasicTree) {
 		EXPECT_EQ(value, i * 100);
 	}
 }
+
+TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
+	BPlusTree<int, int, 4> tree(*blob_store);
+    for (int i = 0; i < 100; i++) {
+		tree.insert(i, i * 100);
+	}
+    for (int i = 0; i < 100; i++) {
+		int* value_ptr = tree.search(i);
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+    for (int i = 0; i < 100; i++) {
+		tree.remove(i);
+		int* value_ptr = tree.search(i);
+		EXPECT_EQ(value_ptr, nullptr);
+	}
+}

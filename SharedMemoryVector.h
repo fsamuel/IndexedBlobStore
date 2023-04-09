@@ -19,7 +19,6 @@ public:
 	using reverse_iterator = std::reverse_iterator<iterator>;
 	using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-
 private:
 	// Header for the allocator state in the shared memory buffer
 	struct VectorStateHeader {

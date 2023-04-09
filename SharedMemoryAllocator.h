@@ -4,6 +4,13 @@
 #include "SharedMemoryBuffer.h"
 #include <vector>
 
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#include <sys/mman.h>
+#endif
+
 class SharedMemoryAllocatorObserver {
 public:
 	virtual void OnBufferResize() = 0;
@@ -252,6 +259,22 @@ private:
 			observer->OnBufferResize();
 		}
 	}
+
+	size_t get_page_size() {
+#ifdef _WIN32
+		SYSTEM_INFO system_info;
+		GetSystemInfo(&system_info);
+		return system_info.dwPageSize;
+#else
+		return sysconf(_SC_PAGE_SIZE);
+#endif
+	}
+
+	size_t round_up_to_page_size(size_t size) {
+		size_t page_size = get_page_size();
+		return ((size + page_size - 1) / page_size) * page_size;
+	}
+
 	// Header for an allocated node in the allocator
 	struct AllocatedNodeHeader {
 		size_type size; // Size of the allocated block, including the header
@@ -409,7 +432,6 @@ private:
 		const AllocatedNodeHeader* m_nodePtr;
 		const SharedMemoryAllocator* m_allocator;
 	};
-
 
 	SharedMemoryBuffer m_buffer;  // Reference to the shared memory buffer used for allocation
 	std::vector<SharedMemoryAllocatorObserver*> m_observers;

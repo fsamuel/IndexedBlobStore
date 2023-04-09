@@ -82,7 +82,7 @@ public:
 	ValueType* search(const KeyType& key);
 
 	void insert(const KeyType& key, const ValueType& value);
-	//void remove(const KeyType& key);
+	bool remove(const KeyType& key);
 
 private:
 	BlobStore& m_blobStore;
@@ -95,6 +95,11 @@ private:
 	ValueType* search(BlobStoreObject<BaseNode> node, const KeyType& key);
 	void splitChild(BlobStoreObject<InternalNode> parentNode, size_t childIndex);
 	void insertNonFull(BlobStoreObject<BaseNode> node, const KeyType& key, const ValueType& value);
+
+	bool remove(BlobStoreObject<BaseNode> node, const KeyType & key);
+	BlobStoreObject<KeyType> getPredecessorKey(BlobStoreObject<BaseNode> node);
+	BlobStoreObject<KeyType> getSuccessorKey(BlobStoreObject<BaseNode> node);
+	void mergeChildren(BlobStoreObject<InternalNode> parentNode, int index);
 };
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -249,22 +254,21 @@ void BPlusTree<KeyType, ValueType, Order>::insertNonFull(BlobStoreObject<BaseNod
 		insertNonFull(BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[i]), key, value);
 	}
 }
-/*
+
 template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::remove(const KeyType& key) {
-	if (m_rootIndex == BlobStore::InvalidIndex) {
+	if (m_root == nullptr) {
 		return false;
 	}
-	return remove(m_rootIndex, key);
+	return remove(m_root, key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::remove(size_t nodeIndex, const KeyType& key) {
-	BaseNode* node = getNode(nodeIndex);
-	if (node->type == NodeType::Leaf) {
-		LeafNode* leafNode = static_cast<LeafNode*>(node);
+bool BPlusTree<KeyType, ValueType, Order>::remove(BlobStoreObject<BaseNode> node, const KeyType& key) {
+	if (node->type == NodeType::LEAF) {
+		BlobStoreObject<LeafNode> leafNode = node.To<LeafNode>();
 		int i = 0;
-		while (i < leafNode->n && key != leafNode->keys[i]) {
+		while (i < leafNode->n && key != *m_blobStore[leafNode->keys[i]]) {
 			i += 1;
 		}
 
@@ -278,98 +282,129 @@ bool BPlusTree<KeyType, ValueType, Order>::remove(size_t nodeIndex, const KeyTyp
 			leafNode->values[j - 1] = leafNode->values[j];
 		}
 		leafNode->n -= 1;
-		m_blobStore.Update(nodeIndex, leafNode); // Update the node in the BlobStore
 
 		return true; // Key successfully removed
 	}
 	else {
-		InternalNode* internalNode = static_cast<InternalNode*>(node);
+		BlobStoreObject<InternalNode> internalNode = node.To<InternalNode>();
 		int i = 0;
-		while (i < internalNode->n && key > internalNode->keys[i]) {
+		while (i < internalNode->n && key > *m_blobStore[internalNode->keys[i]]) {
 			i += 1;
 		}
-
-		if (i < internalNode->n && key == internalNode->keys[i]) {
+		// key <= *m_blobStore[internalNode->keys[i]]
+		if (i < internalNode->n && key == *m_blobStore[internalNode->keys[i]]) {
 			// Key found in the internal node
-			size_t leftChildIndex = internalNode->children[i];
-			size_t rightChildIndex = internalNode->children[i + 1];
-			BaseNode* leftChild = getNode(leftChildIndex);
-			BaseNode* rightChild = getNode(rightChildIndex);
+			BlobStoreObject<BaseNode> leftChild = BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[i]);
+			BlobStoreObject<BaseNode> rightChild = BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[i + 1]);
 
 			if (leftChild->n >= Order) {
 				// Case 1: left child has at least Order keys
-				KeyType predecessorKey = getPredecessorKey(leftChildIndex);
-				internalNode->keys[i] = predecessorKey;
-				m_blobStore.Update(nodeIndex, internalNode); // Update the node in the BlobStore
-				return remove(leftChildIndex, predecessorKey);
+				auto predecessorKeyNode = getPredecessorKey(leftChild);
+				internalNode->keys[i] = predecessorKeyNode.Index();
+				return remove(leftChild, *predecessorKeyNode);
 			}
 			else if (rightChild->n >= Order) {
 				// Case 2: right child has at least Order keys
-				KeyType successorKey = getSuccessorKey(rightChildIndex);
-				internalNode->keys[i] = successorKey;
-				m_blobStore.Update(nodeIndex, internalNode); // Update the node in the BlobStore
-				return remove(rightChildIndex, successorKey);
+				auto successorKeyNode = getSuccessorKey(rightChild);
+				internalNode->keys[i] = successorKeyNode.Index();
+				return remove(rightChild, *successorKeyNode);
 			}
 			else {
 				// Case 3: both children have Order - 1 keys
 				mergeChildren(internalNode, i);
-				m_blobStore.Update(nodeIndex, internalNode); // Update the node in the BlobStore
-				return remove(leftChildIndex, key);
+				return remove(leftChild, key);
 			}
 		}
 
-		return remove(internalNode->children[i], key);
+		return remove(BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[i]), key);
 	}
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyType BPlusTree<KeyType, ValueType, Order>::getPredecessorKey(size_t nodeIndex) {
-	BaseNode* node = getNode(nodeIndex);
-	while (node->type != NodeType::Leaf) {
-		InternalNode* internalNode = static_cast<InternalNode*>(node);
-		nodeIndex = internalNode->children[internalNode->n]; // Get the rightmost child
-		node = getNode(nodeIndex);
+BlobStoreObject<KeyType> BPlusTree<KeyType, ValueType, Order>::getPredecessorKey(BlobStoreObject<BaseNode> node) {
+	while (node->type != NodeType::LEAF) {
+		auto internalNode = node.To<InternalNode>();
+		node = BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[internalNode->n]); // Get the rightmost child
 	}
-	LeafNode* leafNode = static_cast<LeafNode*>(node);
-	return leafNode->keys[leafNode->n - 1]; // Return the rightmost key in the leaf node
+	auto leafNode = node.To<LeafNode>();
+	return BlobStoreObject<KeyType>(&m_blobStore, leafNode->keys[leafNode->n - 1]); // Return the rightmost key in the leaf node
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyType BPlusTree<KeyType, ValueType, Order>::getSuccessorKey(size_t nodeIndex) {
-	BaseNode* node = getNode(nodeIndex);
-	while (node->type != NodeType::Leaf) {
-		InternalNode* internalNode = static_cast<InternalNode*>(node);
-		nodeIndex = internalNode->children[0]; // Get the leftmost child
-		node = getNode(nodeIndex);
+BlobStoreObject<KeyType> BPlusTree<KeyType, ValueType, Order>::getSuccessorKey(BlobStoreObject<BaseNode> node) {
+	while (node->type != NodeType::LEAF) {
+		auto internalNode = node.To<InternalNode>();
+		node = BlobStoreObject<BaseNode>(&m_blobStore, internalNode->children[0]); // Get the leftmost child
 	}
-	LeafNode* leafNode = static_cast<LeafNode*>(node);
-	return leafNode->keys[0]; // Return the leftmost key in the leaf node
+	auto leafNode = node.To<LeafNode>();
+	return BlobStoreObject<KeyType>(&m_blobStore, leafNode->keys[0]); // Return the leftmost key in the leaf node
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-void BPlusTree<KeyType, ValueType, Order>::mergeChildren(InternalNode* parentNode, int index) {
-	size_t leftChildIndex = parentNode->children[index];
-	size_t rightChildIndex = parentNode->children[index + 1];
-	InternalNode* leftChild = static_cast<InternalNode*>(getNode(leftChildIndex));
-	InternalNode* rightChild = static_cast<InternalNode*>(getNode(rightChildIndex));
-	// Move the key from the parent node to the left child
-	leftChild->keys[leftChild->n] = parentNode->keys[index];
-	leftChild->n += 1;
+void BPlusTree<KeyType, ValueType, Order>::mergeChildren(BlobStoreObject<InternalNode> parentNode, int index) {
+	BlobStoreObject<BaseNode> leftChild(&m_blobStore, parentNode->children[index]);
+	BlobStoreObject<BaseNode> rightChild(&m_blobStore, parentNode->children[index + 1]);
 
-	// Move keys and children from the right child to the left child
-	std::copy(rightChild->keys, rightChild->keys + rightChild->n, leftChild->keys + leftChild->n);
-	std::copy(rightChild->children, rightChild->children + rightChild->n + 1, leftChild->children + leftChild->n);
-	leftChild->n += rightChild->n;
+	// Find the index of the key in the parent node that will be moved down.
+	size_t keyIndexInParent = 0;
+	for (size_t i = 0; i < parentNode->keys.size(); ++i) {
+		if (parentNode->children[i + 1] == rightChild.Index()) {
+			keyIndexInParent = i;
+			break;
+		}
+	}
 
-	// Update the parent node
-	std::copy(parentNode->keys + index + 1, parentNode->keys + parentNode->n, parentNode->keys + index);
-	std::copy(parentNode->children + index + 2, parentNode->children + parentNode->n + 1, parentNode->children + index + 1);
-	parentNode->n -= 1;
+	if (leftChild->type == NodeType::LEAF) {
+		// Merge leaf nodes
+		auto leftNode = leftChild.To<LeafNode>();
+		auto rightNode = rightChild.To<LeafNode>();
 
-	// Update the nodes in the BlobStore
-	m_blobStore.Update(leftChildIndex, leftChild);
-	m_blobStore.Update(rightChildIndex, rightChild);
-	m_blobStore.Delete(rightChildIndex);
+		// Move the key from the parent node down to the left sibling node
+		leftNode->keys[leftNode->n] = parentNode->keys[keyIndexInParent];
+		leftNode->values[leftNode->n] = rightNode->values.front();
+		++leftNode->n;
+
+		// Move all keys and values from the right sibling node to the left sibling node
+		for (size_t i = 0; i < rightNode->n; ++i) {
+			leftNode->keys[leftNode->n] = rightNode->keys[i];
+			leftNode->values[leftNode->n] = rightNode->values[i + 1];
+			++leftNode->n;
+		}
+
+	}
+	else {
+		// Merge internal nodes
+		auto leftNode = leftChild.To<InternalNode>();
+		auto rightNode = rightChild.To<InternalNode>();
+
+		// Move the key from the parent node down to the left sibling node
+		leftNode->keys[leftNode->n] = parentNode->keys[keyIndexInParent];
+		++leftNode->n;
+
+		// Move all keys and child pointers from the right sibling node to the left sibling node
+		for (size_t i = 0; i < rightNode->n; ++i) {
+			leftNode->keys[leftNode->n] = rightNode->keys[i];
+			leftNode->children[leftNode->n] = rightNode->children[i];
+
+			// Update the parent of the moved children
+			++leftNode->n;
+		}
+		leftNode->children[leftNode->n] = rightNode->children[rightNode->n];
+	}
+
+	// Update the parent node by removing the key that was moved down and the pointer to the right sibling node
+	parentNode->keys[keyIndexInParent] = parentNode->keys.back();
+	parentNode->children[keyIndexInParent + 1] = parentNode->children.back();
+	--parentNode->n;
+
+	/*
+	// If the parent node is now underflowing and is not the root node, call fixUnderflow
+	if (parentNode->n < Order / 2 && parentNode->parent != BlobStore::InvalidIndex) {
+		fixUnderflow(parentNodeIndex);
+	}*/
+
+	// Free the right sibling node
+	m_blobStore.Drop(rightChild.Index());
 }
-*/
+
 #endif // B_PLUS_TREE_H
