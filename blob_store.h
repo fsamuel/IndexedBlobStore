@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <string>
 #include <cstring>
+#include <iostream>
 
 #include "shared_Memory_allocator.h"
 #include "shared_memory_vector.h"
@@ -122,6 +123,16 @@ public:
 		return lhs != rhs.ptr_;
 	}
 
+	inline friend bool operator==(const BlobStoreObject& lhs, const BlobStoreObject& rhs)
+	{
+		return lhs.ptr_ == rhs.ptr_;
+	}
+
+	inline friend bool operator!=(const BlobStoreObject& lhs, const BlobStoreObject& rhs)
+	{
+		return lhs.ptr_ != rhs.ptr_;
+	}
+
 	// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
 	// when the memory in the BlobStore is reallocated. Updates the internal pointer
 	// to the object.
@@ -210,6 +221,17 @@ public:
 	// Gets the object as a constant char pointer at the specified index.
 	const char* operator[](size_t index) const {
 		return Get<char>(index);
+	}
+
+	// Used for Debugging Purposes; prints out the value stored at the specified index.
+	template<typename T>
+	void Print(size_t index) {
+		T* ptr = Get<T>(index);
+		if (ptr == nullptr) {
+			std::cout << "Invalid index" << std::endl;
+			return;
+		}
+		std::cout << *ptr << std::endl;
 	}
 
 	// Drops the object at the specified index, freeing the associated memory.
