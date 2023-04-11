@@ -49,3 +49,38 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 		EXPECT_EQ(value_ptr, nullptr);
 	}
 }
+
+// Builds a B+ tree with 100 elements, randomly deletes some of them, and then
+// checks that the remaining elements are still in the tree.
+TEST_F(BPlusTreeTest, DeleteAndVerify) {
+	BPlusTree<int, int, 4> tree(*blob_store);
+    for (int i = 0; i < 100; i++) {
+		tree.Insert(i, i * 100);
+	}
+	for (int i = 0; i < 100; i++) {
+		int* value_ptr = tree.Search(i);
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+	// Store the deleted elements in a set so we can check that they're not
+	// in the tree later.
+	std::set<int> deleted;
+	for (int i = 0; i < 100; i++) {
+		if (rand() % 2 == 0) {
+			tree.Remove(i);
+			deleted.insert(i);
+		}
+	}
+	for (int i = 0; i < 100; i++) {
+		int* value_ptr = tree.Search(i);
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		if (deleted.count(i) > 0) {
+			EXPECT_EQ(value_ptr, nullptr);
+		}
+		else {
+			EXPECT_NE(value_ptr, nullptr);
+			EXPECT_EQ(value, i * 100);
+		}
+	}
+}
