@@ -98,6 +98,13 @@ public:
 		return *this;
 	}
 
+	BlobStoreObject& operator=(std::nullptr_t) {
+		store_ = nullptr;
+		index_ = BlobStore::InvalidIndex;
+		ptr_ = nullptr;
+		return *this;
+	}
+
 	bool operator!() const // Enables "if (!sp) ..."
 	{
 		return store_ == nullptr || index_ == BlobStore::InvalidIndex || ptr_ == nullptr;

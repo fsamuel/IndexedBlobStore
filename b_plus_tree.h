@@ -85,6 +85,25 @@ public:
 	void Insert(const KeyType& key, const ValueType& value);
 	bool Remove(const KeyType& key);
 
+	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
+	void PrintNode(BlobStoreObject<BaseNode> node) {
+		if (node->type == NodeType::INTERNAL) {
+			BlobStoreObject<InternalNode> internal_node = node.To<InternalNode>();
+			std::cout << "Internal node (n = " << internal_node->n << ") ";
+			for (size_t i = 0; i < internal_node->n; ++i) {
+				std::cout << *BlobStoreObject<KeyType>(&blob_store_, internal_node->keys[i]) << " ";
+			}
+			std::cout << std::endl;
+		}
+		else {
+			BlobStoreObject<LeafNode> leaf_node = node.To<LeafNode>();
+			std::cout << "Leaf node (n = " << leaf_node->n << ") ";
+			for (size_t i = 0; i < leaf_node->n; ++i) {
+				std::cout << *BlobStoreObject<KeyType>(&blob_store_, leaf_node->keys[i]) << " ";
+			}
+			std::cout << std::endl;
+		}
+	}
 
 	// Prints the tree in a human-readable format in breadth-first order.
 	void PrintTree() {
@@ -411,10 +430,10 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObjec
 		auto child_internal_node = child_node.To<InternalNode>();
 		auto right_sibling_internal_node = right_sibling.To<InternalNode>();
 		child_internal_node->children[child_internal_node->n + 1] = right_sibling_internal_node->children[0];
-		for (int i = 1; i < right_sibling_internal_node->n; ++i) {
+		for (int i = 1; i <= right_sibling_internal_node->n; ++i) {
 			right_sibling_internal_node->children[i - 1] = right_sibling_internal_node->children[i];
 		}
-		right_sibling_internal_node->children[right_sibling_internal_node->n - 1] = BlobStore::InvalidIndex;
+		right_sibling_internal_node->children[right_sibling_internal_node->n] = BlobStore::InvalidIndex;
 	}
 
 	for (int i = 1; i < right_sibling->n; ++i) {
@@ -541,6 +560,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildren(BlobStoreObject<Interna
 		// The root node is empty, so make the left child the new root node
 		root_ = left_child;
 		blob_store_.Drop(parent_node.Index());
+		parent_node = nullptr;
 	}
 }
 
