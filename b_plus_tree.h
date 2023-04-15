@@ -197,7 +197,6 @@ private:
 
 	KeyValuePair<KeyType, ValueType> Remove(BlobStoreObject<InternalNode> parent_node, int child_index, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> RemoveFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
-	KeyValuePair<KeyType, ValueType>  RemoveFromInternalNode(BlobStoreObject<InternalNode> node, int key_index, const KeyType& key);
 	bool BorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, int child_index);
 	bool BorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, int child_index);
 
@@ -416,20 +415,6 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::RemoveFro
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::RemoveFromInternalNode(BlobStoreObject<InternalNode> node, int key_index, const KeyType& key) {
-	
-	// Key found in the internal node
-	BlobStoreObject<BaseNode> right_child = BlobStoreObject<BaseNode>(&blob_store_, node->children[key_index + 1]);
-	auto key_ptr = GetSuccessorKey(right_child, key);
-	if (key_ptr == nullptr) {
-		BlobStoreObject<BaseNode> left_child = BlobStoreObject<BaseNode>(&blob_store_, node->children[key_index]);
-		key_ptr = GetPredecessorKey(left_child);
-	}
-	node->keys[key_index] = key_ptr.Index();
-	return Remove(right_child, key);
-}
-
-template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, int child_index) {
 	if (child_index == 0) {
 		return false;
@@ -514,7 +499,6 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObjec
 			right_sibling_leaf_node->values[i - 1] = right_sibling_leaf_node->values[i];
 		}
 		right_sibling_leaf_node->values[right_sibling_leaf_node->n - 1] = BlobStore::InvalidIndex;
-
 	}
 
 	for (int i = 1; i < right_sibling->n; ++i) {

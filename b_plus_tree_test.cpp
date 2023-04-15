@@ -63,16 +63,18 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		EXPECT_NE(value_ptr, nullptr);
 		EXPECT_EQ(value, i * 100);
 	}
-	std::set<int> deleted;
-	// Store the deleted elements in a set so we can check that they're not
-	// in the tree later.
-	
-	for (int i = 0; i < 100; i++) {
-		if (rand() % 2 == 0) {
-			KeyValuePair<int, int> kv = tree.Remove(i);
 
+	// Delete a random half the elements in random order and store 
+	// the deleted keys in a set so we can check that they're not
+	// in the tree later.
+	std::set<int> deleted;
+	for (int i = 0; i < 50; ++i) {
+		int val = rand() % 100;
+		while (deleted.count(val) > 0) {
+			val = rand() % 100;
+			KeyValuePair<int, int> kv = tree.Remove(i);
+			std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
 			deleted.insert(i);
-			std::cout << "Deleting " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
 		}
 	}
 	
