@@ -77,8 +77,7 @@ public:
 	BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
 		if (blob_store_.IsEmpty()) {
 			CreateRoot();
-		}
-		else {
+		} else {
 			root_ = BlobStoreObject<BaseNode>(&blob_store_, blob_store_.begin().index());
 		}
 	}
@@ -103,8 +102,7 @@ public:
 				std::cout << *BlobStoreObject<KeyType>(&blob_store_, internal_node->keys[i]) << " ";
 			}
 			std::cout << std::endl;
-		}
-		else {
+		} else {
 			BlobStoreObject<LeafNode> leaf_node = node.To<LeafNode>();
 			std::cout << "Leaf node (n = " << leaf_node->n << ") ";
 			for (size_t i = 0; i < leaf_node->n; ++i) {
@@ -129,14 +127,13 @@ public:
 				BlobStoreObject<InternalNode> internal_node = node_with_level.node.To<InternalNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Internal node (n = " << internal_node->n << ") ";
 				for (size_t i = 0; i < internal_node->n; ++i) {
-					std::cout <<  * BlobStoreObject<KeyType>(&blob_store_, internal_node->keys[i]) << " ";
+					std::cout << *BlobStoreObject<KeyType>(&blob_store_, internal_node->keys[i]) << " ";
 				}
 				for (size_t i = 0; i <= internal_node->n; ++i) {
 					queue.push({ BlobStoreObject<BaseNode>(&blob_store_, internal_node->children[i]), node_with_level.level + 1 });
 				}
 				std::cout << std::endl;
-			}
-			else {
+			} else {
 				BlobStoreObject<LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Leaf node (n = " << leaf_node->n << ") ";
 				for (size_t i = 0; i < leaf_node->n; ++i) {
@@ -169,8 +166,7 @@ public:
 					v.push_back({ BlobStoreObject<BaseNode>(&blob_store_, internal_node->children[i]), node_with_level.level + 1 });
 				}
 				std::cout << std::endl;
-			}
-			else {
+			} else {
 				BlobStoreObject<LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Leaf node (n = " << leaf_node->n << ") ";
 				for (size_t i = 0; i < leaf_node->n; ++i) {
@@ -181,7 +177,6 @@ public:
 		}
 
 	}
-
 
 private:
 	BlobStore& blob_store_;
@@ -223,8 +218,7 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType> key, 
 		SplitChild(new_root, 0);
 		InsertNonFull(new_root.To<BaseNode>(), key, value);
 		root_ = new_root.To<BaseNode>();
-	}
-	else {
+	} else {
 		InsertNonFull(root_, key, value);
 	}
 }
@@ -292,8 +286,7 @@ void BPlusTree<KeyType, ValueType, Order>::SplitChild(BlobStoreObject<InternalNo
 			new_internal_node->children[i] = child_internal_node->children[middle_key_index + i + 1];
 			child_internal_node->children[middle_key_index + i + 1] = BlobStore::InvalidIndex;
 		}
-	}
-	else {
+	} else {
 		new_node->n = child_node->n - middle_key_index;
 		for (int i = 0; i < new_node->n; ++i) {
 			new_node->keys[i] = child_node->keys[middle_key_index + i];
@@ -340,8 +333,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 		leaf_node->keys[i + 1] = key.Index();
 		leaf_node->values[i + 1] = value.Index();
 		leaf_node->n += 1;
-	}
-	else {
+	} else {
 		BlobStoreObject<InternalNode> internal_node = node.To<InternalNode>();
 		int i = internal_node->n - 1;
 		while (i >= 0) {
@@ -366,7 +358,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 template <typename KeyType, typename ValueType, size_t Order>
 KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Remove(const KeyType& key) {
 	if (root_ == nullptr) {
-		return std::make_pair(BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex), 
+		return std::make_pair(BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex),
 			BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex));
 	}
 	//return Remove(root_, key);
@@ -440,8 +432,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject
 		}
 		child_internal_node->children[0] = left_sibling_internal_node->children[left_sibling_internal_node->n];
 		left_sibling_internal_node->children[left_sibling_internal_node->n] = BlobStore::InvalidIndex;
-	}
-	else {
+	} else {
 		auto child_leaf_node = child_node.To<LeafNode>();
 		auto left_sibling_leaf_node = left_sibling.To<LeafNode>();
 
@@ -490,8 +481,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObjec
 			right_sibling_internal_node->children[i - 1] = right_sibling_internal_node->children[i];
 		}
 		right_sibling_internal_node->children[right_sibling_internal_node->n] = BlobStore::InvalidIndex;
-	}
-	else {
+	} else {
 		auto child_leaf_node = child_node.To<LeafNode>();
 		auto right_sibling_leaf_node = right_sibling.To<LeafNode>();
 		child_leaf_node->values[child_leaf_node->n] = right_sibling_leaf_node->values[0];
@@ -519,8 +509,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Remove(Bl
 		if (!BorrowFromLeftSibling(parent_node, child_index) && !BorrowFromRightSibling(parent_node, child_index)) {
 			if (child_index < parent_node->n) {
 				MergeChildren(parent_node, child_index);
-			}
-			else {
+			} else {
 				child_node = BlobStoreObject<BaseNode>(&blob_store_, parent_node->children[child_index - 1]);
 				MergeChildren(parent_node, child_index - 1);
 			}
@@ -626,8 +615,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildren(BlobStoreObject<Interna
 			left_node->values[left_node->n] = right_node->values[i];
 			++left_node->n;
 		}
-	}
-	else {
+	} else {
 		// Merge internal nodes
 		auto left_node = left_child.To<InternalNode>();
 		auto right_node = right_child.To<InternalNode>();
