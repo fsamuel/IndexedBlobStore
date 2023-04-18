@@ -25,7 +25,7 @@ TEST_F(BPlusTreeTest, BasicTree) {
 		tree.Insert(i, i * 100);
 	}
     for (int i = 0; i < 100; i++) {
-        int* value_ptr = tree.Search(i);
+        auto value_ptr = tree.Search(i);
         int value = value_ptr == nullptr ? 0 : *value_ptr;
         EXPECT_NE(value_ptr, nullptr);
 		EXPECT_EQ(value, i * 100);
@@ -38,14 +38,14 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 		tree.Insert(i, i * 100);
 	}
     for (int i = 0; i < 100; i++) {
-		int* value_ptr = tree.Search(i);
+		auto value_ptr = tree.Search(i);
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
 		EXPECT_NE(value_ptr, nullptr);
 		EXPECT_EQ(value, i * 100);
 	}
     for (int i = 0; i < 100; i++) {
 		tree.Remove(i);
-		int* value_ptr = tree.Search(i);
+		auto value_ptr = tree.Search(i);
 		EXPECT_EQ(value_ptr, nullptr);
 	}
 }
@@ -58,7 +58,7 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		tree.Insert(i, i * 100);
 	}
 	for (int i = 0; i < 100; i++) {
-		int* value_ptr = tree.Search(i);
+		auto value_ptr = tree.Search(i);
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
 		EXPECT_NE(value_ptr, nullptr);
 		EXPECT_EQ(value, i * 100);
@@ -79,7 +79,7 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 	}
 	
 	for (int i = 0; i < 100; i++) {
-		int* value_ptr = tree.Search(i);
+		auto value_ptr = tree.Search(i);
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
 		if (deleted.count(i) > 0) {
 			EXPECT_EQ(value_ptr, nullptr);
