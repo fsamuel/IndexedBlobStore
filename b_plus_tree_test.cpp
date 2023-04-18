@@ -95,3 +95,23 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		}
 	}
 }
+
+// Populate a B+ tree with 100 elements. Search for an element in the middle
+// of the tree, and iterate over the rest until the end.
+TEST_F(BPlusTreeTest, BPlusTreeIteration) {
+	BPlusTree<int, int, 4> tree(*blob_store);
+	for (int i = 0; i < 100; i++) {
+		tree.Insert(i, i * 100);
+	}
+	auto it = tree.Search(50);
+	int last_key = 49;
+	while (it.GetKey() != nullptr) {
+		int key = *it.GetKey();
+		int value = *it.GetValue();
+		EXPECT_EQ(value, key * 100);
+		EXPECT_GT(key, last_key);
+		last_key = key;
+		std::cout << "Key: " << *it.GetKey() << ", Value: " << *it.GetValue() << std::endl;
+		++it;
+	}
+}

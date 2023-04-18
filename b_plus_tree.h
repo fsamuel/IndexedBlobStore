@@ -90,7 +90,7 @@ public:
 			++key_index_;
 			if (key_index_ > leaf_node_->n - 1) {
 				key_index_ = 0;
-				leaf_node_ = BlobStoreObject<LeafNode>(&store_, leaf_node_->next);
+				leaf_node_ = BlobStoreObject<LeafNode>(store_, leaf_node_->next);
 			}
 			return *this;
 		}
