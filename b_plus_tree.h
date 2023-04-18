@@ -74,6 +74,61 @@ private:
 public:
 	using offset_type = std::ptrdiff_t;
 
+	// Iterator class for BPlusTree
+	class Iterator {
+	public:
+		//using iterator_category = std::forward_iterator_tag;
+		using key_type = KeyType;
+		using value_type = ValueType;
+		using difference_type = std::ptrdiff_t;
+		using pointer = value_type*;
+		using reference = value_type&;
+
+		Iterator(BlobStore* store, BlobStoreObject<LeafNode> leaf_node, size_t key_index) : store_(store), leaf_node_(leaf_node), key_index_(key_index) {}
+
+		Iterator& operator++() {
+			++key_index_;
+			if (key_index_ > leaf_node_->n - 1) {
+				key_index_ = 0;
+				leaf_node_ = BlobStoreObject<LeafNode>(&store_, leaf_node_->next);
+			}
+			return *this;
+		}
+
+		Iterator operator++(int) {
+			Iterator temp = *this;
+			++(*this);
+			return temp;
+		}
+
+		bool operator==(const Iterator& other) const {
+			return store_ == other.store_ && leaf_node_ == other.leaf_node_ && key_index_ == other.key_index_;
+		}
+
+		bool operator!=(const Iterator& other) const {
+			return !(*this == other);
+		}
+
+		BlobStoreObject<KeyType> GetKey() const {
+			if (leaf_node_ != nullptr) {
+				return BlobStoreObject<KeyType>(store_, leaf_node_->keys[key_index_]);
+			}
+			return BlobStoreObject<KeyType>();
+		}
+
+		BlobStoreObject<ValueType> GetValue() const {
+			if (leaf_node_ != nullptr) {
+				return BlobStoreObject<ValueType>(store_, leaf_node_->values[key_index_]);
+			}
+			return BlobStoreObject<ValueType>();
+		}
+
+	private:
+		BlobStore* store_;
+		BlobStoreObject<LeafNode> leaf_node_;
+		size_t key_index_;
+	};
+
 	BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
 		if (blob_store_.IsEmpty()) {
 			CreateRoot();
@@ -82,7 +137,7 @@ public:
 		}
 	}
 
-	BlobStoreObject<ValueType> Search(const KeyType& key);
+	Iterator Search(const KeyType& key);
 
 	void Insert(const KeyType& key, const ValueType& value);
 	void Insert(BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
@@ -186,7 +241,7 @@ private:
 		root_ = blob_store_.Put<LeafNode>(sizeof(LeafNode), BlobStore::InvalidIndex).To<BaseNode>();
 	}
 
-	BlobStoreObject<ValueType> Search(BlobStoreObject<BaseNode> node, const KeyType& key);
+	Iterator Search(BlobStoreObject<BaseNode> node, const KeyType& key);
 	void SplitChild(BlobStoreObject<InternalNode> parentNode, size_t childIndex);
 	void InsertNonFull(BlobStoreObject<BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 
@@ -224,24 +279,24 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType> key, 
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<ValueType> BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
+typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
 	if (root_ == nullptr) {
-		return BlobStoreObject<ValueType>();
+		return Iterator(&blob_store_, BlobStoreObject<LeafNode>(), 0);
 	}
 	return Search(root_, key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<ValueType> BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<BaseNode> node, const KeyType& key) {
+typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<BaseNode> node, const KeyType& key) {
 	if (node->type == NodeType::LEAF) {
 		auto leaf_node = node.To<LeafNode>();
 		for (int i = 0; i < leaf_node->n; i++) {
 			KeyType* current_key = reinterpret_cast<KeyType*>(blob_store_[leaf_node->keys[i]]);
 			if (key == *current_key) {
-				return BlobStoreObject<ValueType>(&blob_store_, leaf_node->values[i]);
+				return Iterator(&blob_store_, leaf_node, i); 
 			}
 		}
-		return BlobStoreObject<ValueType>();
+		return Iterator(&blob_store_, BlobStoreObject<LeafNode>(), 0);
 	} else {
 		auto internal_node = node.To<InternalNode>();
 		int i = 0;

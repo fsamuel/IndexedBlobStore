@@ -69,7 +69,7 @@ public:
 	}
 
 	const T* operator->() const {
-
+		return ptr_;
 	}
 
 	// Dereference operator: Provides access to the object itself.
