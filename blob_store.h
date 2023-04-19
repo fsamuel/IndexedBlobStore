@@ -179,15 +179,6 @@ public:
 
 	static constexpr index_type InvalidIndex = static_cast<index_type>(-1);
 
-	struct BlobMetadata {
-		size_t size;
-		offset_type offset;
-		ssize_t next_free_index; // -1 if the slot is occupied, or the index of the next free slot in the free list
-	};
-
-	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
-	using MetadataVector = SharedMemoryVector<BlobMetadata, BlobMetadataAllocator>;
-
 	// Constructor that initializes the BlobStore with the provided metadata and data shared memory buffers.
 	BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& dataBuffer);
 
@@ -356,6 +347,15 @@ public:
 	}
 
 private:
+	struct BlobMetadata {
+		size_t size;
+		offset_type offset;
+		ssize_t next_free_index; // -1 if the slot is occupied, or the index of the next free slot in the free list
+	};
+
+	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
+	using MetadataVector = SharedMemoryVector<BlobMetadata, BlobMetadataAllocator>;
+
 	// Returns the index of the first free slot in the metadata vector.
 	size_t FindFreeSlot();
 
