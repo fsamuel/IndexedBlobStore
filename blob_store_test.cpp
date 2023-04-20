@@ -140,26 +140,26 @@ TEST_F(BlobStoreTest, BlobIteration) {
 	BlobStoreObject<int> ptr3 = store.New<int>(300);
 	auto it = store.begin();
 	EXPECT_EQ(it.index(), ptr1.Index());
-	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
+	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 100);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 	EXPECT_EQ(it.index(), ptr2.Index());
-	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 200);
+	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 200);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 	EXPECT_EQ(it.index(), ptr3.Index());
-	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 300);
+	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 300);
 	EXPECT_EQ(it.size(), sizeof(int));
 	store.Drop(ptr2.Index());
 
 	it = store.begin();
 	EXPECT_EQ(it.index(), ptr1.Index());
-	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
+	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 100);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 
 	EXPECT_EQ(it.index(), ptr3.Index());
-	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 300);
+	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 300);
 	EXPECT_EQ(it.size(), sizeof(int));
 }
 

@@ -13,9 +13,9 @@ int main() {
         BlobStore blobStore(std::move(metadataBuffer), std::move(dataBuffer));
         blobStore.Drop(2);
         blobStore.Drop(3);
-        char* last = blobStore.Get<char>(1);
+        const char* last = blobStore.Get<char>(1);
         if (last != nullptr) {
-            std::cout << "Last Blob: " << *reinterpret_cast<int*>(last) << std::endl;
+            std::cout << "Last Blob: " << *reinterpret_cast<const int*>(last) << std::endl;
         }
         BlobStoreObject<int> ptr = blobStore.New<int>(1337);
         std::cout << "Blob: " << *ptr << std::endl;
