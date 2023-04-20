@@ -185,12 +185,9 @@ public:
 	// BlobStore destructor
 	~BlobStore();
 
-	// Puts an object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
+	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	BlobStoreObject<T> Put(Args&&... args);
-
-	template <typename T, typename... Args>
-	BlobStoreObject<T> Put(size_t size, Args&&... args);
+	BlobStoreObject<T> New(Args&&... args);
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
@@ -389,20 +386,11 @@ void BlobStoreObject<T>::UpdatePointer() {
 }
 
 template <typename T, typename... Args>
-BlobStoreObject<T> BlobStore::Put(Args&&... args) {
+BlobStoreObject<T> BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
 	char* ptr = allocator_.Allocate(sizeof(T));
 	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
 	metadata_[index] = { sizeof(T), allocator_.ToOffset(ptr), -1 };
-	return BlobStoreObject<T>(this, index);
-}
-
-template <typename T, typename... Args>
-BlobStoreObject<T> BlobStore::Put(size_t size, Args&&... args) {
-	size_t index = FindFreeSlot();
-	char* ptr = allocator_.Allocate(size);
-	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-	metadata_[index] = { size, allocator_.ToOffset(ptr), -1 };
 	return BlobStoreObject<T>(this, index);
 }
 

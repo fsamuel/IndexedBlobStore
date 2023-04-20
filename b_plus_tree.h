@@ -215,7 +215,7 @@ private:
 	BlobStoreObject<BaseNode> root_;
 
 	void CreateRoot() {
-		root_ = blob_store_.Put<LeafNode>(sizeof(LeafNode), BlobStore::InvalidIndex).To<BaseNode>();
+		root_ = blob_store_.New<LeafNode>(BlobStore::InvalidIndex).To<BaseNode>();
 	}
 
 	BlobStoreObject<BaseNode> GetChild(BlobStoreObject<InternalNode> node, size_t child_index) {
@@ -255,8 +255,8 @@ private:
 
 template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const ValueType& value) {
-	BlobStoreObject<KeyType> key_ptr = blob_store_.Put<KeyType>(sizeof(KeyType), key);
-	BlobStoreObject<ValueType> value_ptr = blob_store_.Put<ValueType>(sizeof(ValueType), value);
+	BlobStoreObject<KeyType> key_ptr = blob_store_.New<KeyType>(key);
+	BlobStoreObject<ValueType> value_ptr = blob_store_.New<ValueType>(value);
 
 	Insert(key_ptr, value_ptr);
 }
@@ -265,7 +265,7 @@ template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value) {
 	if (root_->n == Order - 1) {
 		// Root is full, create a new root
-		BlobStoreObject<InternalNode> new_root = blob_store_.Put<InternalNode>(sizeof(InternalNode), 1);
+		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
 		new_root->children[0] = root_.Index();
 		new_root->n = 0;
 		SplitChild(new_root, 0);
@@ -320,8 +320,8 @@ void BPlusTree<KeyType, ValueType, Order>::SplitChild(BlobStoreObject<InternalNo
 	NodeType new_node_type = child_node->type;
 	BlobStoreObject<BaseNode> new_node = (
 		new_node_type == NodeType::INTERNAL ?
-		blob_store_.Put<InternalNode>(sizeof(InternalNode), Order).To<BaseNode>() :
-		blob_store_.Put<LeafNode>(sizeof(LeafNode), Order).To<BaseNode>());
+		blob_store_.New<InternalNode>(Order).To<BaseNode>() :
+		blob_store_.New<LeafNode>(Order).To<BaseNode>());
 
 	int middle_key_index = (child_node->n - 1) / 2;
 	size_t middle_key = child_node->keys[middle_key_index];

@@ -27,9 +27,9 @@ TEST_F(BlobStoreTest, CreateEmptyBlobStore) {
 
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<char> ptr1 = store.Put<char>(100);
+	BlobStoreObject<char> ptr1 = store.New<char>(100);
 	strcpy(&*ptr1, "This is a test.");
-	BlobStoreObject<char> ptr2 = store.Put<char>(100);
+	BlobStoreObject<char> ptr2 = store.New<char>(100);
 	strcpy(&*ptr2, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 2);
 	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
@@ -39,8 +39,8 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 // Creates two blobs with the templatized Put method, and then gets them back.
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsUsingTemplatizedPut) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<int> ptr1 = store.Put<int>(100);
-	BlobStoreObject<int> ptr2 = store.Put<int>(1337);
+	BlobStoreObject<int> ptr1 = store.New<int>(100);
+	BlobStoreObject<int> ptr2 = store.New<int>(1337);
 
 	EXPECT_EQ(store.GetSize(), 2);
 	EXPECT_EQ(*ptr1, 100);
@@ -50,17 +50,17 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsUsingTemplatizedPut) {
 // Creates a few blobs, deletes some in the middle, and the compacts the store.
 TEST_F(BlobStoreTest, CreateBlobStoreWithBlobsAndDeleteTwo) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<char> ptr1 = store.Put<char>(100);
+	BlobStoreObject<char> ptr1 = store.New<char>(100);
 	strcpy(&*ptr1, "This is a test.");
-	BlobStoreObject<char> ptr2 = store.Put<char>(100);
+	BlobStoreObject<char> ptr2 = store.New<char>(100);
 	strcpy(&*ptr2, "Hello World!");
-	BlobStoreObject<char> ptr3 = store.Put<char>(100);
+	BlobStoreObject<char> ptr3 = store.New<char>(100);
 	strcpy(&*ptr3, "This is a test.");
-	BlobStoreObject<char> ptr4 = store.Put<char>(100);
+	BlobStoreObject<char> ptr4 = store.New<char>(100);
 	strcpy(&*ptr4, "Hello World!");
-	BlobStoreObject<char> ptr5 = store.Put<char>(100);
+	BlobStoreObject<char> ptr5 = store.New<char>(100);
 	strcpy(&*ptr5, "This is a test.");
-	BlobStoreObject<char> ptr6 = store.Put<char>(100);
+	BlobStoreObject<char> ptr6 = store.New<char>(100);
 	strcpy(&*ptr6, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 6);
 	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
@@ -87,17 +87,17 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithBlobsAndDeleteTwo) {
 // Creates a few blobs, deletes some in the middle, and the compacts the store.
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<char> ptr1 = store.Put<char>(100);
+	BlobStoreObject<char> ptr1 = store.New<char>(100);
 	strcpy(&*ptr1, "This is a test.");
-	BlobStoreObject<char> ptr2 = store.Put<char>(100);
+	BlobStoreObject<char> ptr2 = store.New<char>(100);
 	strcpy(&*ptr2, "Hello World!");
-	BlobStoreObject<char> ptr3 = store.Put<char>(100);
+	BlobStoreObject<char> ptr3 = store.New<char>(100);
 	strcpy(&*ptr3, "This is a test.");
-	BlobStoreObject<char> ptr4 = store.Put<char>(100);
+	BlobStoreObject<char> ptr4 = store.New<char>(100);
 	strcpy(&*ptr4, "Hello World!");
-	BlobStoreObject<char> ptr5 = store.Put<char>(100);
+	BlobStoreObject<char> ptr5 = store.New<char>(100);
 	strcpy(&*ptr5, "This is a test.");
-	BlobStoreObject<char> ptr6 = store.Put<char>(100);
+	BlobStoreObject<char> ptr6 = store.New<char>(100);
 	strcpy(&*ptr6, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 6);
 	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
@@ -119,9 +119,9 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
 	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
 	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
-	BlobStoreObject<char> ptr7 = store.Put<char>(100);
+	BlobStoreObject<char> ptr7 = store.New<char>(100);
 	strcpy(&*ptr7, "This is a test.");
-	BlobStoreObject<char> ptr8 = store.Put<char>(100);
+	BlobStoreObject<char> ptr8 = store.New<char>(100);
 	strcpy(&*ptr8, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 6);
 	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
@@ -135,9 +135,9 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 // Creates a few blobs of ints, iterates, deletes a few then iterates again.
 TEST_F(BlobStoreTest, BlobIteration) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<int> ptr1 = store.Put<int>(100);
-	BlobStoreObject<int> ptr2 = store.Put<int>(200);
-	BlobStoreObject<int> ptr3 = store.Put<int>(300);
+	BlobStoreObject<int> ptr1 = store.New<int>(100);
+	BlobStoreObject<int> ptr2 = store.New<int>(200);
+	BlobStoreObject<int> ptr3 = store.New<int>(300);
 	auto it = store.begin();
 	EXPECT_EQ(it.index(), ptr1.Index());
 	EXPECT_EQ(*reinterpret_cast<int*>(&*it), 100);
@@ -166,9 +166,9 @@ TEST_F(BlobStoreTest, BlobIteration) {
 // Creates a couple of blobs, deletes one and insures that the BlobStoreObject is no longer valid.
 TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<char> ptr1 = store.Put<char>(100);
+	BlobStoreObject<char> ptr1 = store.New<char>(100);
 	strcpy(&*ptr1, "This is a test.");
-	BlobStoreObject<char> ptr2 = store.Put<char>(100);
+	BlobStoreObject<char> ptr2 = store.New<char>(100);
 	strcpy(&*ptr2, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 2);
 	EXPECT_EQ(store[ptr1.Index()], &*ptr1);

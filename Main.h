@@ -17,7 +17,7 @@ int main() {
         if (last != nullptr) {
             std::cout << "Last Blob: " << *reinterpret_cast<int*>(last) << std::endl;
         }
-        BlobStoreObject<int> ptr = blobStore.Put<int>(sizeof(int), 1337);
+        BlobStoreObject<int> ptr = blobStore.New<int>(1337);
         std::cout << "Blob: " << *ptr << std::endl;
     }
     catch (const std::runtime_error& e) {
