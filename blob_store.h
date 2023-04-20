@@ -191,7 +191,7 @@ public:
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
-	T* Get(size_t index) {
+	T* GetMutable(size_t index) {
 		if (index >= metadata_.size() || metadata_[index].next_free_index != -1) {
 			return nullptr;
 		}
@@ -205,12 +205,12 @@ public:
 	// Gets the object of type T at the specified index as a constant.
 	template<typename T>
 	const T* Get(size_t index) const {
-		return const_cast<BlobStore*>(this)->Get<T>(index);
+		return const_cast<BlobStore*>(this)->GetMutable<T>(index);
 	}
 
 	// Gets the object as a char pointer at the specified index.
 	char* operator[](size_t index) {
-		return Get<char>(index);
+		return GetMutable<char>(index);
 	}
 
 	// Gets the object as a constant char pointer at the specified index.
@@ -309,11 +309,11 @@ public:
 		}
 
 		reference operator*() {
-			return *store_->Get<char>(index_);
+			return *store_->GetMutable<char>(index_);
 		}
 
 		pointer operator->() {
-			return store_->Get<char>(index_);
+			return store_->GetMutable<char>(index_);
 		}
 
 	private:
@@ -382,7 +382,7 @@ BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index)
 
 template<typename T>
 void BlobStoreObject<T>::UpdatePointer() {
-	ptr_ = store_->Get<T>(index_);
+	ptr_ = store_->GetMutable<T>(index_);
 }
 
 template <typename T, typename... Args>
