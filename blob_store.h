@@ -6,6 +6,7 @@
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <type_traits>
 
 #include "shared_Memory_allocator.h"
 #include "shared_memory_vector.h"
@@ -82,6 +83,31 @@ public:
 
 	const T& operator*() const {
 		return *ptr_;
+	}
+
+	// Operator[] implementation for array types.
+	template<typename U = T>
+	typename std::enable_if<std::is_array<U>::value, typename std::remove_extent<U>::type&>::type
+		operator[](size_t i) {
+		return (*ptr_)[i];
+	}
+
+	template<typename U = T>
+	typename std::enable_if<std::is_array<U>::value, const typename std::remove_extent<U>::type&>::type
+		operator[](size_t i) const {
+		return (*ptr_)[i];
+	}
+
+	template<typename U = T>
+	typename std::enable_if<!std::is_array<U>::value, T&>::type
+		operator[](size_t i) {
+		return (*ptr_)[i];
+	}
+
+	template<typename U = T>
+	typename std::enable_if<!std::is_array<U>::value, const T&>::type
+		operator[](size_t i) const {
+		return (*ptr_)[i];
 	}
 
 	// Returns the index of the Blob.
@@ -204,17 +230,6 @@ public:
 		return const_cast<BlobStore*>(this)->GetMutable<const T>(index);
 	}
 
-	// Used for Debugging Purposes; prints out the value stored at the specified index.
-	template<typename T>
-	void Print(size_t index) {
-		T* ptr = Get<T>(index);
-		if (ptr == nullptr) {
-			std::cout << "Invalid index" << std::endl;
-			return;
-		}
-		std::cout << *ptr << std::endl;
-	}
-
 	// Drops the object at the specified index, freeing the associated memory.
 	void Drop(size_t index);
 
@@ -246,8 +261,8 @@ public:
 		using iterator_category = std::bidirectional_iterator_tag;
 		using value_type = char;
 		using difference_type = std::ptrdiff_t;
-		using pointer = value_type*;
-		using reference = value_type&;
+		using pointer = const value_type*;
+		using reference = const value_type&;
 
 		Iterator(BlobStore* store, size_t index) : store_(store), index_(index) {
 			AdvanceToValidIndex();
@@ -294,12 +309,14 @@ public:
 			return !(*this == other);
 		}
 
-		reference operator*() {
-			return *store_->GetMutable<char>(index_);
+		template<typename T>
+		BlobStoreObject<const T> Get() const {
+			return store_->Get<const T>(index_);
 		}
 
-		pointer operator->() {
-			return &*store_->GetMutable<char>(index_);
+		template<typename T>
+		BlobStoreObject<T> GetMutable() {
+			return store_->GetMutable<T>(index_);
 		}
 
 	private:

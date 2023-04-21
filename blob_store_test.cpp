@@ -140,41 +140,41 @@ TEST_F(BlobStoreTest, BlobIteration) {
 	BlobStoreObject<int> ptr3 = store.New<int>(300);
 	auto it = store.begin();
 	EXPECT_EQ(it.index(), ptr1.Index());
-	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 100);
+	EXPECT_EQ(*it.Get<int>(), 100);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 	EXPECT_EQ(it.index(), ptr2.Index());
-	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 200);
+	EXPECT_EQ(*it.Get<int>(), 200);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 	EXPECT_EQ(it.index(), ptr3.Index());
-	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 300);
+	EXPECT_EQ(*it.Get<int>(), 300);
 	EXPECT_EQ(it.size(), sizeof(int));
 	store.Drop(ptr2.Index());
 
 	it = store.begin();
 	EXPECT_EQ(it.index(), ptr1.Index());
-	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 100);
+	EXPECT_EQ(*it.Get<int>(), 100);
 	EXPECT_EQ(it.size(), sizeof(int));
 	++it;
 
 	EXPECT_EQ(it.index(), ptr3.Index());
-	EXPECT_EQ(*reinterpret_cast<const int*>(&*it), 300);
+	EXPECT_EQ(*it.Get<int>(), 300);
 	EXPECT_EQ(it.size(), sizeof(int));
 }
 
 // Creates a couple of blobs, deletes one and insures that the BlobStoreObject is no longer valid.
 TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<char> ptr1 = store.New<char>(100);
-	strcpy(&*ptr1, "This is a test.");
-	BlobStoreObject<char> ptr2 = store.New<char>(100);
-	strcpy(&*ptr2, "Hello World!");
+	BlobStoreObject<char[64]> ptr1 = store.New<char[64]>();
+	strcpy(&ptr1[0], "This is a test.");
+	BlobStoreObject<char[64]> ptr2 = store.New<char[64]>();
+	strcpy(&ptr2[0], "Hello World!");
 	EXPECT_EQ(store.GetSize(), 2);
-	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
-	EXPECT_EQ(store.Get<char>(ptr2.Index()), &*ptr2);
+	EXPECT_EQ(&*store.Get<char[64]>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(&*store.Get<char[64]>(ptr2.Index()), &*ptr2);
 	store.Drop(ptr2.Index());
 	EXPECT_EQ(store.GetSize(), 1);
-	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(&*store.Get<char[64]>(ptr1.Index()), &*ptr1);
 	EXPECT_EQ(ptr2, nullptr);
 }
