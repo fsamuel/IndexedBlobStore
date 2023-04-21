@@ -378,7 +378,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 		BlobStoreObject<LeafNode> leaf_node = node.To<LeafNode>();
 		// Shift the keys and values right.
 		int i = leaf_node->n - 1;
-		while (i >= 0 && *key < *blob_store_[leaf_node->keys[i]]) {
+		while (i >= 0 && *key < *blob_store_.Get<KeyType>(leaf_node->keys[i])) {
 			leaf_node->keys[i + 1] = leaf_node->keys[i];
 			leaf_node->values[i + 1] = leaf_node->values[i];
 			--i;

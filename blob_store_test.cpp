@@ -32,8 +32,8 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 	BlobStoreObject<char> ptr2 = store.New<char>(100);
 	strcpy(&*ptr2, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 2);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr2.Index()], &*ptr2);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr2.Index()), &*ptr2);
 }
 
 // Creates two blobs with the templatized Put method, and then gets them back.
@@ -63,25 +63,25 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithBlobsAndDeleteTwo) {
 	BlobStoreObject<char> ptr6 = store.New<char>(100);
 	strcpy(&*ptr6, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 6);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr2.Index()], &*ptr2);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr4.Index()], &*ptr4);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr2.Index()), &*ptr2);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr4.Index()), &*ptr4);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
 	store.Drop(ptr2.Index());
 	store.Drop(ptr4.Index());
 	EXPECT_EQ(store.GetSize(), 4);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
 	store.Compact();
 	EXPECT_EQ(store.GetSize(), 4);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
 }
 
 // Creates a few blobs, deletes some in the middle, and the compacts the store.
@@ -100,36 +100,36 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsAndDeleteSomeAndAddMore) {
 	BlobStoreObject<char> ptr6 = store.New<char>(100);
 	strcpy(&*ptr6, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 6);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr2.Index()], &*ptr2);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr4.Index()], &*ptr4);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr2.Index()), &*ptr2);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr4.Index()), &*ptr4);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
 	store.Drop(ptr2.Index());
 	store.Drop(ptr4.Index());
 	EXPECT_EQ(store.GetSize(), 4);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
 	store.Compact();
 	EXPECT_EQ(store.GetSize(), 4);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
 	BlobStoreObject<char> ptr7 = store.New<char>(100);
 	strcpy(&*ptr7, "This is a test.");
 	BlobStoreObject<char> ptr8 = store.New<char>(100);
 	strcpy(&*ptr8, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 6);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr3.Index()], &*ptr3);
-	EXPECT_EQ(store[ptr5.Index()], &*ptr5);
-	EXPECT_EQ(store[ptr6.Index()], &*ptr6);
-	EXPECT_EQ(store[ptr7.Index()], &*ptr7);
-	EXPECT_EQ(store[ptr8.Index()], &*ptr8);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr3.Index()), &*ptr3);
+	EXPECT_EQ(store.Get<char>(ptr5.Index()), &*ptr5);
+	EXPECT_EQ(store.Get<char>(ptr6.Index()), &*ptr6);
+	EXPECT_EQ(store.Get<char>(ptr7.Index()), &*ptr7);
+	EXPECT_EQ(store.Get<char>(ptr8.Index()), &*ptr8);
 }
 
 // Creates a few blobs of ints, iterates, deletes a few then iterates again.
@@ -171,10 +171,10 @@ TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 	BlobStoreObject<char> ptr2 = store.New<char>(100);
 	strcpy(&*ptr2, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 2);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
-	EXPECT_EQ(store[ptr2.Index()], &*ptr2);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr2.Index()), &*ptr2);
 	store.Drop(ptr2.Index());
 	EXPECT_EQ(store.GetSize(), 1);
-	EXPECT_EQ(store[ptr1.Index()], &*ptr1);
+	EXPECT_EQ(store.Get<char>(ptr1.Index()), &*ptr1);
 	EXPECT_EQ(ptr2, nullptr);
 }

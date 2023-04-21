@@ -208,16 +208,6 @@ public:
 		return const_cast<BlobStore*>(this)->GetMutable<T>(index);
 	}
 
-	// Gets the object as a char pointer at the specified index.
-	char* operator[](size_t index) {
-		return GetMutable<char>(index);
-	}
-
-	// Gets the object as a constant char pointer at the specified index.
-	const char* operator[](size_t index) const {
-		return Get<char>(index);
-	}
-
 	// Used for Debugging Purposes; prints out the value stored at the specified index.
 	template<typename T>
 	void Print(size_t index) {
