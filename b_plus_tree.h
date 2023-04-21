@@ -220,21 +220,21 @@ private:
 
 	BlobStoreObject<BaseNode> GetChild(BlobStoreObject<InternalNode> node, size_t child_index) {
 		if (node == nullptr || child_index > node->n) {
-			return BlobStoreObject<BaseNode>(&blob_store_, BlobStore::InvalidIndex);
+			return BlobStoreObject<BaseNode>::NullBlob;
 		}
 		return BlobStoreObject<BaseNode>(&blob_store_, node->children[child_index]);
 	}
 
 	BlobStoreObject<KeyType> GetKey(BlobStoreObject<BaseNode> node, size_t key_index) {
 		if (node == nullptr || key_index > node->n - 1) {
-			return BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex);
+			return BlobStoreObject<KeyType>::NullBlob;
 		}
 		return BlobStoreObject<KeyType>(&blob_store_, node->keys[key_index]);
 	}
 
 	BlobStoreObject<ValueType> GetValue(BlobStoreObject<LeafNode> node, size_t value_index) {
 		if (node == nullptr || value_index > node->n - 1) {
-			return BlobStoreObject<ValueType>(&blob_store_, BlobStore::InvalidIndex);
+			return BlobStoreObject<ValueType>::NullBlob;
 		}
 		return BlobStoreObject<ValueType>(&blob_store_, node->values[value_index]);
 	}
@@ -412,8 +412,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 template <typename KeyType, typename ValueType, size_t Order>
 KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Remove(const KeyType& key) {
 	if (root_ == nullptr) {
-		return std::make_pair(BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex),
-			BlobStoreObject<ValueType>(&blob_store_, BlobStore::InvalidIndex));
+		return std::make_pair(BlobStoreObject<KeyType>::NullBlob, BlobStoreObject<ValueType>::NullBlob);
 	}
 	//return Remove(root_, key);
 	if (root_->type == NodeType::LEAF) {
@@ -443,8 +442,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::RemoveFro
 	}
 
 	if (i == node->n) {
-		return std::make_pair(BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex),
-			BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex)); // Key not found
+		return std::make_pair(BlobStoreObject<KeyType>::NullBlob, BlobStoreObject<ValueType>::NullBlob); // Key not found
 	}
 
 	auto kv = std::make_pair(GetKey(node.To<BaseNode>(), i), GetValue(node, i));
@@ -621,7 +619,7 @@ BlobStoreObject<KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(B
 			if (*key_ptr > key)
 				return key_ptr;
 		}
-		return BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex);
+		return BlobStoreObject<KeyType>::NullBlob;
 
 	}
 	for (int i = 0; i <= node->n; ++i) {
@@ -632,7 +630,7 @@ BlobStoreObject<KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(B
 			return key_ptr;
 	}
 	// We should never get here unless the tree has a problem.
-	return BlobStoreObject<KeyType>(&blob_store_, BlobStore::InvalidIndex);
+	return BlobStoreObject<KeyType>::NullBlob;
 
 }
 

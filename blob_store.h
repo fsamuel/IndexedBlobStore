@@ -44,6 +44,9 @@ public:
 template <typename T>
 class BlobStoreObject : public BlobStoreObserver {
 public:
+	// Static NullBlob representing a BlobStoreObject with an InvalidIndex.
+	static const BlobStoreObject<T> NullBlob;
+
 	// Constructor: Initializes the object with a nullptr.
 	BlobStoreObject()
 		: store_(nullptr)
@@ -191,21 +194,14 @@ public:
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
-	T* GetMutable(size_t index) {
-		if (index >= metadata_.size() || metadata_[index].next_free_index != -1) {
-			return nullptr;
-		}
-		BlobMetadata& metadata_entry = metadata_[index];
-		if (metadata_entry.size == 0) {
-			return nullptr;
-		}
-		return allocator_.ToPtr<T>(metadata_entry.offset);
+	BlobStoreObject<T> GetMutable(size_t index) {
+		return BlobStoreObject<T>(this, index);
 	}
 
 	// Gets the object of type T at the specified index as a constant.
 	template<typename T>
-	const T* Get(size_t index) const {
-		return const_cast<BlobStore*>(this)->GetMutable<T>(index);
+	BlobStoreObject<const T> Get(size_t index) const {
+		return const_cast<BlobStore*>(this)->GetMutable<const T>(index);
 	}
 
 	// Used for Debugging Purposes; prints out the value stored at the specified index.
@@ -303,7 +299,7 @@ public:
 		}
 
 		pointer operator->() {
-			return store_->GetMutable<char>(index_);
+			return &*store_->GetMutable<char>(index_);
 		}
 
 	private:
@@ -355,11 +351,31 @@ private:
 	void NotifyObserversOnMemoryReallocated();
 	void NotifyObserversOnDroppedBlob(size_t index);
 
+	// Gets the object of type T at the specified index as a raw pointer.
+	template<typename T>
+	T* GetRaw(size_t index) {
+		if (index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return nullptr;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		if (metadata_entry.size == 0) {
+			return nullptr;
+		}
+		return allocator_.ToPtr<T>(metadata_entry.offset);
+	}
+
 	Allocator allocator_;
 	BlobMetadataAllocator metadata_allocator_;
 	MetadataVector metadata_;
 	std::vector<BlobStoreObserver*> observers_;
+
+	template<typename T>
+	friend class BlobStoreObject;
 };
+
+// Definition of NullBlob.
+template<typename T>
+const BlobStoreObject<T> BlobStoreObject<T>::NullBlob(nullptr, BlobStore::InvalidIndex);
 
 template<typename T>
 BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index)
@@ -372,7 +388,7 @@ BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index)
 
 template<typename T>
 void BlobStoreObject<T>::UpdatePointer() {
-	ptr_ = store_->GetMutable<T>(index_);
+	ptr_ = store_->GetRaw<T>(index_);
 }
 
 template <typename T, typename... Args>
