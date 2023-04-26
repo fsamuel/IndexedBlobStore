@@ -63,7 +63,6 @@ public:
 		if (control_block_ != nullptr) {
 			control_block_->IncrementRefCount();
 		}
-
 	}
 
 	// Move constructor
@@ -74,8 +73,7 @@ public:
 
 	// Constructor: creates a new ControlBlock with the provided store and index.
 	// The ControlBlock starts with a refcount of 1.
-	BlobStoreObject(BlobStore* store, size_t index) :
-		control_block_(new ControlBlock(store, index)) {}
+	BlobStoreObject(BlobStore* store, size_t index);
 
 	// Destructor: Decrements the ControlBlock and destroys it if the refcount
 	// goes to zero.
@@ -230,17 +228,17 @@ private:
 
 	struct ControlBlock : public BlobStoreObserver {
 	public:
-		ControlBlock(BlobStore* store, size_t index)
-			: store_(store), index_(index), ref_count_(1) {
-			if (store_ != nullptr) {
-				store_->AddObserver(this);
-			}
-			UpdatePointer();
-		}
+		ControlBlock(BlobStore* store, size_t index);
 
 		~ControlBlock() {
 			if (store_ != nullptr) {
 				store_->RemoveObserver(this);
+			}
+			if (std::is_const<T>::value) {
+				lock_.ReleaseReadLock();
+			}
+			else {
+				lock_.ReleaseWriteLock();
 			}
 		}
 
@@ -259,6 +257,7 @@ private:
 		BlobStore* store_;				// Pointer to the BlobStore instance
 		size_t index_;					// Index of the object in the BlobStore
 		T* ptr_;						// Pointer to the object
+		RWLock lock_;					// RWLock for this object.
 		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
 
 	private:
@@ -311,9 +310,17 @@ public:
 	// BlobStore destructor
 	~BlobStore();
 
+	// Returns the metadata buffer name.
+	const std::string& GetMetadataBufferName() const {
+		return metadata_allocator_.buffer_name();
+	}
+
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
 	BlobStoreObject<T> New(Args&&... args);
+
+	template <typename T>
+	BlobStoreObject<T[]> NewArray(size_t count);
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
@@ -445,7 +452,8 @@ public:
 
 private:
 	struct BlobMetadata {
-		size_t size;
+		size_t size;			 // The size of the type stored.
+		size_t count;			 // The number of elements of type stored.
 		offset_type offset;
 		ssize_t next_free_index; // -1 if the slot is occupied, or the index of the next free slot in the free list
 	};
@@ -472,7 +480,7 @@ private:
 			return nullptr;
 		}
 		BlobMetadata& metadata_entry = metadata_[index];
-		if (metadata_entry.size == 0) {
+		if (metadata_entry.size == 0 || metadata_entry.count == 0) {
 			return nullptr;
 		}
 		return allocator_.ToPtr<T>(metadata_entry.offset);
@@ -492,8 +500,37 @@ BlobStoreObject<T> BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
 	char* ptr = allocator_.Allocate(sizeof(T));
 	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-	metadata_[index] = { sizeof(T), allocator_.ToOffset(ptr), -1 };
+	metadata_[index] = { sizeof(T), 1, allocator_.ToOffset(ptr), -1 };
 	return BlobStoreObject<T>(this, index);
 }
 
+template <typename T>
+BlobStoreObject<T[]> BlobStore::NewArray(size_t count) {
+	size_t index = FindFreeSlot();
+	T* ptr = reinterpret_cast<T*>(allocator_.Allocate(sizeof(T) * count));
+	for (size_t i = 0; i < count; ++i) {
+		new (&ptr[i]) T();
+	}
+	metadata_[index] = { sizeof(T), count, allocator_.ToOffset(ptr), -1 };
+	return BlobStoreObject<T[]>(this, index);
+}
+
+template<typename T>
+BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index) :
+	control_block_(index == BlobStore::InvalidIndex ? nullptr : new ControlBlock(store, index)) {}
+
+template<typename T>
+BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(BlobStore* store, size_t index)
+	: store_(store), index_(index), lock_(store->GetMetadataBufferName() + std::to_string(index)), ref_count_(1) {
+	if (std::is_const<T>::value) {
+		lock_.AcquireReadLock();
+	}
+	else {
+		lock_.AcquireWriteLock();
+	}
+	if (store_ != nullptr) {
+		store_->AddObserver(this);
+	}
+	UpdatePointer();
+}
 #endif  // BLOB_STORE_H_

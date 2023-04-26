@@ -177,4 +177,11 @@ TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 	EXPECT_EQ(store.GetSize(), 1);
 	EXPECT_EQ(&*store.Get<char[64]>(ptr1.Index()), &*ptr1);
 	EXPECT_EQ(ptr2, nullptr);
+	BlobStoreObject<char[]> ptr3 = store.NewArray<char>(64);
+	ptr3[0] = 'a';
+	ptr3[1] = 'b';
+	ptr3[2] = 'c';
+	ptr3[3] = '\0';
+	std::cout << "String: " << *ptr3 << std::endl;
+	store.Drop(ptr3.Index());
 }

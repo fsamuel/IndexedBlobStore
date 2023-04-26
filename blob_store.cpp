@@ -6,7 +6,7 @@ BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& d
     metadata_(metadata_allocator_)
 {
     if (metadata_.empty()) {
-        metadata_.push_back({ 0, -1, 0 });
+        metadata_.push_back({ 0, 0, -1, 0 });
     }
     allocator_.AddObserver(this);
 }
@@ -16,7 +16,7 @@ BlobStore::~BlobStore() {
 }
 
 void BlobStore::Drop(size_t index) {
-    if (index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+    if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
         return;
     }
     allocator_.Deallocate(allocator_.ToPtr<char>(metadata_[index].offset));
@@ -39,7 +39,7 @@ void BlobStore::Compact() {
 
         // Allocate memory in the new allocator and copy the data
         char* new_ptr = new_allocator.Allocate(metadata_entry.size);
-        std::memcpy(new_ptr, allocator_.ToPtr<char>(metadata_entry.offset), metadata_entry.size);
+        std::memcpy(new_ptr, allocator_.ToPtr<char>(metadata_entry.offset), metadata_entry.size * metadata_entry.count);
 
         // Update metadata with the new pointer
         metadata_entry.offset = new_allocator.ToOffset(new_ptr);;
@@ -81,7 +81,7 @@ size_t BlobStore::FindFreeSlot() {
         return free_index;
     }
     else {
-        metadata_.push_back({ 0, -1, -1 });
+        metadata_.push_back({ 0, 0, -1, -1 });
         return metadata_.size() - 1;
     }
 }

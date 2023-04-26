@@ -37,6 +37,7 @@
     <IncludePath>C:\Users\fadys\source\repos\BPlusTree;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
+    <ClInclude Include="rwlock.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="shared_memory_vector.h" />
@@ -44,6 +45,7 @@
     <ClInclude Include="b_plus_tree.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="rwlock.cpp" />
     <ClCompile Include="shared_memory_buffer.cpp" />
     <ClCompile Include="blob_store.cpp" />
     <ClCompile Include="blob_store_test.cpp" />
