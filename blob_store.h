@@ -72,13 +72,13 @@ public:
 		other.control_block_ = nullptr;
 	}
 
-	// Constructor: Initializes the object with a pointer to the BlobStore and the
-	// index of the object. It also registers itself as an observer to the BlobStore
-	// and updates the internal pointer to the object.
+	// Constructor: creates a new ControlBlock with the provided store and index.
+	// The ControlBlock starts with a refcount of 1.
 	BlobStoreObject(BlobStore* store, size_t index) :
 		control_block_(new ControlBlock(store, index)) {}
 
-	// Destructor: Unregisters the object from the BlobStore's observer list.
+	// Destructor: Decrements the ControlBlock and destroys it if the refcount
+	// goes to zero.
 	~BlobStoreObject() {
 		if (control_block_ && control_block_->DecrementRefCount()) {
 			delete control_block_;
@@ -178,22 +178,34 @@ public:
 
 	inline friend bool operator==(const BlobStoreObject& lhs, const T* rhs)
 	{
-		return lhs.control_block_ != nullptr && lhs.control_block_->ptr_ == rhs;
+		if (lhs.control_block_ == nullptr) {
+			return rhs == nullptr;
+		}
+		return lhs.control_block_->ptr_ == rhs;
 	}
 
 	inline friend bool operator==(const T* lhs, const BlobStoreObject& rhs)
 	{
-		return rhs.control_block_ != nullptr && lhs == rhs.control_block_->ptr_;
+		if (rhs.control_block_ == nullptr) {
+			return lhs == nullptr;
+		}
+		return lhs == rhs.control_block_->ptr_;
 	}
 
 	inline friend bool operator!=(const BlobStoreObject& lhs, const T* rhs)
 	{
-		return lhs.control_block_ == nullptr || lhs.control_block_->ptr_ != rhs;
+		if (lhs.control_block_ == nullptr) {
+			return rhs != nullptr;
+		}
+		return lhs.control_block_->ptr_ != rhs;
 	}
 
 	inline friend bool operator!=(const T* lhs, const BlobStoreObject& rhs)
 	{
-		return rhs->control_block == nullptr || lhs != rhs->control_block_->ptr_;
+		if (rhs.control_block_ == nullptr) {
+			return lhs != nullptr;
+		}
+		return lhs != rhs->control_block_->ptr_;
 	}
 
 	inline friend bool operator==(const BlobStoreObject& lhs, const BlobStoreObject& rhs)
