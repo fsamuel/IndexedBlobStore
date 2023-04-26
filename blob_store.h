@@ -8,6 +8,7 @@
 #include <iostream>
 #include <type_traits>
 
+#include "rwlock.h"
 #include "shared_memory_allocator.h"
 #include "shared_memory_vector.h"
 
@@ -42,188 +43,242 @@ public:
 //   obj->myMethod();
 //   MyClass& obj = *obj;
 //
+// TODO(fsamuel): Move all the members of BlobStoreObject to a Control Block.
+// If ControlBlock is destroyed then release the lock.
+// On move, a BlobStoreObject loses its ControlBlock.
+// If we cast, then we copy over a ref to the control block and increment.
+// If refcount goes to zero then we destroy the ControlBlock.
 template <typename T>
-class BlobStoreObject : public BlobStoreObserver {
+class BlobStoreObject {
 public:
 	// Returns a BlobStoreObject pointing to nullptr.
 	static BlobStoreObject<T> CreateNull() {
 		return BlobStoreObject<T>(nullptr, BlobStore::InvalidIndex);
 	}
-	
+
 	BlobStoreObject() = delete;
 
 	BlobStoreObject(const BlobStoreObject& other)
-		: store_(other.store_),
-		index_(other.index_),
-		ptr_(other.ptr_) {
-		if (store_ != nullptr) {
-			store_->AddObserver(this);
+		: control_block_(other.control_block_) {
+		if (control_block_ != nullptr) {
+			control_block_->IncrementRefCount();
 		}
+
 	}
 
 	// Move constructor
 	BlobStoreObject(BlobStoreObject&& other)
-		: store_(other.store_),
-		index_(other.index_),
-		ptr_(other.ptr_) {
-		other = nullptr;
+		: control_block_(other.control_block_) {
+		other.control_block_ = nullptr;
 	}
 
 	// Constructor: Initializes the object with a pointer to the BlobStore and the
 	// index of the object. It also registers itself as an observer to the BlobStore
 	// and updates the internal pointer to the object.
-	BlobStoreObject(BlobStore* store, size_t index);
+	BlobStoreObject(BlobStore* store, size_t index) :
+		control_block_(new ControlBlock(store, index)) {}
 
 	// Destructor: Unregisters the object from the BlobStore's observer list.
 	~BlobStoreObject() {
-		if (store_) {
-			store_->RemoveObserver(this);
+		if (control_block_ && control_block_->DecrementRefCount()) {
+			delete control_block_;
 		}
 	}
 
 	// Arrow operator: Provides access to the object's methods.
 	T* operator->() {
-		return ptr_;
+		return control_block_->ptr_;
 	}
 
 	const T* operator->() const {
-		return ptr_;
+		return control_block_->ptr_;
 	}
 
 	// Dereference operator: Provides access to the object itself.
 	T& operator*() {
-		return *ptr_;
+		return *control_block_->ptr_;
 	}
 
 	const T& operator*() const {
-		return *ptr_;
+		return *control_block_->ptr_;
 	}
 
 	// Operator[] implementation for array types.
 	template<typename U = T>
 	typename std::enable_if<std::is_array<U>::value, typename std::remove_extent<U>::type&>::type
 		operator[](size_t i) {
-		return (*ptr_)[i];
+		return (*control_block_->ptr_)[i];
 	}
 
 	template<typename U = T>
 	typename std::enable_if<std::is_array<U>::value, const typename std::remove_extent<U>::type&>::type
 		operator[](size_t i) const {
-		return (*ptr_)[i];
+		return (*control_block_->ptr_)[i];
 	}
 
 	template<typename U = T>
 	typename std::enable_if<!std::is_array<U>::value, T&>::type
 		operator[](size_t i) {
-		return (*ptr_)[i];
+		return (*control_block_->ptr_)[i];
 	}
 
 	template<typename U = T>
 	typename std::enable_if<!std::is_array<U>::value, const T&>::type
 		operator[](size_t i) const {
-		return (*ptr_)[i];
+		return (*control_block_->ptr_)[i];
 	}
 
 	// Returns the index of the Blob.
 	size_t Index() const
 	{
-		return index_;
+		return control_block_->index_;
 	}
 
 	template<typename U>
 	BlobStoreObject<U> To() {
-		return BlobStoreObject<U>(store_, index_);
+		return BlobStoreObject<U>(reinterpret_cast<BlobStoreObject<U>::ControlBlock*>(control_block_));
 	}
 
 	BlobStoreObject& operator=(const BlobStoreObject& other) {
 		if (this != &other) {
-			store_ = other.store_;
-			index_ = other.index_;
-			ptr_ = other.ptr_;
+			if (control_block_ && control_block_->DecrementRefCount()) {
+				delete control_block_;
+			}
+			control_block_ = other.control_block_;
+			if (control_block_) {
+				control_block_->IncrementRefCount();
+			}
 		}
 		return *this;
 	}
 
 	BlobStoreObject& operator=(BlobStoreObject&& other) {
 		if (this != &other) {
-			store_ = other.store_;
-			index_ = other.index_;
-			ptr_ = other.ptr_;
+			if (control_block_ && control_block_->DecrementRefCount()) {
+				delete control_block_;
+			}
+			control_block_ = other.control_block_;
+			other.control_block_ = nullptr;
 		}
-		other = nullptr;
 		return *this;
 	}
 
 	BlobStoreObject& operator=(std::nullptr_t) {
-		if (store_ != nullptr) {
-			store_->RemoveObserver(this);
+		if (control_block_ && control_block_->DecrementRefCount()) {
+			delete control_block_;
 		}
-		store_ = nullptr;
-		index_ = BlobStore::InvalidIndex;
-		ptr_ = nullptr;
+		control_block_ = nullptr;
 		return *this;
 	}
 
 	bool operator!() const // Enables "if (!sp) ..."
 	{
-		return store_ == nullptr || index_ == BlobStore::InvalidIndex || ptr_ == nullptr;
+		return !control_block_ || control_block_->store_ == nullptr || control_block_->index_ == BlobStore::InvalidIndex || control_block_->ptr_ == nullptr;
 	}
 
 	inline friend bool operator==(const BlobStoreObject& lhs, const T* rhs)
 	{
-		return lhs.ptr_ == rhs;
+		return lhs.control_block_ != nullptr && lhs.control_block_->ptr_ == rhs;
 	}
 
 	inline friend bool operator==(const T* lhs, const BlobStoreObject& rhs)
 	{
-		return lhs == rhs.ptr_;
+		return rhs.control_block_ != nullptr && lhs == rhs.control_block_->ptr_;
 	}
 
 	inline friend bool operator!=(const BlobStoreObject& lhs, const T* rhs)
 	{
-		return lhs.ptr_ != rhs;
+		return lhs.control_block_ == nullptr || lhs.control_block_->ptr_ != rhs;
 	}
 
 	inline friend bool operator!=(const T* lhs, const BlobStoreObject& rhs)
 	{
-		return lhs != rhs.ptr_;
+		return rhs->control_block == nullptr || lhs != rhs->control_block_->ptr_;
 	}
 
 	inline friend bool operator==(const BlobStoreObject& lhs, const BlobStoreObject& rhs)
 	{
-		return lhs.ptr_ == rhs.ptr_;
+		return lhs.control_block_ == rhs.control_block_;
 	}
 
 	inline friend bool operator!=(const BlobStoreObject& lhs, const BlobStoreObject& rhs)
 	{
-		return lhs.ptr_ != rhs.ptr_;
-	}
-
-	// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
-	// when the memory in the BlobStore is reallocated. Updates the internal pointer
-	// to the object.
-	void OnMemoryReallocated() override {
-		UpdatePointer();
-	}
-
-	// OnDroppedBlob: Method from BlobStoreObserver interface that gets called when a blob
-	// is dropped from the BlobStore. If the dropped blob is the one that this object points to
-	// then it sets the internal pointer to nullptr.
-	void OnDroppedBlob(size_t index) override {
-		if (index == index_) {
-			ptr_ = nullptr;
-			index = BlobStore::InvalidIndex;
-		}
+		return lhs.control_block_ != rhs.control_block_;
 	}
 
 private:
-	// UpdatePointer: Helper method to update the internal pointer to the object using
-	// the BlobStore's GetPointer method.
-	void UpdatePointer();
+	struct ControlBlock;
 
-	BlobStore* store_; // Pointer to the BlobStore instance
-	size_t index_;     // Index of the object in the BlobStore
-	T* ptr_;           // Pointer to the object
+	BlobStoreObject(ControlBlock* control_block) :
+		control_block_(control_block) {
+		if (control_block_) {
+			control_block_->IncrementRefCount();
+		}
+	}
+
+	struct ControlBlock : public BlobStoreObserver {
+	public:
+		ControlBlock(BlobStore* store, size_t index)
+			: store_(store), index_(index), ref_count_(1) {
+			if (store_ != nullptr) {
+				store_->AddObserver(this);
+			}
+			UpdatePointer();
+		}
+
+		~ControlBlock() {
+			if (store_ != nullptr) {
+				store_->RemoveObserver(this);
+			}
+		}
+
+		void IncrementRefCount() {
+			++ref_count_;
+		}
+
+		bool DecrementRefCount() {
+			if (--ref_count_ == 0) {
+				// TODO(fsamuel): Release lock
+				return true;
+			}
+			return false;
+		}
+
+		BlobStore* store_;				// Pointer to the BlobStore instance
+		size_t index_;					// Index of the object in the BlobStore
+		T* ptr_;						// Pointer to the object
+		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
+
+	private:
+
+		// UpdatePointer: Helper method to update the internal pointer to the object using
+		// the BlobStore's GetPointer method.
+		void UpdatePointer() {
+			ptr_ = store_->GetRaw<T>(index_);
+		}
+
+		// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
+		// when the memory in the BlobStore is reallocated. Updates the internal pointer
+		// to the object.
+		void OnMemoryReallocated() override {
+			UpdatePointer();
+		}
+
+		// OnDroppedBlob: Method from BlobStoreObserver interface that gets called when a blob
+		// is dropped from the BlobStore. If the dropped blob is the one that this object points to
+		// then it sets the internal pointer to nullptr.
+		void OnDroppedBlob(size_t index) override {
+			if (index == index_) {
+				index_ = BlobStore::InvalidIndex;
+				ptr_ = nullptr;
+			}
+		}
+	};
+
+	ControlBlock* control_block_;
+
+	template<typename U>
+	friend class BlobStoreObject;
 };
 
 
@@ -401,7 +456,7 @@ private:
 	// Gets the object of type T at the specified index as a raw pointer.
 	template<typename T>
 	T* GetRaw(size_t index) {
-		if (index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
 			return nullptr;
 		}
 		BlobMetadata& metadata_entry = metadata_[index];
@@ -419,20 +474,6 @@ private:
 	template<typename T>
 	friend class BlobStoreObject;
 };
-
-template<typename T>
-BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index)
-	: store_(store), index_(index), ptr_(nullptr) {
-	if (store_) {
-		store_->AddObserver(this);
-		UpdatePointer();
-	}
-}
-
-template<typename T>
-void BlobStoreObject<T>::UpdatePointer() {
-	ptr_ = store_->GetRaw<T>(index_);
-}
 
 template <typename T, typename... Args>
 BlobStoreObject<T> BlobStore::New(Args&&... args) {
