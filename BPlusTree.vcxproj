@@ -130,6 +130,7 @@
     <ClInclude Include="blob_store.h" />
     <ClInclude Include="b_plus_tree.h" />
     <ClInclude Include="Main.h" />
+    <ClInclude Include="rwlock.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="shared_memory_vector.h" />
@@ -137,6 +138,7 @@
   <ItemGroup>
     <ClCompile Include="blob_store.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="rwlock.cpp" />
     <ClCompile Include="shared_memory_buffer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

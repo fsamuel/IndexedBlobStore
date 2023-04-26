@@ -8,7 +8,7 @@
 #include <iostream>
 #include <type_traits>
 
-#include "shared_Memory_allocator.h"
+#include "shared_memory_allocator.h"
 #include "shared_memory_vector.h"
 
 #ifdef _WIN64
@@ -45,14 +45,28 @@ public:
 template <typename T>
 class BlobStoreObject : public BlobStoreObserver {
 public:
-	// Static NullBlob representing a BlobStoreObject with an InvalidIndex.
-	static const BlobStoreObject<T> NullBlob;
+	// Returns a BlobStoreObject pointing to nullptr.
+	static BlobStoreObject<T> CreateNull() {
+		return BlobStoreObject<T>(nullptr, BlobStore::InvalidIndex);
+	}
+	
+	BlobStoreObject() = delete;
 
-	// Constructor: Initializes the object with a nullptr.
-	BlobStoreObject()
-		: store_(nullptr)
-		, index_(BlobStore::InvalidIndex)
-		, ptr_(nullptr) {
+	BlobStoreObject(const BlobStoreObject& other)
+		: store_(other.store_),
+		index_(other.index_),
+		ptr_(other.ptr_) {
+		if (store_ != nullptr) {
+			store_->AddObserver(this);
+		}
+	}
+
+	// Move constructor
+	BlobStoreObject(BlobStoreObject&& other)
+		: store_(other.store_),
+		index_(other.index_),
+		ptr_(other.ptr_) {
+		other = nullptr;
 	}
 
 	// Constructor: Initializes the object with a pointer to the BlobStore and the
@@ -111,7 +125,8 @@ public:
 	}
 
 	// Returns the index of the Blob.
-	size_t Index() const {
+	size_t Index() const
+	{
 		return index_;
 	}
 
@@ -121,13 +136,28 @@ public:
 	}
 
 	BlobStoreObject& operator=(const BlobStoreObject& other) {
-		store_ = other.store_;
-		index_ = other.index_;
-		ptr_ = other.ptr_;
+		if (this != &other) {
+			store_ = other.store_;
+			index_ = other.index_;
+			ptr_ = other.ptr_;
+		}
+		return *this;
+	}
+
+	BlobStoreObject& operator=(BlobStoreObject&& other) {
+		if (this != &other) {
+			store_ = other.store_;
+			index_ = other.index_;
+			ptr_ = other.ptr_;
+		}
+		other = nullptr;
 		return *this;
 	}
 
 	BlobStoreObject& operator=(std::nullptr_t) {
+		if (store_ != nullptr) {
+			store_->RemoveObserver(this);
+		}
 		store_ = nullptr;
 		index_ = BlobStore::InvalidIndex;
 		ptr_ = nullptr;
@@ -389,10 +419,6 @@ private:
 	template<typename T>
 	friend class BlobStoreObject;
 };
-
-// Definition of NullBlob.
-template<typename T>
-const BlobStoreObject<T> BlobStoreObject<T>::NullBlob(nullptr, BlobStore::InvalidIndex);
 
 template<typename T>
 BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index)
