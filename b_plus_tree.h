@@ -10,7 +10,7 @@
 class BaseNode;
 
 template <typename KeyType, typename ValueType>
-using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<ValueType>>;
+using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>>;
 
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
@@ -61,13 +61,13 @@ public:
 		using pointer = value_type*;
 		using reference = value_type&;
 
-		Iterator(BlobStore* store, BlobStoreObject<LeafNode>&& leaf_node, size_t key_index) : store_(store), leaf_node_(std::move(leaf_node)), key_index_(key_index) {}
+		Iterator(BlobStore* store, BlobStoreObject<const LeafNode>&& leaf_node, size_t key_index) : store_(store), leaf_node_(std::move(leaf_node)), key_index_(key_index) {}
 
 		Iterator& operator++() {
 			++key_index_;
 			if (key_index_ > leaf_node_->n - 1) {
 				key_index_ = 0;
-				leaf_node_ = BlobStoreObject<LeafNode>(store_, leaf_node_->next);
+				leaf_node_ = BlobStoreObject<const LeafNode>(store_, leaf_node_->next);
 			}
 			return *this;
 		}
@@ -102,7 +102,7 @@ public:
 
 	private:
 		BlobStore* store_;
-		BlobStoreObject<LeafNode> leaf_node_;
+		BlobStoreObject<const LeafNode> leaf_node_;
 		size_t key_index_;
 	};
 
@@ -226,11 +226,18 @@ private:
 		return BlobStoreObject<BaseNode>(&blob_store_, node->children[child_index]);
 	}
 
-	BlobStoreObject<BaseNode> GetChild(const BlobStoreObject<InternalNode>& node, size_t child_index) {
+	BlobStoreObject<const BaseNode> GetChild(const BlobStoreObject<InternalNode>& node, size_t child_index) {
 		if (node == nullptr || child_index > node->n) {
-			return BlobStoreObject<BaseNode>::CreateNull();
+			return BlobStoreObject<const BaseNode>::CreateNull();
 		}
-		return BlobStoreObject<BaseNode>(&blob_store_, node->children[child_index]);
+		return BlobStoreObject<const BaseNode>(&blob_store_, node->children[child_index]);
+	}
+
+	BlobStoreObject<const BaseNode> GetChild(const BlobStoreObject<const InternalNode>& node, size_t child_index) {
+		if (node == nullptr || child_index > node->n) {
+			return BlobStoreObject<const BaseNode>::CreateNull();
+		}
+		return BlobStoreObject<const BaseNode>(&blob_store_, node->children[child_index]);
 	}
 
 	BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<BaseNode>& node, size_t key_index) {
@@ -240,14 +247,21 @@ private:
 		return BlobStoreObject<const KeyType>(&blob_store_, node->keys[key_index]);
 	}
 
-	BlobStoreObject<ValueType> GetValue(const BlobStoreObject<LeafNode>& node, size_t value_index) {
-		if (node == nullptr || value_index > node->n - 1) {
-			return BlobStoreObject<ValueType>::CreateNull();
+	BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<const BaseNode>& node, size_t key_index) {
+		if (node == nullptr || key_index > node->n - 1) {
+			return BlobStoreObject<const KeyType>::CreateNull();
 		}
-		return BlobStoreObject<ValueType>(&blob_store_, node->values[value_index]);
+		return BlobStoreObject<const KeyType>(&blob_store_, node->keys[key_index]);
 	}
 
-	Iterator Search(BlobStoreObject<BaseNode>&& node, const KeyType& key);
+	BlobStoreObject<const ValueType> GetValue(const BlobStoreObject<LeafNode>& node, size_t value_index) {
+		if (node == nullptr || value_index > node->n - 1) {
+			return BlobStoreObject<const ValueType>::CreateNull();
+		}
+		return BlobStoreObject<const ValueType>(&blob_store_, node->values[value_index]);
+	}
+
+	Iterator Search(BlobStoreObject<const BaseNode>&& node, const KeyType& key);
 	void SplitChild(BlobStoreObject<InternalNode> parentNode, BlobStoreObject<BaseNode> childNode, int child_index);
 	void InsertNonFull(BlobStoreObject<BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 
@@ -288,13 +302,13 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
 	if (root_index_ == BlobStore::InvalidIndex) {
-		return Iterator(&blob_store_, BlobStoreObject<LeafNode>::CreateNull(), 0);
+		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>::CreateNull(), 0);
 	}
-	return Search(blob_store_.GetMutable<BaseNode>(root_index_), key);
+	return Search(blob_store_.Get<BaseNode>(root_index_), key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<BaseNode>&& node, const KeyType& key) {
+typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode>&& node, const KeyType& key) {
 	if (node->type == NodeType::LEAF) {
 		auto leaf_node = node.To<LeafNode>();
 		for (int i = 0; i < leaf_node->n; i++) {
@@ -303,7 +317,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 				return Iterator(&blob_store_, std::move(leaf_node), i); 
 			}
 		}
-		return Iterator(&blob_store_, BlobStoreObject<LeafNode>::CreateNull(), 0);
+		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>::CreateNull(), 0);
 	} else {
 		auto internal_node = node.To<InternalNode>();
 		int i = 0;
@@ -406,7 +420,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 		}
 		i += 1;
 		{
-			BlobStoreObject<BaseNode> child_node = GetChild(internal_node, i);
+			BlobStoreObject<BaseNode> child_node = GetChildMutable(internal_node, i);
 			if (child_node->n == Order - 1) {
 				SplitChild(internal_node, child_node, i);
 				auto current_key = GetKey(internal_node.To<BaseNode>(), i);
@@ -415,7 +429,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 				}
 			}
 		}
-		BlobStoreObject<BaseNode> child_node = GetChild(internal_node, i);
+		BlobStoreObject<BaseNode> child_node = GetChildMutable(internal_node, i);
 		InsertNonFull(child_node, key, value);
 	}
 }
@@ -423,10 +437,10 @@ void BPlusTree<KeyType, ValueType, Order>::InsertNonFull(BlobStoreObject<BaseNod
 template <typename KeyType, typename ValueType, size_t Order>
 KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Remove(const KeyType& key) {
 	if (root_index_ == BlobStore::InvalidIndex) {
-		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<ValueType>::CreateNull());
+		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<const ValueType>::CreateNull());
 	}
 	//return Remove(root_, key);
-	auto root = blob_store_.Get<BaseNode>(root_index_);
+	auto root = blob_store_.GetMutable<BaseNode>(root_index_);
 	if (root->type == NodeType::LEAF) {
 		return RemoveFromLeafNode(root.To<LeafNode>(), key);
 	}
@@ -454,7 +468,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::RemoveFro
 	}
 
 	if (i == node->n) {
-		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<ValueType>::CreateNull()); // Key not found
+		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<const ValueType>::CreateNull()); // Key not found
 	}
 
 	auto kv = std::make_pair(GetKey(node.To<BaseNode>(), i), GetValue(node, i));
@@ -521,7 +535,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObjec
 		return false;
 	}
 
-	BlobStoreObject<BaseNode> right_sibling = GetChild(parent_node, child_index + 1);
+	BlobStoreObject<BaseNode> right_sibling = GetChildMutable(parent_node, child_index + 1);
 
 	if (right_sibling->n <= (Order - 1) / 2) {
 		return false;
@@ -634,7 +648,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 	}
 	for (int i = 0; i <= node->n; ++i) {
 		auto internal_node = node.To<InternalNode>();
-		auto child = GetChild(internal_node, i); // Get the leftmost child
+		auto child = GetChildMutable(internal_node, i); // Get the leftmost child
 		auto key_ptr = GetSuccessorKey(child, key);
 		if (key_ptr != nullptr)
 			return key_ptr;
@@ -646,7 +660,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 
 template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::MergeChildren(BlobStoreObject<InternalNode>&& parent_node, BlobStoreObject<BaseNode> left_child, int key_index_in_parent) {
-	BlobStoreObject<BaseNode> right_child = GetChild(parent_node, key_index_in_parent + 1);
+	BlobStoreObject<BaseNode> right_child = GetChildMutable(parent_node, key_index_in_parent + 1);
 
 	if (left_child->type == NodeType::LEAF) {
 		// Merge leaf nodes

@@ -43,11 +43,6 @@ public:
 //   obj->myMethod();
 //   MyClass& obj = *obj;
 //
-// TODO(fsamuel): Move all the members of BlobStoreObject to a Control Block.
-// If ControlBlock is destroyed then release the lock.
-// On move, a BlobStoreObject loses its ControlBlock.
-// If we cast, then we copy over a ref to the control block and increment.
-// If refcount goes to zero then we destroy the ControlBlock.
 template <typename T>
 class BlobStoreObject {
 public:
@@ -150,9 +145,19 @@ public:
 		return control_block_->store_->GetElementCount(control_block_->index_);
 	}
 
-	template<typename U>
-	BlobStoreObject<U> To() {
-		return BlobStoreObject<U>(reinterpret_cast<BlobStoreObject<U>::ControlBlock*>(control_block_));
+	// Casts BlobStoreObject<T> to a const-preserving BlobStoreObject<U>.
+	template <typename U>
+	auto To() -> typename std::conditional <
+		std::is_const<T>::value,
+		BlobStoreObject< typename std::add_const<U>::type >,
+		BlobStoreObject<U>
+	>::type {
+		using const_preserving_U = typename std::conditional<
+			std::is_const<T>::value,
+			typename std::add_const<U>::type,
+			U
+		>::type;
+		return BlobStoreObject<const_preserving_U>(reinterpret_cast<BlobStoreObject<const_preserving_U>::ControlBlock*>(control_block_));
 	}
 
 	BlobStoreObject<const T> Downgrade()&& {
