@@ -241,7 +241,7 @@ TEST_F(BlobStoreTest, BlobStoreObject) {
 	EXPECT_EQ(ptr2, nullptr);
 }
 
-// Tests upgrading and downgrading BlobStoreObjects.
+// Tests downgrading BlobStoreObjects.
 TEST_F(BlobStoreTest, BlobStoreObjectUpgradeDowngrade) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
 	BlobStoreObject<int[]> ptr = store.NewArray<int>(64);
@@ -258,11 +258,5 @@ TEST_F(BlobStoreTest, BlobStoreObjectUpgradeDowngrade) {
 	EXPECT_EQ(ptr, nullptr);
 	for (int i = 0; i < 64; ++i) {
 		EXPECT_EQ(ptr2[i], i * 100);
-	}
-	BlobStoreObject<int[]> ptr3 = std::move(ptr2).Upgrade();
-	EXPECT_EQ(ptr3.GetSize(), 64 * sizeof(int));
-	EXPECT_EQ(ptr2, nullptr);
-	for (int i = 0; i < 64; ++i) {
-		EXPECT_EQ(ptr3[i], i * 100);
 	}
 }

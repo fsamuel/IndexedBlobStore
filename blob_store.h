@@ -169,15 +169,6 @@ public:
 		return BlobStoreObject<const T>(reinterpret_cast<BlobStoreObject<const T>::ControlBlock*>(control_block));
 	}
 
-	BlobStoreObject<non_const_T> Upgrade()&& {
-		ControlBlock* control_block = control_block_;
-		control_block_ = nullptr;
-		if (control_block != nullptr) {
-			control_block->UpgradeLock();
-		}
-		return BlobStoreObject<non_const_T>(reinterpret_cast<BlobStoreObject<non_const_T>::ControlBlock*>(control_block));
-	}
-
 	BlobStoreObject& operator=(const BlobStoreObject& other) {
 		if (this != &other) {
 			if (control_block_ && control_block_->DecrementRefCount()) {
@@ -292,11 +283,6 @@ private:
 
 		void DowngradeLock() {
 			lock_->DowngradeWriteToReadLock();
-			--ref_count_;
-		}
-
-		void UpgradeLock() {
-			lock_->UpgradeReadToWriteLock();
 			--ref_count_;
 		}
 

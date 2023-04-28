@@ -287,18 +287,18 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const Valu
 
 template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value) {
-	auto root = blob_store_.Get<BaseNode>(root_index_);
+	auto root = blob_store_.GetMutable<BaseNode>(root_index_);
 	if (root->n == Order - 1) {
 		// Root is full, create a new root
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
 		new_root->children[0] = root.Index();
 		new_root->n = 0;
-		SplitChild(new_root, std::move(root).Upgrade(), 0);
+		SplitChild(new_root, root, 0);
 		InsertNonFull(new_root.To<BaseNode>(), key, value);
 		root_index_ = new_root.Index();
 	}
 	else {
-		InsertNonFull(std::move(root).Upgrade(), key, value);
+		InsertNonFull(root, key, value);
 	}
 }
 

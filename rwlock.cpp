@@ -70,15 +70,3 @@ void RWLock::DowngradeWriteToReadLock() {
         }
     }
 }
-
-void RWLock::UpgradeReadToWriteLock() {
-    std::int32_t expected;
-
-    while (true) {
-        expected = 1;
-
-        if (state_->compare_exchange_weak(expected, WRITE_LOCK_FLAG)) {
-            break;
-        }
-    }
-}

@@ -33,9 +33,6 @@ public:
     // Downgrades a write lock to a read lock. Blocks until the downgrade completes.
     void DowngradeWriteToReadLock();
 
-    // Upgrades a read lock to a write lock. Blocks until the upgrade completes.
-    void UpgradeReadToWriteLock();
-
 private:
     void spinWait() {
 #if defined(_WIN32)
