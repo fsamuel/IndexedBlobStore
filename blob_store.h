@@ -51,12 +51,14 @@ public:
 template <typename T>
 class BlobStoreObject {
 public:
+	using non_const_T = typename std::remove_const<T>::type;
+
 	// Returns a BlobStoreObject pointing to nullptr.
 	static BlobStoreObject<T> CreateNull() {
 		return BlobStoreObject<T>(nullptr, BlobStore::InvalidIndex);
 	}
 
-	BlobStoreObject() = delete;
+	BlobStoreObject() : control_block_(nullptr) {}
 
 	BlobStoreObject(const BlobStoreObject& other)
 		: control_block_(other.control_block_) {
@@ -132,9 +134,43 @@ public:
 		return control_block_->index_;
 	}
 
+	// Returns the total size in bytes of this object.
+	size_t GetSize() const {
+		if (control_block_ == nullptr || control_block_->store_ == nullptr) {
+			return 0;
+		}
+		return control_block_->store_->GetSize(control_block_->index_);
+	}
+
+	// Returns the number of elements this object is composed of if it's an array.
+	size_t GetElementCount() const {
+		if (control_block_ == nullptr || control_block_->store_ == nullptr) {
+			return 0;
+		}
+		return control_block_->store_->GetElementCount(control_block_->index_);
+	}
+
 	template<typename U>
 	BlobStoreObject<U> To() {
 		return BlobStoreObject<U>(reinterpret_cast<BlobStoreObject<U>::ControlBlock*>(control_block_));
+	}
+
+	BlobStoreObject<const T> Downgrade()&& {
+		ControlBlock* control_block = control_block_;
+		control_block_ = nullptr;
+		if (control_block != nullptr) {
+			control_block->DowngradeLock();
+		}
+		return BlobStoreObject<const T>(reinterpret_cast<BlobStoreObject<const T>::ControlBlock*>(control_block));
+	}
+
+	BlobStoreObject<non_const_T> Upgrade()&& {
+		ControlBlock* control_block = control_block_;
+		control_block_ = nullptr;
+		if (control_block != nullptr) {
+			control_block->UpgradeLock();
+		}
+		return BlobStoreObject<non_const_T>(reinterpret_cast<BlobStoreObject<non_const_T>::ControlBlock*>(control_block));
 	}
 
 	BlobStoreObject& operator=(const BlobStoreObject& other) {
@@ -234,12 +270,7 @@ private:
 			if (store_ != nullptr) {
 				store_->RemoveObserver(this);
 			}
-			if (std::is_const<T>::value) {
-				lock_.ReleaseReadLock();
-			}
-			else {
-				lock_.ReleaseWriteLock();
-			}
+
 		}
 
 		void IncrementRefCount() {
@@ -248,16 +279,26 @@ private:
 
 		bool DecrementRefCount() {
 			if (--ref_count_ == 0) {
-				// TODO(fsamuel): Release lock
+				lock_->unlock();
 				return true;
 			}
 			return false;
 		}
 
+		void DowngradeLock() {
+			lock_->DowngradeWriteToReadLock();
+			--ref_count_;
+		}
+
+		void UpgradeLock() {
+			lock_->UpgradeReadToWriteLock();
+			--ref_count_;
+		}
+
 		BlobStore* store_;				// Pointer to the BlobStore instance
 		size_t index_;					// Index of the object in the BlobStore
 		T* ptr_;						// Pointer to the object
-		RWLock lock_;					// RWLock for this object.
+		std::unique_ptr<RWLock> lock_;	// RWLock for this object.
 		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
 
 	private:
@@ -334,8 +375,31 @@ public:
 		return const_cast<BlobStore*>(this)->GetMutable<const T>(index);
 	}
 
+	// Gets the size of the blob stored at the speific index.
+	size_t GetSize(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return 0;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		return metadata_entry.size * metadata_entry.count;
+	}
+
+	// Gets the number of elements stored in this blob if the type is an array.
+	size_t GetElementCount(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return 0;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		return metadata_entry.count;
+	}
+
 	// Drops the object at the specified index, freeing the associated memory.
 	void Drop(size_t index);
+
+	template<typename U>
+	void Drop(BlobStoreObject<U>&& object) {
+		Drop(object.Index());
+	}
 
 	// Compacts the BlobStore, removing any unused space between objects.
 	void Compact();
@@ -452,10 +516,16 @@ public:
 
 private:
 	struct BlobMetadata {
-		size_t size;			 // The size of the type stored.
-		size_t count;			 // The number of elements of type stored.
-		offset_type offset;
-		ssize_t next_free_index; // -1 if the slot is occupied, or the index of the next free slot in the free list
+		size_t size;			      // The size of the type stored.
+		size_t count;			      // The number of elements of type stored.
+		offset_type offset;           // The offset of the blob in the shared memory buffer.
+		std::atomic<int> lock_state;  // The lock state of the blob.
+		ssize_t next_free_index;      // -1 if the slot is occupied, or the index of the next free slot in the free list
+		BlobMetadata() : size(0), count(0), offset(0), lock_state(0), next_free_index(0) {}
+
+		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), offset(offset), lock_state(0), next_free_index(-1) {}
+
+		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset), lock_state(0), next_free_index(other.next_free_index) {}
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
@@ -486,6 +556,15 @@ private:
 		return allocator_.ToPtr<T>(metadata_entry.offset);
 	}
 
+	// Creates an RWLock for the object at the specified index.
+	std::unique_ptr<RWLock> CreateLock(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return nullptr;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		return std::make_unique<RWLock>(&metadata_entry.lock_state);
+	}
+
 	Allocator allocator_;
 	BlobMetadataAllocator metadata_allocator_;
 	MetadataVector metadata_;
@@ -500,7 +579,12 @@ BlobStoreObject<T> BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
 	char* ptr = allocator_.Allocate(sizeof(T));
 	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
-	metadata_[index] = { sizeof(T), 1, allocator_.ToOffset(ptr), -1 };
+	BlobMetadata& metadata = metadata_[index];
+	metadata.size = sizeof(T);
+	metadata.count = 1;
+	metadata.offset = allocator_.ToOffset(ptr);
+	metadata.lock_state = 0;
+	metadata.next_free_index = -1;
 	return BlobStoreObject<T>(this, index);
 }
 
@@ -511,7 +595,12 @@ BlobStoreObject<T[]> BlobStore::NewArray(size_t count) {
 	for (size_t i = 0; i < count; ++i) {
 		new (&ptr[i]) T();
 	}
-	metadata_[index] = { sizeof(T), count, allocator_.ToOffset(ptr), -1 };
+	BlobMetadata& metadata = metadata_[index];
+	metadata.size = sizeof(T);
+	metadata.count = count;
+	metadata.offset = allocator_.ToOffset(ptr);
+	metadata.lock_state = 0;
+	metadata.next_free_index = -1;
 	return BlobStoreObject<T[]>(this, index);
 }
 
@@ -521,12 +610,12 @@ BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index) :
 
 template<typename T>
 BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(BlobStore* store, size_t index)
-	: store_(store), index_(index), lock_(store->GetMetadataBufferName() + std::to_string(index)), ref_count_(1) {
+	: store_(store), index_(index), lock_(store->CreateLock(index)), ref_count_(1) {
 	if (std::is_const<T>::value) {
-		lock_.AcquireReadLock();
+		lock_->lockRead();
 	}
 	else {
-		lock_.AcquireWriteLock();
+		lock_->lockWrite();
 	}
 	if (store_ != nullptr) {
 		store_->AddObserver(this);

@@ -1,45 +1,59 @@
 #ifndef RWLOCK_H_
 #define RWLOCK_H_
 
-#include <string>
+#include <atomic>
+//#include <thread>
+#include <chrono>
+//#include <stdexcept>
+//#include <limits>
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32)
 #include <Windows.h>
 #else
-#include <fcntl.h>
-#include <pthread.h>
-#include <semaphore.h>
 #include <unistd.h>
 #endif
 
+#undef max
+
+// A simple spinning read-write lock implementation that allows multiple readers or a single writer.
 class RWLock {
 public:
-    // Constructor: Initializes a cross-process RWLock with the given name.
-    explicit RWLock(const std::string& name);
+    explicit RWLock(std::atomic<int>* lock_state) : state_(lock_state) {}
 
-    // Destructor: Cleans up resources associated with the RWLock.
-    ~RWLock();
+    // Attempt to acquire a read lock with an optional timeout in milliseconds
+    bool lockRead(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero());
 
-    // Acquires a read lock.
-    bool AcquireReadLock();
+    // Attempt to acquire a write lock with an optional timeout in milliseconds
+    bool lockWrite(std::chrono::milliseconds timeout = std::chrono::milliseconds::zero());
 
-    // Acquires a write lock.
-    bool AcquireWriteLock();
+    void unlock();
 
-    // Releases the read lock.
-    bool ReleaseReadLock();
+    // Try to acquire a read lock without blocking. Returns true if the lock was acquired.
+    bool tryLockRead();
 
-    // Releases the write lock.
-    bool ReleaseWriteLock();
+    // Try to acquire a write lock without blocking. Returns true if the lock was acquired.
+    bool tryLockWrite();
+
+    // Downgrades a write lock to a read lock. Blocks until the downgrade completes.
+    void DowngradeWriteToReadLock();
+
+    // Upgrades a read lock to a write lock. Blocks until the upgrade completes.
+    void UpgradeReadToWriteLock();
 
 private:
-    std::string lock_name_;
-#if defined(_WIN32) || defined(_WIN64)
-    SRWLOCK srw_lock_;
+    void spinWait() {
+#if defined(_WIN32)
+        Sleep(0);
 #else
-    pthread_rwlock_t* rw_lock_;
-    pthread_rwlockattr_t rw_lock_attr_;
+        std::this_thread::yield();
 #endif
+    }
+
+    bool hasTimedOut(std::chrono::high_resolution_clock::time_point start, std::chrono::milliseconds timeout) {
+        return timeout != std::chrono::milliseconds::zero() && std::chrono::high_resolution_clock::now() - start >= timeout;
+    }
+
+    std::atomic<int>* state_;
 };
 
 #endif  // RWLOCK_H_

@@ -6,6 +6,7 @@
 
 #ifdef _WIN32
 #include <Windows.h>
+#undef max
 #else
 #include <unistd.h>
 #include <sys/mman.h>
@@ -113,7 +114,7 @@ public:
 
 				// Return a pointer to the data in the new block
 				AllocatedNodeHeader* node_header_ptr = reinterpret_cast<AllocatedNodeHeader*>(current_block_ptr);
-				return NewAllocatedNodeAtOffset(ToOffset(node_header_ptr), max(bytes_needed, block_size));
+				return NewAllocatedNodeAtOffset(ToOffset(node_header_ptr), std::max(bytes_needed, block_size));
 			}
 
 			// Move to the next block in the free list

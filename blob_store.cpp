@@ -6,7 +6,7 @@ BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& d
     metadata_(metadata_allocator_)
 {
     if (metadata_.empty()) {
-        metadata_.push_back({ 0, 0, -1, 0 });
+        metadata_.emplace_back();
     }
     allocator_.AddObserver(this);
 }
@@ -38,7 +38,7 @@ void BlobStore::Compact() {
         }
 
         // Allocate memory in the new allocator and copy the data
-        char* new_ptr = new_allocator.Allocate(metadata_entry.size);
+        char* new_ptr = new_allocator.Allocate(metadata_entry.size * metadata_entry.count);
         std::memcpy(new_ptr, allocator_.ToPtr<char>(metadata_entry.offset), metadata_entry.size * metadata_entry.count);
 
         // Update metadata with the new pointer
@@ -81,7 +81,7 @@ size_t BlobStore::FindFreeSlot() {
         return free_index;
     }
     else {
-        metadata_.push_back({ 0, 0, -1, -1 });
+        metadata_.emplace_back();
         return metadata_.size() - 1;
     }
 }

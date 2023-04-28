@@ -1,58 +1,84 @@
 #include "rwlock.h"
 
-RWLock::RWLock(const std::string& name) : lock_name_(name) {
-#if defined(_WIN32) || defined(_WIN64)
-    InitializeSRWLock(&srw_lock_);
-#else
-    rw_lock_ = new pthread_rwlock_t;
-    pthread_rwlockattr_init(&rw_lock_attr_);
-    pthread_rwlockattr_setpshared(&rw_lock_attr_, PTHREAD_PROCESS_SHARED);
-    pthread_rwlock_init(rw_lock_, &rw_lock_attr_);
-#endif
+#include <algorithm>
+#include <chrono>
+#include <climits>
+
+constexpr std::int32_t WRITE_LOCK_FLAG = 0x80000000;
+
+bool RWLock::lockRead(std::chrono::milliseconds timeout) {
+    auto start = std::chrono::high_resolution_clock::now();
+    while (true) {
+        if (tryLockRead()) {
+            return true;
+        }
+        if (hasTimedOut(start, timeout)) {
+            return false;
+        }
+        spinWait();
+    }
 }
 
-RWLock::~RWLock() {
-#if defined(_WIN32) || defined(_WIN64)
-    // SRWLOCK does not need explicit destruction
-#else
-    pthread_rwlock_destroy(rw_lock_);
-    pthread_rwlockattr_destroy(&rw_lock_attr_);
-    delete rw_lock_;
-#endif
+bool RWLock::lockWrite(std::chrono::milliseconds timeout) {
+    auto start = std::chrono::high_resolution_clock::now();
+    while (true) {
+        if (tryLockWrite()) {
+            return true;
+        }
+        if (hasTimedOut(start, timeout)) {
+            return false;
+        }
+        spinWait();
+    }
 }
 
-bool RWLock::AcquireReadLock() {
-#if defined(_WIN32) || defined(_WIN64)
-    AcquireSRWLockShared(&srw_lock_);
-    return true;
-#else
-    return pthread_rwlock_rdlock(rw_lock_) == 0;
-#endif
+void RWLock::unlock() {
+    std::int32_t expected;
+
+    while (true) {
+        expected = state_->load();
+        std::int32_t newState = std::max<int32_t>((expected & ~WRITE_LOCK_FLAG) - 1, 0);
+
+        if (state_->compare_exchange_weak(expected, newState)) {
+            break;
+        }
+    }
 }
 
-bool RWLock::AcquireWriteLock() {
-#if defined(_WIN32) || defined(_WIN64)
-    AcquireSRWLockExclusive(&srw_lock_);
-    return true;
-#else
-    return pthread_rwlock_wrlock(rw_lock_) == 0;
-#endif
+bool RWLock::tryLockRead() {
+    int state = state_->load(std::memory_order_acquire);
+  
+    if (state >= 0) {
+        return state_->compare_exchange_weak(state, state + 1, std::memory_order_acquire);
+    }
+    return false;
 }
 
-bool RWLock::ReleaseReadLock() {
-#if defined(_WIN32) || defined(_WIN64)
-    ReleaseSRWLockShared(&srw_lock_);
-    return true;
-#else
-    return pthread_rwlock_unlock(rw_lock_) == 0;
-#endif
+bool RWLock::tryLockWrite() {
+    int state = 0;
+    return state_->compare_exchange_weak(state, WRITE_LOCK_FLAG, std::memory_order_acquire);
 }
 
-bool RWLock::ReleaseWriteLock() {
-#if defined(_WIN32) || defined(_WIN64)
-    ReleaseSRWLockExclusive(&srw_lock_);
-    return true;
-#else
-    return pthread_rwlock_unlock(rw_lock_) == 0;
-#endif
+void RWLock::DowngradeWriteToReadLock() {
+    std::int32_t expected;
+
+    while (true) {
+        expected = WRITE_LOCK_FLAG;
+
+        if (state_->compare_exchange_weak(expected, 1)) {
+            break;
+        }
+    }
+}
+
+void RWLock::UpgradeReadToWriteLock() {
+    std::int32_t expected;
+
+    while (true) {
+        expected = 1;
+
+        if (state_->compare_exchange_weak(expected, WRITE_LOCK_FLAG)) {
+            break;
+        }
+    }
 }
