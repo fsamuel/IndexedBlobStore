@@ -2,18 +2,14 @@
 #define RWLOCK_H_
 
 #include <atomic>
-//#include <thread>
 #include <chrono>
-//#include <stdexcept>
-//#include <limits>
 
 #if defined(_WIN32)
 #include <Windows.h>
+#undef max
 #else
 #include <unistd.h>
 #endif
-
-#undef max
 
 // A simple spinning read-write lock implementation that allows multiple readers or a single writer.
 class RWLock {
