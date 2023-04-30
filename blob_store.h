@@ -123,6 +123,12 @@ public:
 		return (*control_block_->ptr_)[i];
 	}
 
+	template <typename U = T>
+	typename std::enable_if<std::is_copy_constructible<U>::value, BlobStoreObject<non_const_T>>::type
+		Clone() const {
+		return control_block_->store_->Clone<T>(control_block_->index_);
+	}
+
 	// Returns the index of the Blob.
 	size_t Index() const
 	{
@@ -332,7 +338,7 @@ class BlobStore : public SharedMemoryAllocatorObserver {
 public:
 	using Allocator = SharedMemoryAllocator<char>;
 	using offset_type = typename Allocator::offset_type;
-	using index_type = typename SharedMemoryVector<offset_type>::size_type;
+	using index_type = size_t;
 
 	static constexpr index_type InvalidIndex = static_cast<index_type>(-1);
 
@@ -349,7 +355,8 @@ public:
 
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	BlobStoreObject<T> New(Args&&... args);
+	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
+		New(Args&&... args);
 
 	template <typename T>
 	BlobStoreObject<T[]> NewArray(size_t count);
@@ -364,6 +371,24 @@ public:
 	template<typename T>
 	BlobStoreObject<const T> Get(size_t index) const {
 		return const_cast<BlobStore*>(this)->GetMutable<const T>(index);
+	}
+
+	template <typename T>
+	typename std::enable_if<std::is_copy_constructible<T>::value, BlobStoreObject<typename std::remove_const<T>::type>>::type
+		Clone(size_t index) {
+		// This is only safe if the calling object is holding a read or write lock.
+		const T* obj = GetRaw<T>(index);
+		BlobMetadata& metadata = metadata_[index];
+		size_t clone_index = FindFreeSlot();
+		char* ptr = allocator_.Allocate(metadata.size * metadata.count);
+		allocator_.Construct(reinterpret_cast<std::remove_const<T>::type*>(ptr), *obj);
+		BlobMetadata& clone_metadata = metadata_[clone_index];
+		clone_metadata.size = metadata.size;
+		clone_metadata.count = metadata.count;
+		clone_metadata.offset = allocator_.ToOffset(ptr);
+		clone_metadata.lock_state = 0;
+		clone_metadata.next_free_index = -1;
+		return BlobStoreObject<typename std::remove_const<T>::type>(this, clone_index);
 	}
 
 	// Gets the size of the blob stored at the speific index.
@@ -566,7 +591,8 @@ private:
 };
 
 template <typename T, typename... Args>
-BlobStoreObject<T> BlobStore::New(Args&&... args) {
+typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
+BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
 	char* ptr = allocator_.Allocate(sizeof(T));
 	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);

@@ -260,3 +260,16 @@ TEST_F(BlobStoreTest, BlobStoreObjectUpgradeDowngrade) {
 		EXPECT_EQ(ptr2[i], i * 100);
 	}
 }
+
+// Tests BlobStoreObject::Clone.
+TEST_F(BlobStoreTest, BlobStoreObjectClone) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	// TODO(fsamuel): I should probably implement an array-based version of Clone.
+	BlobStoreObject<int> ptr = store.New<int>(64);
+	EXPECT_EQ(ptr.GetSize(), sizeof(int));
+	EXPECT_EQ(*ptr, 64);
+
+	BlobStoreObject<int> ptr2 = ptr.Clone();
+	EXPECT_NE(ptr2.Index(), ptr.Index());
+	EXPECT_EQ(*ptr, *ptr2);
+}
