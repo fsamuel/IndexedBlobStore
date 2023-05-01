@@ -174,27 +174,45 @@ public:
 	KeyValuePair<KeyType, ValueType> Remove(const KeyType& key);
 
 	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
-	void PrintNode(BlobStoreObject<BaseNode> node) {
+	template<typename T>
+	void PrintNode(BlobStoreObject<const T> node) {}
+
+	template<>
+	void PrintNode(BlobStoreObject<const InternalNode> node) {
+		if (node == nullptr) {
+			std::cout << "NULL Node" << std::endl;
+			return;
+		}
+		std::cout << "Internal node (n = " << node->num_keys() << ") ";
+		for (size_t i = 0; i < node->num_keys(); ++i) {
+			std::cout << *GetKey(node, i) << " ";
+		}
+		std::cout << std::endl;
+	}
+
+	template<>
+	void PrintNode(BlobStoreObject<const LeafNode> node) {
+		if (node == nullptr) {
+			std::cout << "NULL Node" << std::endl;
+			return;
+		}
+		std::cout << "Leaf node (n = " << node->num_keys() << ") ";
+		for (size_t i = 0; i < node->num_keys(); ++i) {
+			std::cout << *GetKey(node, i) << " ";
+		}
+		std::cout << std::endl;
+	}
+
+	template<>
+	void PrintNode(BlobStoreObject<const BaseNode> node) {
 		if (node == nullptr) {
 			std::cout << "NULL Node" << std::endl;
 			return;
 		}
 		if (node->type == NodeType::INTERNAL) {
-			BlobStoreObject<InternalNode> internal_node = node.To<InternalNode>();
-			std::cout << "Internal node (n = " << internal_node->num_keys() << ") ";
-			for (size_t i = 0; i < internal_node->num_keys(); ++i) {
-				std::cout << *BlobStoreObject<KeyType>(&blob_store_, internal_node->keys[i]) << " ";
-			}
-			std::cout << std::endl;
+			return PrintNode(node.To<InternalNode>());
 		}
-		else {
-			BlobStoreObject<LeafNode> leaf_node = node.To<LeafNode>();
-			std::cout << "Leaf node (n = " << leaf_node->num_keys() << ") ";
-			for (size_t i = 0; i < leaf_node->num_keys(); ++i) {
-				std::cout << *BlobStoreObject<KeyType>(&blob_store_, leaf_node->keys[i]) << " ";
-			}
-			std::cout << std::endl;
-		}
+		return PrintNode(node.To<LeafNode>());
 	}
 
 	// Prints the tree in a human-readable format in breadth-first order.
@@ -210,22 +228,16 @@ public:
 			queue.pop();
 			if (node_with_level.node->type == NodeType::INTERNAL) {
 				BlobStoreObject<const InternalNode> internal_node = node_with_level.node.To<InternalNode>();
-				std::cout << std::string(node_with_level.level, ' ') << "Internal node (n = " << internal_node->num_keys() << ") ";
-				for (size_t i = 0; i < internal_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, internal_node->get_key(i)) << " ";
-				}
 				for (size_t i = 0; i <= internal_node->num_keys(); ++i) {
 					queue.push({ GetChild(internal_node, i), node_with_level.level + 1 });
 				}
-				std::cout << std::endl;
+				std::cout << std::string(node_with_level.level, ' ');
+				PrintNode(internal_node);
 			}
 			else {
 				BlobStoreObject<const LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
-				std::cout << std::string(node_with_level.level, ' ') << "Leaf node (n = " << leaf_node->num_keys() << ") ";
-				for (size_t i = 0; i < leaf_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, leaf_node->get_key(i)) << " ";
-				}
-				std::cout << std::endl;
+				std::cout << std::string(node_with_level.level, ' ');
+				PrintNode(leaf_node);
 			}
 		}
 	}
@@ -403,7 +415,6 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 
 	int middle_key_index = (node->num_keys() - 1) / 2;
 	BlobStoreObject<const KeyType> middle_key = GetKey(node, middle_key_index);
-	//size_t middle_key = node->keys[middle_key_index];
 
 	if (new_node_type == NodeType::INTERNAL) {
 		new_node->set_num_keys(node->num_keys() - middle_key_index - 1);
@@ -516,7 +527,10 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 	// and the new child node if the child node was split. We should update our ith key if so.
 	// If a node needs to be cloned, then its parent will need to be cloned as well to point to the clone.
 	// This means that every insertion involves cloning all the way up to the root node.
-	// When the root node is cloned then we compare and swap the root node.
+	// When the root node is cloned then we compare and swap the root node. This also means that the cost
+	// of cloning is O(log N) where N is the number of nodes in the tree. The positive of this is keys
+	// and values are not stored in the nodes, so cloning is cheap, and we will always be able to read from
+	// the tree while it is being modified.
 	auto key_node_pair = Insert(child_node, key, value);
 	auto new_key = key_node_pair.first;
 	auto new_child = key_node_pair.second;
@@ -542,7 +556,7 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 		// insert the new child node and its minimum key into the parent node
 		int j = internal_node->num_keys() - 1;
 		while (j >= static_cast<int>(i)) {
-			internal_node->children[j + 1] = internal_node->children[j];
+			internal_node->children[j + 2] = internal_node->children[j + 1];
 			internal_node->set_key(j + 1, internal_node->get_key(j));
 			--j;
 		}
@@ -773,7 +787,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 	for (int i = 0; i <= node->num_keys(); ++i) {
 		auto internal_node = node.To<InternalNode>();
 		auto child = GetChild(internal_node, i); // Get the leftmost child
-		auto key_ptr = GetSuccessorKey(child, key);
+		auto key_ptr = GetSuccessorKey(child, std::move(key));
 		if (key_ptr != nullptr)
 			return key_ptr;
 	}

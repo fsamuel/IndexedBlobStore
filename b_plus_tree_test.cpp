@@ -115,3 +115,51 @@ TEST_F(BPlusTreeTest, BPlusTreeIteration) {
 		++it;
 	}
 }
+
+// Popualte a B+ tree with 100 elements in random order. Verify that the elements are
+// in the tree. Delete the elements also in random order. Verify that the elements
+// are no longer in the tree.
+TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
+	BPlusTree<int, int, 4> tree(*blob_store);
+	std::set<int> inserted;
+	for (int i = 0; i < 100; i++) {
+		int val = rand() % 100;
+		while (inserted.count(val) > 0) {
+			val = rand() % 100;
+		}
+		tree.Insert(val, val * 100);
+		inserted.insert(val);
+	}
+	for (int i = 0; i < 100; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+	// Delete a random half the elements in random order and store 
+	// the deleted keys in a set so we can check that they're not
+	// in the tree later.
+	std::set<int> deleted;
+	for (int i = 0; i < 50; ++i) {
+		int val = rand() % 100;
+		while (deleted.count(val) > 0) {
+			val = rand() % 100;
+			KeyValuePair<int, int> kv = tree.Remove(i);
+			std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
+			deleted.insert(i);
+		}
+	}
+	for (int i = 0; i < 100; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		if (deleted.count(i) > 0) {
+			EXPECT_EQ(value_ptr, nullptr);
+		}
+		else {
+			EXPECT_NE(value_ptr, nullptr);
+			EXPECT_EQ(value, i * 100);
+		}
+	}
+}
