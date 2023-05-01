@@ -359,7 +359,7 @@ public:
 		New(Args&&... args);
 
 	template <typename T>
-	BlobStoreObject<T[]> NewArray(size_t count);
+	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T[]>>::type NewArray(size_t count);
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
@@ -606,7 +606,7 @@ BlobStore::New(Args&&... args) {
 }
 
 template <typename T>
-BlobStoreObject<T[]> BlobStore::NewArray(size_t count) {
+typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T[]>>::type BlobStore::NewArray(size_t count) {
 	size_t index = FindFreeSlot();
 	T* ptr = reinterpret_cast<T*>(allocator_.Allocate(sizeof(T) * count));
 	for (size_t i = 0; i < count; ++i) {
