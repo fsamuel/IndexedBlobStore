@@ -19,13 +19,13 @@ using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<c
 // new right sibling node.
 template<typename KeyType, typename NodeType>
 struct InsertionBundle {
-	InsertionBundle(BlobStoreObject<const KeyType> new_key, BlobStoreObject<NodeType> new_right_node)
-		: new_key(new_key), new_right_node(new_right_node) {}
+	InsertionBundle(BlobStoreObject<NodeType> new_left_node, BlobStoreObject<const KeyType> new_key, BlobStoreObject<NodeType> new_right_node)
+		: new_left_node(new_left_node), new_key(new_key), new_right_node(new_right_node) {}
 	BlobStoreObject<const KeyType> new_key;
-	//BlobStoreObject<BaseNode> new_left_node;
+	BlobStoreObject<NodeType> new_left_node;
 	BlobStoreObject<NodeType> new_right_node;
 
-	bool empty() const { return !new_left_node; }
+	bool empty() const { return !new_left_node && !new_right_node; }
 };
 
 template <typename KeyType, typename ValueType, std::size_t Order>
@@ -47,6 +47,9 @@ private:
 				keys[i] = BlobStore::InvalidIndex;
 			}
 		}
+
+		BaseNode(const BaseNode& other)
+			:type(other.type), n(other.n), keys(other.keys) {}
 
 		// Returns whether the node has the maximum number of keys it can hold.
 		bool is_full() const { return n == Order - 1; }
@@ -70,7 +73,7 @@ private:
 		void set_key(size_t index, size_t key) { keys[index] = key; }
 	};
 
-	static_assert(std::is_trivially_copyable<BaseNode>::value, "BaseNode is trivially copyable");
+	//static_assert(std::is_trivially_copyable<BaseNode>::value, "BaseNode is trivially copyable");
 	static_assert(std::is_standard_layout<BaseNode>::value, "BaseNode is standard layout");
 
 
@@ -84,6 +87,8 @@ private:
 			}
 		}
 
+		InternalNode(const InternalNode& other) : base(other.base), children(other.children) {}
+
 		bool is_full() const { return base.is_full(); }
 		size_t num_keys() const { return base.num_keys(); }
 		void increment_num_keys() { base.increment_num_keys(); }
@@ -93,7 +98,7 @@ private:
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
 	};
 
-	static_assert(std::is_trivially_copyable<InternalNode>::value, "InternalNode is trivially copyable");
+	//static_assert(std::is_trivially_copyable<InternalNode>::value, "InternalNode is trivially copyable");
 	static_assert(std::is_standard_layout<InternalNode>::value, "InternalNode is standard layout");
 
 	struct LeafNode {
@@ -104,6 +109,8 @@ private:
 		LeafNode(BlobStore::index_type next, std::size_t n = 0)
 			: base(NodeType::LEAF, n), next(next) {}
 
+		LeafNode(const LeafNode& other) : base(other.base), values(other.values), next(other.next) {}
+
 		bool is_full() const { return base.is_full(); }
 		size_t num_keys() const { return base.num_keys();}
 		void increment_num_keys() { base.increment_num_keys(); }
@@ -113,7 +120,7 @@ private:
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
 	};
 
-	static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
+	//static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
 	static_assert(std::is_standard_layout<LeafNode>::value, "LeafNode is standard layout");
 
 	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
@@ -379,11 +386,14 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key
 	InsertionBundle bundle = Insert(root, key, value);
 	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
-		new_root->children[0] = root.Index();
+		new_root->children[0] = bundle.new_left_node.Index();
 		new_root->children[1] = bundle.new_right_node.Index();
 		new_root->set_num_keys(1);
 		new_root->set_key(0, bundle.new_key.Index());
 		root_index_ = new_root.Index();
+	}
+	else {
+		root_index_ = bundle.new_left_node.Index();
 	}
 }
 
@@ -422,49 +432,53 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 
 template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitNode(BlobStoreObject<BaseNode> node) {
-	NodeType new_node_type = node->type;
-	BlobStoreObject<BaseNode> new_node = (
-		new_node_type == NodeType::INTERNAL ?
+	// TODO(fsamuel): This is a hack to ensure the right constructor is called.
+	BlobStoreObject<BaseNode> new_left_node = node->type == NodeType::INTERNAL ?
+		node.To<InternalNode>().Clone().To<BaseNode>() :
+		node.To<LeafNode>().Clone().To<BaseNode>();
+	NodeType new_right_node_type = new_left_node->type;
+	BlobStoreObject<BaseNode> new_right_node = (
+		new_right_node_type == NodeType::INTERNAL ?
 		blob_store_.New<InternalNode>(Order).To<BaseNode>() :
 		blob_store_.New<LeafNode>(Order).To<BaseNode>());
 
-	int middle_key_index = (node->num_keys() - 1) / 2;
-	BlobStoreObject<const KeyType> middle_key = GetKey(node, middle_key_index);
+	int middle_key_index = (new_left_node->num_keys() - 1) / 2;
+	BlobStoreObject<const KeyType> middle_key = GetKey(new_left_node, middle_key_index);
 
-	if (new_node_type == NodeType::INTERNAL) {
-		new_node->set_num_keys(node->num_keys() - middle_key_index - 1);
-		for (int i = 0; i < new_node->num_keys(); ++i) {
-			new_node->keys[i] = node->keys[middle_key_index + i + 1];
-			node->keys[middle_key_index + i + 1] = BlobStore::InvalidIndex;
+	if (new_right_node_type == NodeType::INTERNAL) {
+		new_right_node->set_num_keys(new_left_node->num_keys() - middle_key_index - 1);
+		for (int i = 0; i < new_right_node->num_keys(); ++i) {
+			new_right_node->keys[i] = new_left_node->keys[middle_key_index + i + 1];
+			new_left_node->keys[middle_key_index + i + 1] = BlobStore::InvalidIndex;
 		}
 
-		auto new_internal_node = new_node.To<InternalNode>();
-		auto child_internal_node = node.To<InternalNode>();
-		for (int i = 0; i <= new_node->num_keys(); ++i) {
+		auto new_internal_node = new_right_node.To<InternalNode>();
+		auto child_internal_node = new_left_node.To<InternalNode>();
+		for (int i = 0; i <= new_right_node->num_keys(); ++i) {
 			new_internal_node->children[i] = child_internal_node->children[middle_key_index + i + 1];
 			child_internal_node->children[middle_key_index + i + 1] = BlobStore::InvalidIndex;
 		}
 	}
 	else {
-		new_node->set_num_keys(node->num_keys() - middle_key_index);
-		for (int i = 0; i < new_node->num_keys(); ++i) {
-			new_node->keys[i] = node->keys[middle_key_index + i];
-			node->keys[middle_key_index + i] = BlobStore::InvalidIndex;
+		new_right_node->set_num_keys(new_left_node->num_keys() - middle_key_index);
+		for (int i = 0; i < new_right_node->num_keys(); ++i) {
+			new_right_node->keys[i] = new_left_node->keys[middle_key_index + i];
+			new_left_node->keys[middle_key_index + i] = BlobStore::InvalidIndex;
 		}
-		auto new_leaf_node = new_node.To<LeafNode>();
+		auto new_leaf_node = new_right_node.To<LeafNode>();
 		auto child_leaf_node = node.To<LeafNode>();
-		for (int i = 0; i < new_node->num_keys(); ++i) {
+		for (int i = 0; i < new_right_node->num_keys(); ++i) {
 			new_leaf_node->values[i] = child_leaf_node->values[middle_key_index + i];
 			child_leaf_node->values[middle_key_index + i] = BlobStore::InvalidIndex;
 		}
 		new_leaf_node->next = child_leaf_node->next;
-		child_leaf_node->next = new_node.Index();
+		child_leaf_node->next = new_right_node.Index();
 		child_leaf_node->values[middle_key_index] = BlobStore::InvalidIndex;
 	}
 
-	node->set_num_keys(middle_key_index);
-	node->keys[middle_key_index] = BlobStore::InvalidIndex;
-	return InsertionBundle(middle_key, new_node);
+	new_left_node->set_num_keys(middle_key_index);
+	new_left_node->keys[middle_key_index] = BlobStore::InvalidIndex;
+	return InsertionBundle(new_left_node, middle_key, new_right_node);
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -475,28 +489,32 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	if (node->is_full()) {
 		InsertionBundle bundle = SplitNode(node.To<BaseNode>());
 		if (*key >= *bundle.new_key) {
-			InsertIntoLeaf(bundle.new_right_node.To<LeafNode>(), std::move(key), std::move(value));
+			// TODO(fsamuel): HACK ALERT. There is another clone happening here.
+			InsertionBundle new_bundle = InsertIntoLeaf(bundle.new_right_node.To<LeafNode>(), std::move(key), std::move(value));
+			bundle.new_right_node = new_bundle.new_left_node;
 		}
 		else {
-			InsertIntoLeaf(node, std::move(key), std::move(value));
+			InsertionBundle new_bundle = InsertIntoLeaf(bundle.new_left_node.To<LeafNode>(), std::move(key), std::move(value));
+			bundle.new_left_node = new_bundle.new_left_node;
 		}
 		return bundle;
 	}	
 	// Shift the keys and values right.
-	int i = node->num_keys() - 1;
+	BlobStoreObject<LeafNode> new_left_node = node.Clone();
+	int i = new_left_node->num_keys() - 1;
 	while (i >= 0) {
-		BlobStoreObject<const KeyType> key_ptr = GetKey(node, i);
+		BlobStoreObject<const KeyType> key_ptr = GetKey(new_left_node, i);
 		if (*key >= *key_ptr) {
 			break;
 		}
-		node->set_key(i + 1, node->get_key(i));
-		node->values[i + 1] = node->values[i];
+		new_left_node->set_key(i + 1, new_left_node->get_key(i));
+		new_left_node->values[i + 1] = new_left_node->values[i];
 		--i;
 	}
-	node->set_key(i + 1, key.Index());
-	node->values[i + 1] = value.Index();
-	node->increment_num_keys();
-	return InsertionBundle(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
+	new_left_node->set_key(i + 1, key.Index());
+	new_left_node->values[i + 1] = value.Index();
+	new_left_node->increment_num_keys();
+	return InsertionBundle(new_left_node.To<BaseNode>(), BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -545,18 +563,19 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	// and values are not stored in the nodes, so cloning is cheap, and we will always be able to read from
 	// the tree while it is being modified.
 	InsertionBundle child_node_bundle = Insert(child_node, key, value);
+	// TODO(fsamuel): This is inefficient because we might clone again on SplitNode.
+	BlobStoreObject<InternalNode> new_internal_node = internal_node.Clone();
+	new_internal_node->children[i] = child_node_bundle.new_left_node.Index();
 	if (child_node_bundle.new_right_node != nullptr) {
 		if (node->is_full()) {
 			// insert the new child node and its minimum key into the parent node recursively
-			InsertionBundle node_bundle = SplitNode(node);
-			//auto node_middle_key = node_key_node_pair.first;
-			//auto right_internal_node = node_key_node_pair.second.To<InternalNode>();
+			InsertionBundle node_bundle = SplitNode(new_internal_node.To<BaseNode>());
 
 			// The parent node is full so we need to split it and insert the new node into the parent node or
 			// its new sibling.
 			if (*child_node_bundle.new_key < *node_bundle.new_key) {
 				InsertKeyChildIntoInternalNode(
-					internal_node,
+					node_bundle.new_left_node.To<InternalNode>(),
 					std::move(child_node_bundle.new_key), 
 					std::move(child_node_bundle.new_right_node));
 			}
@@ -569,20 +588,19 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 			// return the new node and its middle key to be inserted into the parent node recursively
 			return node_bundle;
 		}
-		
 		// insert the new child node and its minimum key into the parent node
-		int j = internal_node->num_keys() - 1;
+		int j = new_internal_node->num_keys() - 1;
 		while (j >= static_cast<int>(i)) {
-			internal_node->children[j + 2] = internal_node->children[j + 1];
-			internal_node->set_key(j + 1, internal_node->get_key(j));
+			new_internal_node->children[j + 2] = new_internal_node->children[j + 1];
+			new_internal_node->set_key(j + 1, new_internal_node->get_key(j));
 			--j;
 		}
-		internal_node->children[i + 1] = child_node_bundle.new_right_node.Index();
-		internal_node->set_key(i, child_node_bundle.new_key.Index());
-		internal_node->increment_num_keys();
+		new_internal_node->children[i + 1] = child_node_bundle.new_right_node.Index();
+		new_internal_node->set_key(i, child_node_bundle.new_key.Index());
+		new_internal_node->increment_num_keys();
 	}
 	// No split occurred so nothing to return.
-	return InsertionBundle(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
+	return InsertionBundle(new_internal_node.To<BaseNode>(), BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>

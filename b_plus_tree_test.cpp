@@ -6,8 +6,8 @@ protected:
     virtual void SetUp() {
         std::remove("metadataBuffer");
         std::remove("dataBuffer");
-        SharedMemoryBuffer metadataBuffer("metadataBuffer", 2048);
-        SharedMemoryBuffer dataBuffer("dataBuffer", 2048);
+        SharedMemoryBuffer metadataBuffer("metadataBuffer", 8192);
+        SharedMemoryBuffer dataBuffer("dataBuffer", 8192);
         blob_store = new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
     }
 

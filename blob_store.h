@@ -288,7 +288,9 @@ private:
 
 		bool DecrementRefCount() {
 			if (--ref_count_ == 0) {
-				lock_->unlock();
+				if (lock_ != nullptr) {
+					lock_->unlock();
+				}
 				return true;
 			}
 			return false;
@@ -311,6 +313,9 @@ private:
 		// the BlobStore's GetPointer method.
 		void UpdatePointer() {
 			ptr_ = store_->GetRaw<T>(index_);
+			// We need to recreate the lock every time we relocate memory.
+			// TODO(fsamuel): THIS IS A HUGE HACK.
+			lock_ = store_->CreateLock(index_);
 		}
 
 		// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
@@ -362,7 +367,7 @@ public:
 
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
+	typename std::enable_if<std::is_standard_layout<T>::value, BlobStoreObject<T>>::type
 		New(Args&&... args);
 
 	template <typename T>
@@ -384,10 +389,11 @@ public:
 	typename std::enable_if<std::is_copy_constructible<T>::value, BlobStoreObject<typename std::remove_const<T>::type>>::type
 		Clone(size_t index) {
 		// This is only safe if the calling object is holding a read or write lock.
-		const T* obj = GetRaw<T>(index);
-		BlobMetadata& metadata = metadata_[index];
+		// TODO(fsamuel): This whole method is NOT thread safe or buffer resize safe.
+		BlobMetadata metadata = metadata_[index];
 		size_t clone_index = FindFreeSlot();
 		char* ptr = allocator_.Allocate(metadata.size * metadata.count);
+		const T* obj = GetRaw<T>(index);
 		allocator_.Construct(reinterpret_cast<std::remove_const<T>::type*>(ptr), *obj);
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
@@ -621,7 +627,7 @@ private:
 };
 
 template <typename T, typename... Args>
-typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
+typename std::enable_if<std::is_standard_layout<T>::value, BlobStoreObject<T>>::type
 BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
 	char* ptr = allocator_.Allocate(sizeof(T));
