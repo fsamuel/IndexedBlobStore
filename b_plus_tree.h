@@ -12,6 +12,22 @@ class BaseNode;
 template <typename KeyType, typename ValueType>
 using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>>;
 
+
+// InsertionBundle represents output of an insertion operation.
+// It is either empty or contains a BlobStoreObject of the newly cloned node,
+// the key to be inserted into the parent node, and the BlobStoreObect of the
+// new right sibling node.
+template<typename KeyType, typename NodeType>
+struct InsertionBundle {
+	InsertionBundle(BlobStoreObject<const KeyType> new_key, BlobStoreObject<NodeType> new_right_node)
+		: new_key(new_key), new_right_node(new_right_node) {}
+	BlobStoreObject<const KeyType> new_key;
+	//BlobStoreObject<BaseNode> new_left_node;
+	BlobStoreObject<NodeType> new_right_node;
+
+	bool empty() const { return !new_left_node; }
+};
+
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
 private:
@@ -99,6 +115,8 @@ private:
 
 	static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
 	static_assert(std::is_standard_layout<LeafNode>::value, "LeafNode is standard layout");
+
+	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
 
 public:
 	using offset_type = std::ptrdiff_t;
@@ -329,13 +347,13 @@ private:
 	}
 
 	Iterator Search(BlobStoreObject<const BaseNode>&& node, const KeyType& key);
-	std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<BaseNode>> SplitNode(BlobStoreObject<BaseNode> node);
+	InsertionBundle SplitNode(BlobStoreObject<BaseNode> node);
 
-	std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<KeyType, ValueType, Order>::BaseNode>> InsertIntoLeaf(BlobStoreObject<LeafNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
+	InsertionBundle InsertIntoLeaf(BlobStoreObject<LeafNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 	void InsertKeyChildIntoInternalNode(BlobStoreObject<InternalNode> node, BlobStoreObject<const KeyType> new_key,
 		BlobStoreObject<BaseNode> new_child);
 
-	std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<KeyType, ValueType, Order>::BaseNode>> Insert(BlobStoreObject<BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
+	InsertionBundle Insert(BlobStoreObject<BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 
 	KeyValuePair<KeyType, ValueType> Remove(BlobStoreObject<InternalNode> parent_node, int child_index, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> RemoveFromLeafNode(BlobStoreObject<LeafNode>&& node, const KeyType& key);
@@ -358,16 +376,13 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const Valu
 template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value) {
 	auto root = blob_store_.GetMutable<BaseNode>(root_index_);
-
-	auto kv = Insert(root, key, value);
-	auto new_key = kv.first;
-	auto new_root_sibling = kv.second;
-	if (new_root_sibling != nullptr) {
+	InsertionBundle bundle = Insert(root, key, value);
+	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
 		new_root->children[0] = root.Index();
-		new_root->children[1] = new_root_sibling.Index();
+		new_root->children[1] = bundle.new_right_node.Index();
 		new_root->set_num_keys(1);
-		new_root->set_key(0, new_key.Index());
+		new_root->set_key(0, bundle.new_key.Index());
 		root_index_ = new_root.Index();
 	}
 }
@@ -406,7 +421,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<KeyType, ValueType, Order>::BaseNode>> BPlusTree<KeyType, ValueType, Order>::SplitNode(BlobStoreObject<BaseNode> node) {
+typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitNode(BlobStoreObject<BaseNode> node) {
 	NodeType new_node_type = node->type;
 	BlobStoreObject<BaseNode> new_node = (
 		new_node_type == NodeType::INTERNAL ?
@@ -449,25 +464,23 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 
 	node->set_num_keys(middle_key_index);
 	node->keys[middle_key_index] = BlobStore::InvalidIndex;
-	return std::make_pair(middle_key, new_node);
+	return InsertionBundle(middle_key, new_node);
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<KeyType, ValueType, Order>::BaseNode>> BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(BlobStoreObject<LeafNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
+typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(BlobStoreObject<LeafNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
 	// We know this is the leaf we want to insert into or the right sibling we're about to create.
 	// TODO(fsamuel): Clone node, execute this full function on the clone, and then return the clone,
 	// and the right sibling, if any.
 	if (node->is_full()) {
-		auto kv = SplitNode(node.To<BaseNode>());
-		auto middle_key = kv.first;
-		auto new_node = kv.second.To<LeafNode>();
-		if (*key >= *middle_key) {
-			InsertIntoLeaf(new_node, std::move(key), std::move(value));
+		InsertionBundle bundle = SplitNode(node.To<BaseNode>());
+		if (*key >= *bundle.new_key) {
+			InsertIntoLeaf(bundle.new_right_node.To<LeafNode>(), std::move(key), std::move(value));
 		}
 		else {
 			InsertIntoLeaf(node, std::move(key), std::move(value));
 		}
-		return kv;
+		return bundle;
 	}	
 	// Shift the keys and values right.
 	int i = node->num_keys() - 1;
@@ -483,7 +496,7 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 	node->set_key(i + 1, key.Index());
 	node->values[i + 1] = value.Index();
 	node->increment_num_keys();
-	return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
+	return InsertionBundle(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -507,7 +520,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<KeyType, ValueType, Order>::BaseNode>> BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
+typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
 	if (node->type == NodeType::LEAF) {
 		return InsertIntoLeaf(node.To<LeafNode>(), std::move(key), std::move(value));
 	}
@@ -531,26 +544,30 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 	// of cloning is O(log N) where N is the number of nodes in the tree. The positive of this is keys
 	// and values are not stored in the nodes, so cloning is cheap, and we will always be able to read from
 	// the tree while it is being modified.
-	auto key_node_pair = Insert(child_node, key, value);
-	auto new_key = key_node_pair.first;
-	auto new_child = key_node_pair.second;
-	if (new_child != nullptr) {
+	InsertionBundle child_node_bundle = Insert(child_node, key, value);
+	if (child_node_bundle.new_right_node != nullptr) {
 		if (node->is_full()) {
 			// insert the new child node and its minimum key into the parent node recursively
-			auto node_key_node_pair = SplitNode(node);
-			auto node_middle_key = node_key_node_pair.first;
-			auto right_internal_node = node_key_node_pair.second.To<InternalNode>();
+			InsertionBundle node_bundle = SplitNode(node);
+			//auto node_middle_key = node_key_node_pair.first;
+			//auto right_internal_node = node_key_node_pair.second.To<InternalNode>();
 
 			// The parent node is full so we need to split it and insert the new node into the parent node or
 			// its new sibling.
-			if (*new_key < *node_middle_key) {
-				InsertKeyChildIntoInternalNode(internal_node, std::move(new_key), std::move(new_child));
+			if (*child_node_bundle.new_key < *node_bundle.new_key) {
+				InsertKeyChildIntoInternalNode(
+					internal_node,
+					std::move(child_node_bundle.new_key), 
+					std::move(child_node_bundle.new_right_node));
 			}
 			else {
-				InsertKeyChildIntoInternalNode(right_internal_node, std::move(new_key), std::move(new_child));
+				InsertKeyChildIntoInternalNode(
+					node_bundle.new_right_node.To<InternalNode>(),
+					std::move(child_node_bundle.new_key),
+					std::move(child_node_bundle.new_right_node));
 			}
 			// return the new node and its middle key to be inserted into the parent node recursively
-			return node_key_node_pair;
+			return node_bundle;
 		}
 		
 		// insert the new child node and its minimum key into the parent node
@@ -560,12 +577,12 @@ std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<typename BPlusTree<Key
 			internal_node->set_key(j + 1, internal_node->get_key(j));
 			--j;
 		}
-		internal_node->children[i + 1] = new_child.Index();
-		internal_node->set_key(i, new_key.Index());
+		internal_node->children[i + 1] = child_node_bundle.new_right_node.Index();
+		internal_node->set_key(i, child_node_bundle.new_key.Index());
 		internal_node->increment_num_keys();
 	}
 	// No split occurred so nothing to return.
-	return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
+	return InsertionBundle(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>

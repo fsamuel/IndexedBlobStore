@@ -268,8 +268,11 @@ TEST_F(BlobStoreTest, BlobStoreObjectClone) {
 	BlobStoreObject<int> ptr = store.New<int>(64);
 	EXPECT_EQ(ptr.GetSize(), sizeof(int));
 	EXPECT_EQ(*ptr, 64);
-
+	// Get the ptr version.
+	auto ptr_version = ptr.GetVersion();
 	BlobStoreObject<int> ptr2 = ptr.Clone();
 	EXPECT_NE(ptr2.Index(), ptr.Index());
 	EXPECT_EQ(*ptr, *ptr2);
+	auto ptr2_version = ptr2.GetVersion();
+	EXPECT_GE(ptr2_version, ptr_version);
 }
