@@ -163,13 +163,6 @@ public:
 		return control_block_->store_->GetElementCount(control_block_->index_);
 	}
 
-	std::chrono::time_point<std::chrono::system_clock> GetVersion() const {
-		if (control_block_ == nullptr || control_block_->store_ == nullptr) {
-			return std::chrono::time_point<std::chrono::system_clock>();
-		}
-		return control_block_->store_->GetVersion(control_block_->index_);
-	}
-
 	// Casts BlobStoreObject<T> to a const-preserving BlobStoreObject<U>.
 	template <typename U>
 	auto To() -> typename std::conditional <
@@ -410,7 +403,6 @@ public:
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
 		clone_metadata.count = metadata.count;
-		clone_metadata.version = 0;
 		clone_metadata.offset = allocator_.ToOffset(ptr);
 		clone_metadata.lock_state = 0;
 		clone_metadata.next_free_index = -1;
@@ -441,18 +433,6 @@ public:
 	template<typename U>
 	void Drop(BlobStoreObject<U>&& object) {
 		Drop(object.Index());
-	}
-
-	// Returns the version of the object at the specified index if the index is valid.
-	// Otherwise returns 0;
-	std::chrono::time_point<std::chrono::system_clock> GetVersion(size_t index) const {
-		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
-			return  std::chrono::time_point<std::chrono::system_clock>();
-		}
-		std::int64_t version = metadata_[index].version;
-		// Convert the time since epoch back into a std::chrono::time_point
-		auto time_since_epoch = std::chrono::milliseconds(version);
-		return std::chrono::time_point<std::chrono::system_clock>(time_since_epoch);
 	}
 
 	// Compacts the BlobStore, removing any unused space between objects.
@@ -572,15 +552,14 @@ private:
 	struct BlobMetadata {
 		size_t size;			      // The size of the type stored.
 		size_t count;			      // The number of elements of type stored.
-		std::int64_t version;         // The timestamp of the last write lock acquisition.
 		offset_type offset;           // The offset of the blob in the shared memory buffer.
 		std::atomic<int> lock_state;  // The lock state of the blob.
 		ssize_t next_free_index;      // -1 if the slot is occupied, or the index of the next free slot in the free list
-		BlobMetadata() : size(0), count(0), version(0), offset(0), lock_state(0), next_free_index(0) {}
+		BlobMetadata() : size(0), count(0), offset(0), lock_state(0), next_free_index(0) {}
 
-		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), version(0), offset(offset), lock_state(0), next_free_index(-1) {}
+		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), offset(offset), lock_state(0), next_free_index(-1) {}
 
-		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), version(other.version), offset(other.offset), lock_state(0), next_free_index(other.next_free_index) {}
+		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset), lock_state(0), next_free_index(other.next_free_index) {}
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
@@ -618,15 +597,6 @@ private:
 		}
 		BlobMetadata& metadata_entry = metadata_[index];
 		return std::make_unique<RWLock>(&metadata_entry.lock_state);
-	}
-
-	// Update the version of the object at the specified index to the current time.
-	void UpdateVersion(size_t index) {
-		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
-			return;
-		}
-		BlobMetadata& metadata_entry = metadata_[index];
-		metadata_entry.version = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	Allocator allocator_;
@@ -681,7 +651,6 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(BlobStore* store
 	}
 	else {
 		lock_->lockWrite();
-		store->UpdateVersion(index);
 	}
 	if (store_ != nullptr) {
 		store_->AddObserver(this);

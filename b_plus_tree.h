@@ -31,6 +31,10 @@ struct InsertionBundle {
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
 private:
+	struct BPlusTreeHeader {
+		size_t version;
+		BlobStore::index_type root_index;
+	};
 	enum class NodeType : uint8_t { INTERNAL, LEAF };
 
 	struct BaseNode {
@@ -186,9 +190,6 @@ public:
 		if (blob_store_.IsEmpty()) {
 			CreateRoot();
 		}
-		else {
-			root_index_ = blob_store_.begin().index();
-		}
 	}
 
 	Iterator Search(const KeyType& key);
@@ -298,11 +299,12 @@ public:
 
 private:
 	BlobStore& blob_store_;
-	size_t root_index_ = BlobStore::InvalidIndex;
 
 	void CreateRoot() {
+		auto header = blob_store_.New<BPlusTreeHeader>();
 		auto root = blob_store_.New<LeafNode>(BlobStore::InvalidIndex);
-		root_index_ = root.Index();
+		header->version = 0;
+		header->root_index = root.Index();
 	}
 
 	template<typename U, typename std::enable_if<
@@ -370,7 +372,7 @@ private:
 	bool BorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> child_node, int child_index);
 
 	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
-	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<BaseNode> node, const KeyType& key);
+	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 	void MergeChildren(BlobStoreObject<InternalNode>&& parentNode, BlobStoreObject<BaseNode> left_child, int index);
 };
 
@@ -384,7 +386,13 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const Valu
 
 template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value) {
-	auto root = blob_store_.Get<BaseNode>(root_index_);
+	BlobStoreObject<const BaseNode> root;
+	{
+		auto header = blob_store_.Get<BPlusTreeHeader>(1);
+		// clone the header and increment the version counter here.
+		BlobStore::index_type root_index = header->root_index;
+		root = blob_store_.Get<BaseNode>(header->root_index);
+	}
 	InsertionBundle bundle = Insert(root, key, value);
 	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
@@ -392,19 +400,26 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key
 		new_root->children[1] = bundle.new_right_node.Index();
 		new_root->set_num_keys(1);
 		new_root->set_key(0, bundle.new_key.Index());
-		root_index_ = new_root.Index();
+		auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
+		header->root_index = new_root.Index();
 	}
 	else {
-		root_index_ = bundle.new_left_node.Index();
+		auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
+		header->root_index = bundle.new_left_node.Index();
 	}
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
-	if (root_index_ == BlobStore::InvalidIndex) {
+	BlobStore::index_type root_index = BlobStore::InvalidIndex;
+	{
+		auto header = blob_store_.Get<BPlusTreeHeader>(1);
+		root_index = header->root_index;
+	}
+	if (root_index == BlobStore::InvalidIndex) {
 		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>::CreateNull(), 0);
 	}
-	return Search(blob_store_.Get<BaseNode>(root_index_), key);
+	return Search(blob_store_.Get<BaseNode>(root_index), key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
@@ -559,7 +574,10 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	InsertionBundle child_node_bundle = Insert(child_node, key, value);
 	BlobStoreObject<InternalNode> new_internal_node = internal_node.Clone();
 	new_internal_node->children[i] = child_node_bundle.new_left_node.Index();
+	// If the child node bundle has a new right node, then that means that a split occurred to insert
+	// the key/value pair. We need to find a place to insert the new middle key.
 	if (child_node_bundle.new_right_node != nullptr) {
+		// The internal node is full so we need to recursively split to find a  
 		if (new_internal_node->is_full()) {
 			// insert the new child node and its minimum key into the parent node recursively
 			InsertionBundle node_bundle = SplitInternalNode(new_internal_node);
@@ -598,10 +616,15 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 
 template <typename KeyType, typename ValueType, size_t Order>
 KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Remove(const KeyType& key) {
-	if (root_index_ == BlobStore::InvalidIndex) {
+	BlobStore::index_type root_index = BlobStore::InvalidIndex;
+	{
+		auto header = blob_store_.Get<BPlusTreeHeader>(1);
+		root_index = header->root_index;
+	}
+	if (root_index == BlobStore::InvalidIndex) {
 		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<const ValueType>::CreateNull());
 	}
-	auto root = blob_store_.GetMutable<BaseNode>(root_index_);
+	auto root = blob_store_.GetMutable<BaseNode>(root_index);
 	if (root->type == NodeType::LEAF) {
 		return RemoveFromLeafNode(root.To<LeafNode>(), key);
 	}
@@ -783,7 +806,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Remove(Bl
 		if (i < internal_node->num_keys() && key == *current_key) {
 			// Can there ever be a null successor? That means there is no successor at all.
 			// That shouldn't happen I think.
-			auto key_ptr = GetSuccessorKey(internal_node.To<BaseNode>(), key);
+			auto key_ptr = GetSuccessorKey(internal_node.To<const BaseNode>(), key);
 			internal_node->set_key(i, key_ptr.Index());
 		}
 		return kv;
@@ -801,7 +824,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetPredeces
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<BaseNode> node, const KeyType& key) {
+BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
 	if (node->type == NodeType::LEAF) {
 		for (int i = 0; i < node->num_keys(); ++i) {
 			auto key_ptr = GetKey(node, i);
@@ -875,9 +898,10 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildren(BlobStoreObject<Interna
 	// Free the right sibling node
 	blob_store_.Drop(right_child.Index());
 
-	if (parent_node.Index() == root_index_ && parent_node->num_keys() == 0) {
+	auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
+	if (parent_node.Index() == header->root_index && parent_node->num_keys() == 0) {
 		// The root node is empty, so make the left child the new root node
-		root_index_ = left_child.Index();
+		header->root_index = left_child.Index();
 		blob_store_.Drop(parent_node.Index());
 		parent_node = nullptr;
 	}
