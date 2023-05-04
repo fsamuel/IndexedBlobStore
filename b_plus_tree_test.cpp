@@ -24,6 +24,10 @@ TEST_F(BPlusTreeTest, BasicTree) {
     for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
+	std::cout << std::endl << std::endl << "Tree Version 100" << std::endl;
+	tree.PrintTree(100);
+	std::cout << std::endl << std::endl << "Tree Version 10" << std::endl;
+	tree.PrintTree(10);
     for (int i = 0; i < 100; i++) {
         auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();

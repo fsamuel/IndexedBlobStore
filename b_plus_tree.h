@@ -34,7 +34,7 @@ private:
 	struct BPlusTreeHeader {
 		size_t version;
 		BlobStore::index_type root_index;
-		BlobStore::index_type previous_root_index;
+		BlobStore::index_type previous_header;
 	};
 	enum class NodeType : uint8_t { INTERNAL, LEAF };
 
@@ -43,10 +43,12 @@ private:
 		NodeType type;
 		// The number of keys in the node.
 		std::size_t n;
+		// The version of this node.
+		std::size_t version;
 		// The keys in the node.
 		std::array<BlobStore::index_type, Order - 1> keys;
 
-		BaseNode(NodeType type, std::size_t n) : type(type), n(n) {
+		BaseNode(NodeType type, std::size_t n) : type(type), n(n), version(0) {
 			// Initialize all keys to invalid index.
 			for (size_t i = 0; i < Order - 1; ++i) {
 				keys[i] = BlobStore::InvalidIndex;
@@ -54,7 +56,7 @@ private:
 		}
 
 		BaseNode(const BaseNode& other)
-			:type(other.type), n(other.n), keys(other.keys) {}
+			:type(other.type), n(other.n), version(other.version), keys(other.keys) {}
 
 		// Returns whether the node has the maximum number of keys it can hold.
 		bool is_full() const { return n == Order - 1; }
@@ -67,6 +69,16 @@ private:
 
 		// Decrements the number of keys in the node.
 		void decrement_num_keys() { --n; }
+
+		// Returns the version of the node.
+		size_t get_version() const {
+			return version;
+		}
+
+		// Sets the version of the node.
+		void set_version(size_t new_version) {
+			version = new_version;
+		}
 
 		// Sets the number of keys in the node.
 		void set_num_keys(size_t num_keys) { n = num_keys; }
@@ -98,6 +110,8 @@ private:
 		size_t num_keys() const { return base.num_keys(); }
 		void increment_num_keys() { base.increment_num_keys(); }
 		void decrement_num_keys() { base.decrement_num_keys(); }
+		size_t get_version() const { return base.get_version(); }
+		void set_version(size_t new_version) { base.set_version(new_version); }
 		void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
 		size_t get_key(size_t index) const { return base.get_key(index); }
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
@@ -120,6 +134,8 @@ private:
 		size_t num_keys() const { return base.num_keys(); }
 		void increment_num_keys() { base.increment_num_keys(); }
 		void decrement_num_keys() { base.decrement_num_keys(); }
+		size_t get_version() const { return base.get_version(); }
+		void set_version(size_t new_version) { base.set_version(new_version); }
 		void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
 		size_t get_key(size_t index) const { return base.get_key(index); }
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
@@ -206,7 +222,7 @@ public:
 			std::cout << "NULL Node" << std::endl;
 			return;
 		}
-		std::cout << "Internal node (n = " << node->num_keys() << ") ";
+		std::cout << "Internal node (n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
 		for (size_t i = 0; i < node->num_keys(); ++i) {
 			std::cout << *GetKey(node, i) << " ";
 		}
@@ -218,7 +234,7 @@ public:
 			std::cout << "NULL Node" << std::endl;
 			return;
 		}
-		std::cout << "Leaf node (n = " << node->num_keys() << ") ";
+		std::cout << "Leaf node (n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
 		for (size_t i = 0; i < node->num_keys(); ++i) {
 			std::cout << *GetKey(node, i) << " ";
 		}
@@ -237,13 +253,17 @@ public:
 	}
 
 	// Prints the tree in a human-readable format in breadth-first order.
-	void PrintTree() {
+	void PrintTree(size_t version) {
 		struct NodeWithLevel {
 			BlobStoreObject<const BaseNode> node;
 			size_t level;
 		};
 		std::queue<NodeWithLevel> queue;
-		queue.push({ blob_store_.Get<BaseNode>(root_index_), 0 });
+		BlobStoreObject<const BPlusTreeHeader> header = blob_store_.Get<BPlusTreeHeader>(1);
+		while (header->previous_header != BlobStore::InvalidIndex && header->version > version) {
+			header = blob_store_.Get<BPlusTreeHeader>(header->previous_header);
+		}
+		queue.push({ blob_store_.Get<BaseNode>(header->root_index), 0 });
 		while (!queue.empty()) {
 			NodeWithLevel node_with_level = queue.front();
 			queue.pop();
@@ -306,7 +326,7 @@ private:
 		auto root = blob_store_.New<LeafNode>(BlobStore::InvalidIndex);
 		header->version = 0;
 		header->root_index = root.Index();
-		header->previous_root_index = BlobStore::InvalidIndex;
+		header->previous_header = BlobStore::InvalidIndex;
 	}
 
 	template<typename U, typename std::enable_if<
@@ -359,14 +379,14 @@ private:
 	template<typename U>
 	typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::LeafNode>::value,
-		InsertionBundle>::type InsertIntoLeaf(BlobStoreObject<U> node,
+		InsertionBundle>::type InsertIntoLeaf(size_t version, BlobStoreObject<U> node,
 			BlobStoreObject<KeyType> key,
 			BlobStoreObject<ValueType> value);
 	void InsertKeyChildIntoInternalNode(BlobStoreObject<InternalNode> node,
 		BlobStoreObject<const KeyType> new_key,
 		BlobStoreObject<BaseNode> new_child);
 
-	InsertionBundle Insert(BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
+	InsertionBundle Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 
 	KeyValuePair<KeyType, ValueType> Remove(BlobStoreObject<InternalNode> parent_node, int child_index, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> RemoveFromLeafNode(BlobStoreObject<LeafNode>&& node, const KeyType& key);
@@ -391,11 +411,12 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
 	++new_header->version;
-	new_header->previous_root_index = new_header.Index();
+	new_header->previous_header = new_header.Index();
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(old_header->root_index);
-	InsertionBundle bundle = Insert(root, key, value);
+	InsertionBundle bundle = Insert(new_header->version, root, key, value);
 	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
+		new_root->set_version(new_header->version);
 		new_root->children[0] = bundle.new_left_node.Index();
 		new_root->children[1] = bundle.new_right_node.Index();
 		new_root->set_num_keys(1);
@@ -449,6 +470,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitLeafNode(BlobStoreObject<LeafNode> left_node) {
 	BlobStoreObject<LeafNode> new_right_node = blob_store_.New<LeafNode>(Order);
+	new_right_node->set_version(left_node->get_version());
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
 	BlobStoreObject<const KeyType> middle_key = GetKey(left_node, middle_key_index);
@@ -476,6 +498,7 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitInternalNode(BlobStoreObject<InternalNode> left_node) {
 	BlobStoreObject<InternalNode> new_right_node = blob_store_.New<InternalNode>(Order);
+	new_right_node->set_version(left_node->get_version());
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
 	BlobStoreObject<const KeyType> middle_key = GetKey(left_node, middle_key_index);
@@ -503,16 +526,17 @@ template<typename U>
 typename std::enable_if<
 	std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::LeafNode>::value,
 	typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle>::type
-	BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(BlobStoreObject<U> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
+	BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(size_t version, BlobStoreObject<U> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
 	BlobStoreObject<LeafNode> new_left_node = node.GetMutableOrClone();
+	new_left_node->set_version(version);
 	if (new_left_node->is_full()) {
 		InsertionBundle bundle = SplitLeafNode(new_left_node);
 		// We pass the recursive InsertIntoLeaf a non-const LeafNode so we won't clone it.
 		if (*key >= *bundle.new_key) {
-			InsertIntoLeaf(bundle.new_right_node.To<LeafNode>(), std::move(key), std::move(value));
+			InsertIntoLeaf(version, bundle.new_right_node.To<LeafNode>(), std::move(key), std::move(value));
 		}
 		else {
-			InsertIntoLeaf(bundle.new_left_node.To<LeafNode>(), std::move(key), std::move(value));
+			InsertIntoLeaf(version, bundle.new_left_node.To<LeafNode>(), std::move(key), std::move(value));
 		}
 		return bundle;
 	}
@@ -554,9 +578,9 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
+typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
 	if (node->type == NodeType::LEAF) {
-		return InsertIntoLeaf(node.To<LeafNode>(), std::move(key), std::move(value));
+		return InsertIntoLeaf(version, node.To<LeafNode>(), std::move(key), std::move(value));
 	}
 	// Find the child node where the new key-value should be inserted.
 	BlobStoreObject<const InternalNode> internal_node = node.To<InternalNode>();
@@ -570,8 +594,9 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	}
 	i += 1;
 	BlobStoreObject<const BaseNode> child_node = GetChild(internal_node, i);
-	InsertionBundle child_node_bundle = Insert(child_node, key, value);
+	InsertionBundle child_node_bundle = Insert(version, child_node, key, value);
 	BlobStoreObject<InternalNode> new_internal_node = internal_node.Clone();
+	new_internal_node->set_version(version);
 	new_internal_node->children[i] = child_node_bundle.new_left_node.Index();
 	// If the child node bundle has a new right node, then that means that a split occurred to insert
 	// the key/value pair. We need to find a place to insert the new middle key.
