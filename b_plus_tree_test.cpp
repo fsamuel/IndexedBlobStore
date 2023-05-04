@@ -24,10 +24,6 @@ TEST_F(BPlusTreeTest, BasicTree) {
     for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
-	std::cout << std::endl << std::endl << "Tree Version 100" << std::endl;
-	tree.PrintTree(100);
-	std::cout << std::endl << std::endl << "Tree Version 10" << std::endl;
-	tree.PrintTree(10);
     for (int i = 0; i < 100; i++) {
         auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
@@ -50,7 +46,7 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 		EXPECT_EQ(value, i * 100);
 	}
     for (int i = 0; i < 100; i++) {
-		tree.Remove(i);
+		tree.Delete(i);
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
 		EXPECT_EQ(value_ptr, nullptr);
@@ -80,7 +76,7 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		int val = rand() % 100;
 		while (deleted.count(val) > 0) {
 			val = rand() % 100;
-			KeyValuePair<int, int> kv = tree.Remove(i);
+			KeyValuePair<int, int> kv = tree.Delete(i);
 			std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
 			deleted.insert(i);
 		}
@@ -134,6 +130,10 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
 		tree.Insert(val, val * 100);
 		inserted.insert(val);
 	}
+	std::cout << std::endl << std::endl << "Tree Version 100" << std::endl;
+	tree.PrintTree(100);
+	std::cout << std::endl << std::endl << "Tree Version 50" << std::endl;
+	tree.PrintTree(50);
 	for (int i = 0; i < 100; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
@@ -149,7 +149,7 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
 		int val = rand() % 100;
 		while (deleted.count(val) > 0) {
 			val = rand() % 100;
-			KeyValuePair<int, int> kv = tree.Remove(i);
+			KeyValuePair<int, int> kv = tree.Delete(i);
 			std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
 			deleted.insert(i);
 		}
