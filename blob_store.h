@@ -141,6 +141,18 @@ public:
 		return control_block_->store_->Clone<T>(control_block_->index_);
 	}
 
+	template<typename U>
+	typename std::enable_if<std::is_same<typename std::remove_const<U>::type, typename std::remove_const<T>::type>::value, bool>::type
+	 CompareAndSwap(BlobStoreObject<U> other) {
+		if (*this == nullptr || other == nullptr) {
+			return false;
+		}
+		size_t offset = control_block_->offset_;
+		size_t other_offset = other.control_block_->offset_;
+		return control_block_->store_->CompareAndSwap(control_block_->index_, offset, other_offset) &&
+			control_block_->store_->CompareAndSwap(other.control_block_->index_, other_offset, offset);
+	}
+
 	// Returns the index of the Blob.
 	size_t Index() const
 	{
@@ -308,6 +320,7 @@ private:
 
 		BlobStore* store_;				// Pointer to the BlobStore instance
 		size_t index_;					// Index of the object in the BlobStore
+		size_t offset_;                 // Offset of the object in the shared memory buffer.
 		T* ptr_;						// Pointer to the object
 		std::unique_ptr<RWLock> lock_;	// RWLock for this object.
 		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
@@ -317,7 +330,7 @@ private:
 		// UpdatePointer: Helper method to update the internal pointer to the object using
 		// the BlobStore's GetPointer method.
 		void UpdatePointer() {
-			ptr_ = store_->GetRaw<T>(index_);
+			ptr_ = store_->GetRaw<T>(index_, &offset_);
 			// We need to recreate the lock every time we relocate memory.
 			// TODO(fsamuel): THIS IS A HUGE HACK.
 			lock_ = store_->CreateLock(index_);
@@ -398,7 +411,8 @@ public:
 		BlobMetadata metadata = metadata_[index];
 		size_t clone_index = FindFreeSlot();
 		char* ptr = allocator_.Allocate(metadata.size * metadata.count);
-		const T* obj = GetRaw<T>(index);
+		size_t offset;
+		const T* obj = GetRaw<T>(index, &offset);
 		allocator_.Construct(reinterpret_cast<std::remove_const<T>::type*>(ptr), *obj);
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
@@ -407,6 +421,14 @@ public:
 		clone_metadata.lock_state = 0;
 		clone_metadata.next_free_index = -1;
 		return BlobStoreObject<typename std::remove_const<T>::type>(this, clone_index);
+	}
+
+	bool CompareAndSwap(size_t index, BlobStore::offset_type expected_offset, BlobStore::offset_type new_offset) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return false;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		return metadata_entry.offset.compare_exchange_weak(expected_offset, new_offset);
 	}
 
 	// Gets the size of the blob stored at the speific index.
@@ -550,16 +572,16 @@ public:
 
 private:
 	struct BlobMetadata {
-		size_t size;			      // The size of the type stored.
-		size_t count;			      // The number of elements of type stored.
-		offset_type offset;           // The offset of the blob in the shared memory buffer.
-		std::atomic<int> lock_state;  // The lock state of the blob.
-		ssize_t next_free_index;      // -1 if the slot is occupied, or the index of the next free slot in the free list
+		size_t size;                      // The size of the type stored.
+		size_t count;                     // The number of elements of type stored.
+		std::atomic<offset_type> offset;  // The offset of the blob in the shared memory buffer.
+		std::atomic<int> lock_state;      // The lock state of the blob.
+		ssize_t next_free_index;          // -1 if the slot is occupied, or the index of the next free slot in the free list
 		BlobMetadata() : size(0), count(0), offset(0), lock_state(0), next_free_index(0) {}
 
 		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), offset(offset), lock_state(0), next_free_index(-1) {}
 
-		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset), lock_state(0), next_free_index(other.next_free_index) {}
+		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index) {}
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
@@ -579,13 +601,16 @@ private:
 
 	// Gets the object of type T at the specified index as a raw pointer.
 	template<typename T>
-	T* GetRaw(size_t index) {
+	T* GetRaw(size_t index, size_t* offset) {
 		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
 			return nullptr;
 		}
 		BlobMetadata& metadata_entry = metadata_[index];
 		if (metadata_entry.size == 0 || metadata_entry.count == 0) {
 			return nullptr;
+		}
+		if (offset != nullptr) {
+			*offset = metadata_entry.offset;
 		}
 		return allocator_.ToPtr<T>(metadata_entry.offset);
 	}

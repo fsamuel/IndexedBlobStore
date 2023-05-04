@@ -34,6 +34,7 @@ private:
 	struct BPlusTreeHeader {
 		size_t version;
 		BlobStore::index_type root_index;
+		BlobStore::index_type previous_root_index;
 	};
 	enum class NodeType : uint8_t { INTERNAL, LEAF };
 
@@ -194,8 +195,8 @@ public:
 
 	Iterator Search(const KeyType& key);
 
-	void Insert(const KeyType& key, const ValueType& value);
-	void Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value);
+	bool Insert(const KeyType& key, const ValueType& value);
+	bool Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value);
 
 	KeyValuePair<KeyType, ValueType> Remove(const KeyType& key);
 
@@ -305,6 +306,7 @@ private:
 		auto root = blob_store_.New<LeafNode>(BlobStore::InvalidIndex);
 		header->version = 0;
 		header->root_index = root.Index();
+		header->previous_root_index = BlobStore::InvalidIndex;
 	}
 
 	template<typename U, typename std::enable_if<
@@ -377,22 +379,20 @@ private:
 };
 
 template<typename KeyType, typename ValueType, size_t Order>
-void BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const ValueType& value) {
+bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const ValueType& value) {
 	BlobStoreObject<KeyType> key_ptr = blob_store_.New<KeyType>(key);
 	BlobStoreObject<ValueType> value_ptr = blob_store_.New<ValueType>(value);
 
-	Insert(std::move(key_ptr), std::move(value_ptr));
+	return Insert(std::move(key_ptr), std::move(value_ptr));
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value) {
-	BlobStoreObject<const BaseNode> root;
-	{
-		auto header = blob_store_.Get<BPlusTreeHeader>(1);
-		// clone the header and increment the version counter here.
-		BlobStore::index_type root_index = header->root_index;
-		root = blob_store_.Get<BaseNode>(header->root_index);
-	}
+bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value) {
+	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
+	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
+	++new_header->version;
+	new_header->previous_root_index = new_header.Index();
+	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(old_header->root_index);
 	InsertionBundle bundle = Insert(root, key, value);
 	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
@@ -400,13 +400,12 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key
 		new_root->children[1] = bundle.new_right_node.Index();
 		new_root->set_num_keys(1);
 		new_root->set_key(0, bundle.new_key.Index());
-		auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
-		header->root_index = new_root.Index();
+		new_header->root_index = new_root.Index();
 	}
 	else {
-		auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
-		header->root_index = bundle.new_left_node.Index();
+		new_header->root_index = bundle.new_left_node.Index();
 	}
+	return old_header.CompareAndSwap(new_header);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
