@@ -408,8 +408,8 @@ private:
 
 	KeyValuePair<KeyType, ValueType> Delete(BlobStoreObject<InternalNode> parent_node, int child_index, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode>&& node, const KeyType& key);
-	bool BorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index);
-	bool BorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index);
+	bool TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index);
+	bool TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index);
 
 	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
@@ -418,6 +418,10 @@ private:
 	                        BlobStoreObject<InternalNode> right_child,
 		                    size_t parent_key);
 	void MergeLeafNodes(BlobStoreObject<LeafNode> left_child, BlobStoreObject<LeafNode> right_child);
+	void MergeChildWithLeftOrRightSibling(
+		BlobStoreObject<InternalNode> parent,
+		int child_index,
+		BlobStoreObject<BaseNode>* child);
 
 };
 
@@ -717,7 +721,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
+bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
 	if (!left_sibling || left_sibling->will_underflow()) {
 		return false;
 	}
@@ -760,7 +764,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
+bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
 	if (!right_sibling || right_sibling->will_underflow()) {
 		return false;
 	}
@@ -813,49 +817,9 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 	BlobStoreObject<BaseNode> left_child = GetChild(parent_node, child_index);
 	// The current child where we want to delete a node is too small.
 	if (left_child->will_underflow()) {
-		if (!BorrowFromLeftSibling(parent_node, child_index > 0 ? GetChild(parent_node, child_index -1): BlobStoreObject<BaseNode>(), left_child, child_index) && 
-			!BorrowFromRightSibling(parent_node, left_child, (child_index + 1) <= parent_node->num_keys() ? GetChild(parent_node, child_index + 1) : BlobStoreObject<BaseNode>(), child_index)) {
-			BlobStoreObject<BaseNode> right_child;
-			int key_index_in_parent = child_index;
-			if (child_index < parent_node->num_keys()) {
-				right_child = GetChild(parent_node, child_index + 1);
-				if (left_child->type == NodeType::LEAF) {
-					MergeLeafNodes(left_child.To<LeafNode>(), right_child.To<LeafNode>());
-				}
-				else {
-					MergeInternalNodes(left_child.To<InternalNode>(), right_child.To<InternalNode>(), parent_node->get_key(key_index_in_parent));
-				}
-			}
-			else {
-				key_index_in_parent = child_index - 1;
-				right_child = left_child;
-				left_child = GetChild(parent_node, child_index - 1);
-				if (left_child->type == NodeType::LEAF) {
-					MergeLeafNodes(left_child.To<LeafNode>(), right_child.To<LeafNode>());
-				}
-				else {
-					MergeInternalNodes(left_child.To<InternalNode>(), right_child.To<InternalNode>(), parent_node->get_key(key_index_in_parent));
-				}
-
-			}
-
-			// Update the parent node by removing the key that was moved down and the pointer to the right sibling node
-			for (int i = key_index_in_parent; i < parent_node->num_keys() - 1; ++i) {
-				parent_node->set_key(i, parent_node->get_key(i + 1));
-				parent_node->children[i + 1] = parent_node->children[i + 2];
-			}
-			parent_node->decrement_num_keys();
-
-			// Free the right sibling node
-			blob_store_.Drop(right_child.Index());
-
-			auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
-			if (parent_node.Index() == header->root_index && parent_node->num_keys() == 0) {
-				// The root node is empty, so make the left child the new root node
-				header->root_index = left_child.Index();
-				blob_store_.Drop(parent_node.Index());
-				parent_node = nullptr;
-			}
+		if (!TryToBorrowFromLeftSibling(parent_node, child_index > 0 ? GetChild(parent_node, child_index -1): BlobStoreObject<BaseNode>(), left_child, child_index) && 
+			!TryToBorrowFromRightSibling(parent_node, left_child, (child_index + 1) <= parent_node->num_keys() ? GetChild(parent_node, child_index + 1) : BlobStoreObject<BaseNode>(), child_index)) {
+			MergeChildWithLeftOrRightSibling(parent_node, child_index, &left_child);
 		}
 	}
 
@@ -972,6 +936,51 @@ void BPlusTree<KeyType, ValueType, Order>::MergeLeafNodes(
 		left_node->increment_num_keys();
 	}
 	left_node->next = right_node->next;
+}
+
+template <typename KeyType, typename ValueType, size_t Order>
+void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
+	BlobStoreObject<InternalNode> parent, int child_index, BlobStoreObject<BaseNode>* child) {
+	BlobStoreObject<BaseNode> left_child;
+	BlobStoreObject<BaseNode> right_child;
+	int key_index_in_parent;  
+	if (child_index < parent->num_keys()) {
+		key_index_in_parent = child_index;
+		left_child = *child;
+		right_child = GetChild(parent, child_index + 1);
+	}
+	else {
+		key_index_in_parent = child_index - 1;
+		left_child = GetChild(parent, child_index - 1);
+		right_child = *child;
+		*child = left_child;
+	}
+
+	if (left_child->type == NodeType::LEAF) {
+		MergeLeafNodes(left_child.To<LeafNode>(), right_child.To<LeafNode>());
+	}
+	else {
+		MergeInternalNodes(left_child.To<InternalNode>(), right_child.To<InternalNode>(), parent->get_key(key_index_in_parent));
+	}
+
+	// Update the parent node by removing the key that was moved down and the pointer to the right sibling node
+	for (int i = key_index_in_parent; i < parent->num_keys() - 1; ++i) {
+		parent->set_key(i, parent->get_key(i + 1));
+		parent->children[i + 1] = parent->children[i + 2];
+	}
+	parent->decrement_num_keys();
+
+	// Free the right sibling node
+	blob_store_.Drop(right_child.Index());
+
+	// TODO(fsamuel): This shouldn't happen here. This should happen at the first call.
+	auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
+	if (parent.Index() == header->root_index && parent->num_keys() == 0) {
+		// The root node is empty, so make the left child the new root node
+		header->root_index = left_child.Index();
+		blob_store_.Drop(parent.Index());
+		parent = nullptr;
+	}
 }
 
 #endif // B_PLUS_TREE_H_
