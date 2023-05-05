@@ -187,14 +187,14 @@ public:
 			if (leaf_node_ != nullptr) {
 				return BlobStoreObject<const KeyType>(store_, leaf_node_->get_key(key_index_));
 			}
-			return BlobStoreObject<const KeyType>::CreateNull();
+			return BlobStoreObject<const KeyType>();
 		}
 
 		BlobStoreObject<ValueType> GetValue() const {
 			if (leaf_node_ != nullptr) {
 				return BlobStoreObject<ValueType>(store_, leaf_node_->values[key_index_]);
 			}
-			return BlobStoreObject<ValueType>::CreateNull();
+			return BlobStoreObject<ValueType>();
 		}
 
 	private:
@@ -343,7 +343,7 @@ private:
 			BaseNode
 		>::type;
 		if (node == nullptr || child_index > node->num_keys()) {
-			return BlobStoreObject<const_preserving_BaseNode>::CreateNull();
+			return BlobStoreObject<const_preserving_BaseNode>();
 		}
 		return BlobStoreObject<const_preserving_BaseNode>(&blob_store_, node->children[child_index]);
 	}
@@ -357,7 +357,7 @@ private:
 	>::type* = nullptr>
 	BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<U>&node, size_t key_index) {
 		if (node == nullptr || key_index > node->num_keys() - 1) {
-			return BlobStoreObject<const KeyType>::CreateNull();
+			return BlobStoreObject<const KeyType>();
 		}
 		return BlobStoreObject<const KeyType>(&blob_store_, node->get_key(key_index));
 	}
@@ -369,7 +369,7 @@ private:
 	>::type* = nullptr>
 	BlobStoreObject<const ValueType> GetValue(const BlobStoreObject<U>& node, size_t value_index) {
 		if (node == nullptr || value_index > node->num_keys() - 1) {
-			return BlobStoreObject<const ValueType>::CreateNull();
+			return BlobStoreObject<const ValueType>();
 		}
 		return BlobStoreObject<const ValueType>(&blob_store_, node->values[value_index]);
 	}
@@ -455,7 +455,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 		root_index = header->root_index;
 	}
 	if (root_index == BlobStore::InvalidIndex) {
-		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>::CreateNull(), 0);
+		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>(), 0);
 	}
 	return Search(blob_store_.Get<BaseNode>(root_index), key);
 }
@@ -475,7 +475,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 		if (i < node->num_keys() && key == *current_key) {
 			return Iterator(&blob_store_, std::move(node.To<LeafNode>()), i);
 		}
-		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>::CreateNull(), 0);
+		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>(), 0);
 	}
 	else {
 		if (i < node->num_keys() && key == *current_key) {
@@ -572,7 +572,7 @@ typename std::enable_if<
 	new_left_node->set_key(i + 1, key.Index());
 	new_left_node->values[i + 1] = value.Index();
 	new_left_node->increment_num_keys();
-	return InsertionBundle(new_left_node.To<BaseNode>(), BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
+	return InsertionBundle(new_left_node.To<BaseNode>(), BlobStoreObject<const KeyType>(), BlobStoreObject<BaseNode>());
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -653,7 +653,7 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 		new_internal_node->increment_num_keys();
 	}
 	// No split occurred so nothing to return.
-	return InsertionBundle(new_internal_node.To<BaseNode>(), BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<BaseNode>::CreateNull());
+	return InsertionBundle(new_internal_node.To<BaseNode>(), BlobStoreObject<const KeyType>(), BlobStoreObject<BaseNode>());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
@@ -664,7 +664,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(co
 		root_index = header->root_index;
 	}
 	if (root_index == BlobStore::InvalidIndex) {
-		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<const ValueType>::CreateNull());
+		return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
 	}
 	auto root = blob_store_.GetMutable<BaseNode>(root_index);
 	if (root->type == NodeType::LEAF) {
@@ -696,7 +696,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 	}
 
 	if (i == node->num_keys()) {
-		return std::make_pair(BlobStoreObject<const KeyType>::CreateNull(), BlobStoreObject<const ValueType>::CreateNull()); // Key not found
+		return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>()); // Key not found
 	}
 
 	auto kv = std::make_pair(GetKey(node, i), GetValue(node, i));
@@ -808,8 +808,8 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 	BlobStoreObject<BaseNode> left_child = GetChild(parent_node, child_index);
 	// The current child where we want to delete a node is too small.
 	if (left_child->num_keys() == (Order - 1) / 2) {
-		if (!BorrowFromLeftSibling(parent_node, child_index > 0 ? GetChild(parent_node, child_index -1): BlobStoreObject<BaseNode>::CreateNull(), left_child, child_index) && 
-			!BorrowFromRightSibling(parent_node, left_child, (child_index + 1) <= parent_node->num_keys() ? GetChild(parent_node, child_index + 1) : BlobStoreObject<BaseNode>::CreateNull(), child_index)) {
+		if (!BorrowFromLeftSibling(parent_node, child_index > 0 ? GetChild(parent_node, child_index -1): BlobStoreObject<BaseNode>(), left_child, child_index) && 
+			!BorrowFromRightSibling(parent_node, left_child, (child_index + 1) <= parent_node->num_keys() ? GetChild(parent_node, child_index + 1) : BlobStoreObject<BaseNode>(), child_index)) {
 			BlobStoreObject<BaseNode> right_child;
 			int key_index_in_parent = child_index;
 			if (child_index < parent_node->num_keys()) {
@@ -914,7 +914,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 			if (*key_ptr > key)
 				return key_ptr;
 		}
-		return BlobStoreObject<const KeyType>::CreateNull();
+		return BlobStoreObject<const KeyType>();
 
 	}
 	for (int i = 0; i <= node->num_keys(); ++i) {
@@ -925,7 +925,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 			return key_ptr;
 	}
 	// We should never get here unless the tree has a problem.
-	return BlobStoreObject<const KeyType>::CreateNull();
+	return BlobStoreObject<const KeyType>();
 
 }
 

@@ -48,11 +48,6 @@ class BlobStoreObject {
 public:
 	using non_const_T = typename std::remove_const<T>::type;
 
-	// Returns a BlobStoreObject pointing to nullptr.
-	static BlobStoreObject<T> CreateNull() {
-		return BlobStoreObject<T>(nullptr, BlobStore::InvalidIndex);
-	}
-
 	BlobStoreObject() : control_block_(nullptr) {}
 
 	BlobStoreObject(const BlobStoreObject& other)
