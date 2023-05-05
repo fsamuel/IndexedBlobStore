@@ -61,6 +61,9 @@ private:
 		// Returns whether the node has the maximum number of keys it can hold.
 		bool is_full() const { return n == Order - 1; }
 
+		// Returns whether the node has the minimum number of keys it can hold.
+		bool will_underflow() const { return n == (Order - 1) / 2; }
+		
 		// Returns the number of keys in the node.
 		size_t num_keys() const { return n; }
 
@@ -107,6 +110,7 @@ private:
 		InternalNode(const InternalNode& other) : base(other.base), children(other.children) {}
 
 		bool is_full() const { return base.is_full(); }
+		bool will_underflow() const { return base.will_underflow(); }
 		size_t num_keys() const { return base.num_keys(); }
 		void increment_num_keys() { base.increment_num_keys(); }
 		void decrement_num_keys() { base.decrement_num_keys(); }
@@ -131,6 +135,7 @@ private:
 		LeafNode(const LeafNode& other) : base(other.base), values(other.values), next(other.next) {}
 
 		bool is_full() const { return base.is_full(); }
+		bool will_underflow() const { return base.will_underflow(); }
 		size_t num_keys() const { return base.num_keys(); }
 		void increment_num_keys() { base.increment_num_keys(); }
 		void decrement_num_keys() { base.decrement_num_keys(); }
@@ -713,7 +718,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 
 template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
-	if (!left_sibling || left_sibling->num_keys() <= (Order - 1) / 2) {
+	if (!left_sibling || left_sibling->will_underflow() {
 		return false;
 	}
 
@@ -756,7 +761,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject
 
 template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
-	if (!right_sibling || right_sibling->num_keys() <= (Order - 1) / 2) {
+	if (!right_sibling || right_sibling->will_underflow() {
 		return false;
 	}
 
@@ -807,7 +812,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 	//PrintNode(parent_node.To<const InternalNode>());
 	BlobStoreObject<BaseNode> left_child = GetChild(parent_node, child_index);
 	// The current child where we want to delete a node is too small.
-	if (left_child->num_keys() == (Order - 1) / 2) {
+	if (left_child->will_underflow()) {
 		if (!BorrowFromLeftSibling(parent_node, child_index > 0 ? GetChild(parent_node, child_index -1): BlobStoreObject<BaseNode>(), left_child, child_index) && 
 			!BorrowFromRightSibling(parent_node, left_child, (child_index + 1) <= parent_node->num_keys() ? GetChild(parent_node, child_index + 1) : BlobStoreObject<BaseNode>(), child_index)) {
 			BlobStoreObject<BaseNode> right_child;
@@ -853,6 +858,8 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 			}
 		}
 	}
+
+	// The current child where we want to delete a node is a leaf node.
 	if (left_child->type == NodeType::LEAF) {
 		//PrintNode(parent_node.To<const BaseNode>());
 		return DeleteFromLeafNode(left_child.To<LeafNode>(), key);
