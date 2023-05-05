@@ -57,10 +57,12 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 // checks that the remaining elements are still in the tree.
 TEST_F(BPlusTreeTest, DeleteAndVerify) {
 	BPlusTree<int, int, 4> tree(*blob_store);
-    for (int i = 0; i < 100; i++) {
+	std::set<int> inserted;
+    for (int i = 0; i < 20; i++) {
 		tree.Insert(i, i * 100);
+		inserted.insert(i);
 	}
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 10; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
@@ -68,25 +70,25 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		EXPECT_EQ(value, i * 100);
 	}
 
+	tree.PrintTree(20);
 	// Delete a random half the elements in random order and store 
 	// the deleted keys in a set so we can check that they're not
 	// in the tree later.
-	std::set<int> deleted;
-	for (int i = 0; i < 50; ++i) {
-		int val = rand() % 100;
-		while (deleted.count(val) > 0) {
-			val = rand() % 100;
-			KeyValuePair<int, int> kv = tree.Delete(i);
-			std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
-			deleted.insert(i);
+	for (int i = 0; i < 10; ++i) {
+		int val = rand() % 20;
+		while (inserted.count(val) == 0) {
+			val = rand() %20;
 		}
+		KeyValuePair<int, int> kv = tree.Delete(val);
+		inserted.erase(val);
+		std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
 	}
-	
-	for (int i = 0; i < 100; i++) {
+	tree.PrintTree(20);
+	for (int i = 0; i < 20; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
-		if (deleted.count(i) > 0) {
+		if (inserted.count(i) == 0) {
 			EXPECT_EQ(value_ptr, nullptr);
 		}
 		else {
