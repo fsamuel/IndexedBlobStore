@@ -718,7 +718,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 
 template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
-	if (!left_sibling || left_sibling->will_underflow() {
+	if (!left_sibling || left_sibling->will_underflow()) {
 		return false;
 	}
 
@@ -761,7 +761,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(BlobStoreObject
 
 template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
-	if (!right_sibling || right_sibling->will_underflow() {
+	if (!right_sibling || right_sibling->will_underflow()) {
 		return false;
 	}
 
