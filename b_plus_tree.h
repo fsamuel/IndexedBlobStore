@@ -697,7 +697,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(co
 
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	if (root->type == NodeType::LEAF) {
-		BlobStoreObject<LeafNode> new_root = root.To<const LeafNode>().Clone();
+		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode>();
 		new_root->set_version(new_header->version);
 		auto kv = DeleteFromLeafNode(new_root, key);
 		new_header->root_index = new_root.Index();
@@ -707,7 +707,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(co
 		// TODO(fsamuel): We need to distingush between a CAS fail and a key not found.
 		return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
 	}
-	BlobStoreObject<InternalNode> new_root = root.To<const InternalNode>().Clone();
+	BlobStoreObject<InternalNode> new_root = root.Clone<InternalNode>();
 	new_root->set_version(new_header->version);
 	int i = 0;
 	BlobStoreObject<const KeyType> current_key;
@@ -807,12 +807,12 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(size_t ver
 	BlobStoreObject<BaseNode> new_left_sibling;
 	BlobStoreObject<BaseNode> new_right_sibling;
 	if (left_sibling->type == NodeType::LEAF) {
-		new_left_sibling = left_sibling.To<LeafNode>().Clone().To<BaseNode>();
-		new_right_sibling = right_sibling.To<LeafNode>().Clone().To<BaseNode>();
+		new_left_sibling = left_sibling.Clone<LeafNode>().To<BaseNode>();
+		new_right_sibling = right_sibling.Clone<LeafNode>().To<BaseNode>();
 	}
 	else {
-		new_left_sibling = left_sibling.To<InternalNode>().Clone().To<BaseNode>();
-		new_right_sibling = right_sibling.To<InternalNode>().Clone().To<BaseNode>();
+		new_left_sibling = left_sibling.Clone<InternalNode>().To<BaseNode>();
+		new_right_sibling = right_sibling.Clone<InternalNode>().To<BaseNode>();
 	}
 	new_left_sibling->set_version(version);
 	new_right_sibling->set_version(version);
@@ -869,12 +869,12 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 	BlobStoreObject<BaseNode> new_left_sibling;
 	BlobStoreObject<BaseNode> new_right_sibling;
 	if (right_sibling->type == NodeType::LEAF) {
-		new_left_sibling = left_sibling.To<LeafNode>().Clone().To<BaseNode>();
-		new_right_sibling = right_sibling.To<LeafNode>().Clone().To<BaseNode>();
+		new_left_sibling = left_sibling.Clone<LeafNode>().To<BaseNode>();
+		new_right_sibling = right_sibling.Clone<LeafNode>().To<BaseNode>();
 	}
 	else {
-		new_left_sibling = left_sibling.To<InternalNode>().Clone().To<BaseNode>();
-		new_right_sibling = right_sibling.To<InternalNode>().Clone().To<BaseNode>();
+		new_left_sibling = left_sibling.Clone<InternalNode>().To<BaseNode>();
+		new_right_sibling = right_sibling.Clone<InternalNode>().To<BaseNode>();
 	}
 	new_left_sibling->set_version(version);
 	new_right_sibling->set_version(version);
@@ -952,10 +952,10 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 	}
 	else {
 		if (const_child->type == NodeType::LEAF) {
-			child = const_child.To<LeafNode>().Clone().To<BaseNode>();
+			child = const_child.Clone<LeafNode>().To<BaseNode>();
 		}
 		else {
-			child = const_child.To<InternalNode>().Clone().To<BaseNode>();
+			child = const_child.Clone<InternalNode>().To<BaseNode>();
 		}
 		parent_internal_node->children[child_index] = child.Index();
 	}
@@ -1050,10 +1050,10 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		//left_child = *child;
 		right_child = GetChildConst(parent, child_index + 1);
 		if (child->type == NodeType::LEAF) {
-			left_child = child.To<LeafNode>().Clone().To<BaseNode>();
+			left_child = child.Clone<LeafNode>().To<BaseNode>();
 		}
 		else {
-			left_child = child.To<InternalNode>().Clone().To<BaseNode>();
+			left_child = child.Clone<InternalNode>().To<BaseNode>();
 		}
 		left_child->set_version(version);
 		*out_child = left_child;
@@ -1064,10 +1064,10 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		BlobStoreObject<const BaseNode> const_left_child = GetChildConst(parent, child_index - 1);
 		right_child = child;
 		if (const_left_child->type == NodeType::LEAF) {
-			left_child = const_left_child.To<LeafNode>().Clone().To<BaseNode>();
+			left_child = const_left_child.Clone<LeafNode>().To<BaseNode>();
 		}
 		else {
-			left_child = const_left_child.To<InternalNode>().Clone().To<BaseNode>();
+			left_child = const_left_child.Clone<InternalNode>().To<BaseNode>();
 		}
 		left_child->set_version(version);
 		parent->children[child_index - 1] = left_child.Index();

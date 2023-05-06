@@ -131,9 +131,9 @@ public:
 	}
 
 	template <typename U = T>
-	typename std::enable_if<std::is_copy_constructible<U>::value, BlobStoreObject<non_const_T>>::type
+	typename std::enable_if<std::is_copy_constructible<U>::value, BlobStoreObject< typename std::remove_const<U>::type>>::type
 		Clone() const {
-		return control_block_->store_->Clone<T>(control_block_->index_);
+		return control_block_->store_->Clone<U>(control_block_->index_);
 	}
 
 	template<typename U>
