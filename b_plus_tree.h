@@ -861,8 +861,12 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 	BlobStoreObject<BaseNode> child = GetChild(parent_node, child_index);
 	// The current child where we want to delete a node is too small.
 	if (child->will_underflow()) {
-		// Rebalancing might drop the current child and move all its keys to its left sibling which
-		// is why child is an output parameter.
+		// Rebalancing might involve one of three operations:
+		//     1. Borrowing a key from the left sibling.
+		//     2. Borrowing a key from the right sibling.
+		//     3. Merging the left or right sibling with the current child.
+		// Rebalancing might drop the current child and move all its keys to its left sibling if this child is the
+		// rightmost child within the parent. This is why child is an output parameter.
 		// If we end up merging nodes, we might remove a key from the parent which is why the child
 		// must be rebalanced before the recursive calls below.
 		RebalanceChildWithLeftOrRightSibling(parent_node, child_index, &child);
@@ -870,7 +874,6 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 
 	// The current child where we want to delete a node is a leaf node.
 	if (child->type == NodeType::LEAF) {
-		//PrintNode(parent_node.To<const BaseNode>());
 		return DeleteFromLeafNode(child.To<LeafNode>(), key);
 	}
 
