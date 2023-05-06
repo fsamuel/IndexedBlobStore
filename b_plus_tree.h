@@ -420,8 +420,8 @@ private:
 	KeyValuePair<KeyType, ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
 
-	bool TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, BlobStoreObject<BaseNode>* out_right_sibling, int child_index);
-	bool TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode>* out_left_sibling, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index);
+	bool TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling);
+	bool TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling);
 
 	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
@@ -797,7 +797,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, BlobStoreObject<BaseNode>* out_right_sibling, int child_index) {
+bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling) {
 	if (!left_sibling || left_sibling->will_underflow()) {
 		return false;
 	}
@@ -857,7 +857,7 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(BlobStoreO
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode>* out_left_sibling, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index) {
+bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling) {
 	if (!right_sibling || right_sibling->will_underflow()) {
 		return false;
 	}
@@ -924,7 +924,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
 	BlobStoreObject<InternalNode> parent_internal_node = parent_node->To<InternalNode>();
 	BlobStoreObject<const BaseNode> const_child = GetChildConst(parent_internal_node, child_index);
-	BlobStoreObject<BaseNode> child;// = GetChild(parent_internal_node, child_index);
+	BlobStoreObject<BaseNode> child;
 	// The current child where we want to delete a node is too small.
 	if (const_child->will_underflow()) {
 		// Rebalancing might involve one of three operations:
@@ -1093,18 +1093,14 @@ void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
 	int child_index,
 	BlobStoreObject<const BaseNode> child,
 	BlobStoreObject<BaseNode>* new_child) {
-	{
-		BlobStoreObject<const BaseNode> left_sibling = child_index > 0 ? GetChildConst(parent, child_index - 1) : BlobStoreObject<const BaseNode>();
-		if (TryToBorrowFromLeftSibling(parent, left_sibling, child,new_child, child_index)) {
-			return;
-		}
+	BlobStoreObject<const BaseNode> left_sibling = child_index > 0 ? GetChildConst(parent, child_index - 1) : BlobStoreObject<const BaseNode>();
+	if (TryToBorrowFromLeftSibling(parent, left_sibling, child, child_index, new_child)) {
+		return;
 	}
 	
-	{
-		BlobStoreObject<const BaseNode> right_sibling = (child_index + 1) <= parent->num_keys() ? GetChildConst(parent, child_index + 1) : BlobStoreObject<const BaseNode>();
-		if (TryToBorrowFromRightSibling(parent, new_child, child, right_sibling, child_index)) {
-			return;
-		}
+	BlobStoreObject<const BaseNode> right_sibling = (child_index + 1) <= parent->num_keys() ? GetChildConst(parent, child_index + 1) : BlobStoreObject<const BaseNode>();
+	if (TryToBorrowFromRightSibling(parent, child, right_sibling, child_index, new_child)) {
+		return;
 	}
 	
 	MergeChildWithLeftOrRightSibling(parent, child_index, child, new_child);
