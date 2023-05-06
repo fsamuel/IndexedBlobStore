@@ -417,9 +417,9 @@ private:
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 
 	void MergeInternalNodes(BlobStoreObject<InternalNode> left_child,
-	                        BlobStoreObject<InternalNode> right_child,
+	                        BlobStoreObject<const InternalNode> right_child,
 		                    size_t parent_key);
-	void MergeLeafNodes(BlobStoreObject<LeafNode> left_child, BlobStoreObject<LeafNode> right_child);
+	void MergeLeafNodes(BlobStoreObject<LeafNode> left_child, BlobStoreObject<const LeafNode> right_child);
 	void MergeChildWithLeftOrRightSibling(
 		BlobStoreObject<InternalNode> parent,
 		int child_index,
@@ -948,7 +948,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::MergeInternalNodes(
 	BlobStoreObject<InternalNode> left_node,
-	BlobStoreObject<InternalNode> right_node,
+	BlobStoreObject<const InternalNode> right_node,
 	size_t parent_key) {
 	// Move the key from the parent node down to the left sibling node
 	left_node->set_key(left_node->num_keys(), /*parent_node->get_key(key_index_in_parent)*/parent_key);
@@ -968,7 +968,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeInternalNodes(
 template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::MergeLeafNodes(
 	BlobStoreObject<LeafNode> left_node,
-	BlobStoreObject<LeafNode> right_node) {
+	BlobStoreObject<const LeafNode> right_node) {
 	// Move the key from the parent node down to the left sibling node
 	left_node->set_key(left_node->num_keys(), right_node->get_key(0));
 	left_node->values[left_node->num_keys()] = right_node->values[0];
@@ -993,23 +993,38 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		key_index_in_parent = child_index;
 		left_child = *child;
 		right_child = GetChild(parent, child_index + 1);
+		if (left_child->type == NodeType::LEAF) {
+			left_child = left_child.To<LeafNode>().Clone().To<BaseNode>();
+		}
+		else {
+			left_child = left_child.To<InternalNode>().Clone().To<BaseNode>();
+		}
+		*child = left_child;
+		parent->children[child_index] = left_child.Index();
 	}
 	else {
 		key_index_in_parent = child_index - 1;
 		left_child = GetChild(parent, child_index - 1);
 		right_child = *child;
+		if (left_child->type == NodeType::LEAF) {
+			left_child = left_child.To<LeafNode>().Clone().To<BaseNode>();
+		}
+		else {
+			left_child = left_child.To<InternalNode>().Clone().To<BaseNode>();
+		}
+		parent->children[child_index - 1] = left_child.Index();
 		*child = left_child;
 	}
 
 	if (left_child->type == NodeType::LEAF) {
 		MergeLeafNodes(
 			left_child.To<LeafNode>(),
-			right_child.To<LeafNode>());
+			right_child.To<const LeafNode>());
 	}
 	else {
 		MergeInternalNodes(
 			left_child.To<InternalNode>(), 
-			right_child.To<InternalNode>(), 
+			right_child.To<const InternalNode>(), 
 			parent->get_key(key_index_in_parent));
 	}
 
