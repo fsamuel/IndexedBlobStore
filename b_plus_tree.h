@@ -904,6 +904,15 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 		// must be rebalanced before the recursive calls below.
 		RebalanceChildWithLeftOrRightSibling(parent_node, child_index, &child);
 	}
+	else {
+		if (child->type == NodeType::LEAF) {
+			child = child.To<LeafNode>().Clone().To<BaseNode>();
+		}
+		else {
+			child = child.To<InternalNode>().Clone().To<BaseNode>();
+		}
+		parent_node->children[child_index] = child.Index();
+	}
 
 	// The current child where we want to delete a node is a leaf node.
 	if (child->type == NodeType::LEAF) {
