@@ -83,7 +83,7 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		inserted.erase(val);
 		std::cout << "Deleted " << i << " key: " << *kv.first << ", value: " << *kv.second << std::endl;
 	}
-	tree.PrintTree(20);
+	tree.PrintTree(100);
 	for (int i = 0; i < 20; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();

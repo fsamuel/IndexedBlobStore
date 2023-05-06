@@ -406,7 +406,7 @@ private:
 
 	InsertionBundle Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 
-	KeyValuePair<KeyType, ValueType> Delete(BlobStoreObject<InternalNode> parent_node, int child_index, const KeyType& key);
+	KeyValuePair<KeyType, ValueType> Delete(BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
 	KeyValuePair<KeyType, ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
 
@@ -703,13 +703,14 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(co
 		i += 1;
 	}
 	std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>> kv;
+	BlobStoreObject<BaseNode> new_root_base = new_root.To<BaseNode>();
 	if (i < new_root->num_keys() && key == *current_key) {
-		kv = Delete(new_root, i + 1, key);
+		kv = Delete(&new_root_base, i + 1, key);
 	}
 	else {
-		kv = Delete(new_root, i, key);
+		kv = Delete(&new_root_base, i, key);
 	}
-	new_header->root_index = new_root.Index();
+	new_header->root_index = new_root_base.Index();
 	if (old_header.CompareAndSwap(new_header)) {
 		return kv;
 	}
@@ -753,12 +754,14 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 		}
 		i += 1;
 	}
+	BlobStoreObject<BaseNode> internal_node_base = node.To<BaseNode>();
+
 	// We found the first key larger or equal to the node we're looking for.
 	// Case 1: key == *current_key: we need to delete the key.
 	if (i < node->num_keys() && key == *current_key) {
 		// The key/value pair is in the right child. Recurse down
 		// to delete the key/value pair first.
-		auto kv = Delete(node, i + 1, key);
+		auto kv = Delete(&internal_node_base, i + 1, key);
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
 		BlobStoreObject<const KeyType> current_key;
@@ -778,7 +781,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 		return kv;
 	}
 	// Delete at the left child if the current key is larger.
-	return Delete(node, i, key);
+	return Delete(&internal_node_base, i, key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
@@ -906,8 +909,9 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(BlobStore
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(BlobStoreObject<InternalNode> parent_node, int child_index, const KeyType& key) {
-	BlobStoreObject<BaseNode> child = GetChild(parent_node, child_index);
+KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
+	BlobStoreObject<InternalNode> parent_internal_node = parent_node->To<InternalNode>();
+	BlobStoreObject<BaseNode> child = GetChild(parent_internal_node, child_index);
 	// The current child where we want to delete a node is too small.
 	if (child->will_underflow()) {
 		// Rebalancing might involve one of three operations:
@@ -918,7 +922,15 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 		// rightmost child within the parent. This is why child is an output parameter.
 		// If we end up merging nodes, we might remove a key from the parent which is why the child
 		// must be rebalanced before the recursive calls below.
-		RebalanceChildWithLeftOrRightSibling(parent_node, child_index, &child);
+		RebalanceChildWithLeftOrRightSibling(parent_internal_node, child_index, &child);
+		
+		// TODO(fsamuel): This shouldn't happen here. This should happen at the first call.
+		if (parent_internal_node->num_keys() == 0) {
+			// The root node is empty, so make the left child the new root node
+			// This is okay to drop since this is a new clone.
+			blob_store_.Drop(parent_internal_node.Index());
+			*parent_node = child;
+		}
 	}
 	else {
 		if (child->type == NodeType::LEAF) {
@@ -927,7 +939,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Bl
 		else {
 			child = child.To<InternalNode>().Clone().To<BaseNode>();
 		}
-		parent_node->children[child_index] = child.Index();
+		parent_internal_node->children[child_index] = child.Index();
 	}
 
 	// The current child where we want to delete a node is a leaf node.
@@ -1060,18 +1072,6 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	}
 	// The parent could underflow if we don't do something before getting this far.
 	parent->decrement_num_keys();
-
-	// Free the right sibling node
-	blob_store_.Drop(right_child.Index());
-
-	// TODO(fsamuel): This shouldn't happen here. This should happen at the first call.
-	auto header = blob_store_.GetMutable<BPlusTreeHeader>(1);
-	if (parent.Index() == header->root_index && parent->num_keys() == 0) {
-		// The root node is empty, so make the left child the new root node
-		header->root_index = left_child.Index();
-		blob_store_.Drop(parent.Index());
-		parent = nullptr;
-	}
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
