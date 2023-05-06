@@ -673,32 +673,48 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 
 template <typename KeyType, typename ValueType, size_t Order>
 KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key) {
-	BlobStore::index_type root_index = BlobStore::InvalidIndex;
-	{
-		auto header = blob_store_.Get<BPlusTreeHeader>(1);
-		root_index = header->root_index;
-	}
-	if (root_index == BlobStore::InvalidIndex) {
+	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
+	if (old_header->root_index == BlobStore::InvalidIndex) {
 		return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
 	}
-	auto root = blob_store_.GetMutable<BaseNode>(root_index);
+	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
+	++new_header->version;
+	new_header->previous_header = new_header.Index();
+
+	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	if (root->type == NodeType::LEAF) {
-		return DeleteFromLeafNode(root.To<LeafNode>(), key);
+		BlobStoreObject<LeafNode> new_root = root.To<const LeafNode>().Clone();
+		auto kv = DeleteFromLeafNode(new_root, key);
+		new_header->root_index = new_root.Index();
+		if (old_header.CompareAndSwap(new_header)) {
+			return kv;
+		}
+		// TODO(fsamuel): We need to distingush between a CAS fail and a key not found.
+		return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
 	}
-	auto internal_node = root.To<InternalNode>();
+	BlobStoreObject<InternalNode> new_root = root.To<const InternalNode>().Clone();
 	int i = 0;
 	BlobStoreObject<const KeyType> current_key;
-	while (i < internal_node->num_keys()) {
-		current_key = GetKey(internal_node, i);
+	while (i < new_root->num_keys()) {
+		current_key = GetKey(new_root, i);
 		if (key <= *current_key) {
 			break;
 		}
 		i += 1;
 	}
-	if (i < internal_node->num_keys() && key == *current_key) {
-		return Delete(std::move(internal_node), i + 1, key);
+	std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>> kv;
+	if (i < new_root->num_keys() && key == *current_key) {
+		kv = Delete(new_root, i + 1, key);
 	}
-	return Delete(std::move(internal_node), i, key);
+	else {
+		kv = Delete(new_root, i, key);
+	}
+	new_header->root_index = new_root.Index();
+	if (old_header.CompareAndSwap(new_header)) {
+		return kv;
+	}
+	// TODO(fsamuel): We need to distingush between a CAS fail and a key not found.
+	return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
