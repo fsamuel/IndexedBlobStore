@@ -411,7 +411,7 @@ private:
 	KeyValuePair<KeyType, ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
 
 	bool TryToBorrowFromLeftSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<BaseNode>* right_sibling, int child_index);
-	bool TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index);
+	bool TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode>* left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index);
 
 	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
@@ -826,49 +826,65 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(BlobStoreO
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode> left_sibling, BlobStoreObject<BaseNode> right_sibling, int child_index) {
+bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(BlobStoreObject<InternalNode> parent_node, BlobStoreObject<BaseNode>* left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index) {
 	if (!right_sibling || right_sibling->will_underflow()) {
 		return false;
 	}
 
-	size_t key_index;
-	if (left_sibling->type == NodeType::INTERNAL) {
-		auto left_internal_node = left_sibling.To<InternalNode>();
-		auto right_internal_node = right_sibling.To<InternalNode>();
-
-		left_internal_node->set_key(left_sibling->num_keys(), parent_node->get_key(child_index));
-		left_internal_node->children[left_internal_node->num_keys() + 1] = right_internal_node->children[0];
-
-		for (int i = 1; i <= right_internal_node->num_keys(); ++i) {
-			right_internal_node->children[i - 1] = right_internal_node->children[i];
-		}
-		right_internal_node->children[right_internal_node->num_keys()] = BlobStore::InvalidIndex;
-		key_index = right_sibling->get_key(0);
+	BlobStoreObject<BaseNode> new_left_sibling;
+	BlobStoreObject<BaseNode> new_right_sibling;
+	if (right_sibling->type == NodeType::LEAF) {
+		new_left_sibling = left_sibling->To<LeafNode>().Clone().To<BaseNode>();
+		new_right_sibling = right_sibling.To<LeafNode>().Clone().To<BaseNode>();
 	}
 	else {
-		auto left_leaf_node = left_sibling.To<LeafNode>();
-		auto right_leaf_node = right_sibling.To<LeafNode>();
+		new_left_sibling = left_sibling->To<InternalNode>().Clone().To<BaseNode>();
+		new_right_sibling = right_sibling.To<InternalNode>().Clone().To<BaseNode>();
+	}
 
-		left_leaf_node->set_key(left_leaf_node->num_keys(), right_leaf_node->get_key(0));
-		left_leaf_node->values[left_leaf_node->num_keys()] = right_leaf_node->values[0];
+	parent_node->children[child_index] = new_left_sibling.Index();
+	parent_node->children[child_index + 1] = new_right_sibling.Index();
 
-		for (int i = 1; i < right_leaf_node->num_keys(); ++i) {
-			right_leaf_node->values[i - 1] = right_leaf_node->values[i];
+	size_t key_index;
+	if (new_left_sibling->type == NodeType::INTERNAL) {
+		auto new_left_internal_node = new_left_sibling.To<InternalNode>();
+		auto new_right_internal_node = new_right_sibling.To<InternalNode>();
+
+		new_left_internal_node->set_key(new_left_sibling->num_keys(), parent_node->get_key(child_index));
+		new_left_internal_node->children[new_left_internal_node->num_keys() + 1] = new_right_internal_node->children[0];
+
+		for (int i = 1; i <= new_right_internal_node->num_keys(); ++i) {
+			new_right_internal_node->children[i - 1] = new_right_internal_node->children[i];
 		}
-		right_leaf_node->values[right_leaf_node->num_keys() - 1] = BlobStore::InvalidIndex;
+		new_right_internal_node->children[new_right_internal_node->num_keys()] = BlobStore::InvalidIndex;
+		key_index = new_right_sibling->get_key(0);
+	}
+	else {
+		auto new_left_leaf_node = new_left_sibling.To<LeafNode>();
+		auto new_right_leaf_node = new_right_sibling.To<LeafNode>();
 
-		key_index = right_sibling->get_key(1);
+		new_left_leaf_node->set_key(new_left_leaf_node->num_keys(), new_right_leaf_node->get_key(0));
+		new_left_leaf_node->values[new_left_leaf_node->num_keys()] = new_right_leaf_node->values[0];
+
+		for (int i = 1; i < new_right_leaf_node->num_keys(); ++i) {
+			new_right_leaf_node->values[i - 1] = new_right_leaf_node->values[i];
+		}
+		new_right_leaf_node->values[new_right_leaf_node->num_keys() - 1] = BlobStore::InvalidIndex;
+
+		key_index = new_right_sibling->get_key(1);
 	}
 
-	for (int i = 1; i < right_sibling->num_keys(); ++i) {
-		right_sibling->keys[i - 1] = right_sibling->keys[i];
+	for (int i = 1; i < new_right_sibling->num_keys(); ++i) {
+		new_right_sibling->keys[i - 1] = new_right_sibling->keys[i];
 	}
-	right_sibling->keys[right_sibling->num_keys() - 1] = BlobStore::InvalidIndex;
+	new_right_sibling->keys[new_right_sibling->num_keys() - 1] = BlobStore::InvalidIndex;
 
-	left_sibling->increment_num_keys();
-	right_sibling->decrement_num_keys();
+	new_left_sibling->increment_num_keys();
+	new_right_sibling->decrement_num_keys();
 
 	parent_node->set_key(child_index, key_index);
+
+	*left_sibling = new_left_sibling;
 
 	return true;
 }
@@ -1032,7 +1048,7 @@ void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
 	
 	{
 		BlobStoreObject<BaseNode> right_sibling = (child_index + 1) <= parent->num_keys() ? GetChild(parent, child_index + 1) : BlobStoreObject<BaseNode>();
-		if (TryToBorrowFromRightSibling(parent, *child, right_sibling, child_index)) {
+		if (TryToBorrowFromRightSibling(parent, child, right_sibling.To<const BaseNode>(), child_index)) {
 			return;
 		}
 	}
