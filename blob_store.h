@@ -130,10 +130,10 @@ public:
 		return *this;
 	}
 
-	template <typename U = T>
-	typename std::enable_if<std::is_copy_constructible<U>::value, BlobStoreObject< typename std::remove_const<U>::type>>::type
+	template <typename U = T, typename V = T>
+	typename std::enable_if<std::is_copy_constructible<U>::value && std::is_copy_constructible<V>::value, BlobStoreObject< typename std::remove_const<V>::type>>::type
 		Clone() const {
-		return control_block_->store_->Clone<U>(control_block_->index_);
+		return control_block_->store_->Clone<U>(control_block_->index_).To<std::remove_const<V>::type >();
 	}
 
 	template<typename U>
