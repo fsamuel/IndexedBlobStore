@@ -540,15 +540,14 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root) {
 	path_to_root.push_back(node.Index());
-	int i = 0;
-	BlobStoreObject<const KeyType> current_key;
-	while (i < node->num_keys()) {
-		current_key = GetKey(node, i);
-		if (key <= *current_key) {
-			break;
-		}
-		++i;
-	}
+	auto it = std::lower_bound(node->keys.begin(), node->keys.begin() + node->num_keys(), key,
+		[this](size_t lhs, const KeyType& rhs) {
+			return *blob_store_.Get<KeyType>(lhs) < rhs;
+		});
+
+	size_t i = std::distance(node->keys.begin(), it);
+	BlobStoreObject<const KeyType> current_key = i < node->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+
 	if (node->is_leaf()) {
 		return Iterator(&blob_store_, std::move(path_to_root), i);
 	}
@@ -673,17 +672,16 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	if (node->is_leaf()) {
 		return InsertIntoLeaf(version, node.To<LeafNode>(), std::move(key), std::move(value));
 	}
+
 	// Find the child node where the new key-value should be inserted.
 	BlobStoreObject<const InternalNode> internal_node = node.To<InternalNode>();
-	int i = internal_node->num_keys() - 1;
-	while (i >= 0) {
-		auto current_key = GetKey(internal_node, i);
-		if (*key >= *current_key) {
-			break;
-		}
-		--i;
-	}
-	i += 1;
+	auto it = std::lower_bound(internal_node->base.keys.begin(), internal_node->base.keys.begin() + internal_node->num_keys(), key,
+		[this](size_t lhs, const BlobStoreObject<KeyType>& rhs) {
+			return *blob_store_.Get<KeyType>(lhs) < *rhs;
+		});
+
+	size_t i = std::distance(internal_node->base.keys.begin(), it);
+
 	BlobStoreObject<const BaseNode> child_node = GetChild(internal_node, i);
 	InsertionBundle child_node_bundle = Insert(version, child_node, key, value);
 	BlobStoreObject<InternalNode> new_internal_node = internal_node.Clone();
@@ -757,17 +755,16 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 	// If the root is an internal node, then we need to find the leaf node where the key is located.
 	BlobStoreObject<InternalNode> new_root = root.Clone<InternalNode>();
 	new_root->set_version(new_header->version);
-	int i = 0;
+
 	// Find the child node where the key should be deleted.
-	BlobStoreObject<const KeyType> current_key;
-	while (i < new_root->num_keys()) {
-		current_key = GetKey(new_root, i);
-		// If the key is less than or equal to the current key, then we have found the child node.
-		if (key <= *current_key) {
-			break;
-		}
-		i += 1;
-	}
+	auto it = std::lower_bound(new_root->base.keys.begin(), new_root->base.keys.begin() + new_root->num_keys(), key,
+		[this](size_t lhs, const KeyType& rhs) {
+			return *blob_store_.Get<KeyType>(lhs) < rhs;
+		});
+
+	size_t i = std::distance(new_root->base.keys.begin(), it);
+	BlobStoreObject<const KeyType> current_key = i < new_root->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+
 	BlobStoreObject<const ValueType> deleted;
 	BlobStoreObject<BaseNode> new_root_base = new_root.To<BaseNode>();
 	if (i < new_root->num_keys() && key == *current_key) {
@@ -787,7 +784,7 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
-	auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.end(), key,
+	auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.begin() + node->num_keys(), key,
 		[this](size_t lhs, const KeyType& rhs) {
 			return *blob_store_.Get<KeyType>(lhs) < rhs;
 		});
@@ -813,15 +810,14 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key) {
-	int i = 0;
-	BlobStoreObject<const KeyType> current_key;
-	while (i < node->num_keys()) {
-		current_key = GetKey(node, i);
-		if (key <= *current_key) {
-			break;
-		}
-		i += 1;
-	}
+	auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.begin() + node->num_keys(), key,
+		[this](size_t lhs, const KeyType& rhs) {
+			return *blob_store_.Get<KeyType>(lhs) < rhs;
+		});
+
+	size_t i = std::distance(node->base.keys.begin(), it);
+	BlobStoreObject<const KeyType> current_key = i < node->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+
 	BlobStoreObject<BaseNode> internal_node_base = node.To<BaseNode>();
 
 	// We found the first key larger or equal to the node we're looking for.
@@ -832,14 +828,15 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 		auto deleted_value = Delete(node->get_version(), &internal_node_base, i + 1, key);
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
-		BlobStoreObject<const KeyType> current_key;
-		while (i < node->num_keys()) {
-			current_key = GetKey(node, i);
-			if (key <= *current_key) {
-				break;
-			}
-			i += 1;
-		}
+
+		auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.begin() + node->num_keys(), key,
+			[this](size_t lhs, const KeyType& rhs) {
+				return *blob_store_.Get<KeyType>(lhs) < rhs;
+			});
+
+		size_t i = std::distance(node->base.keys.begin(), it);
+		BlobStoreObject<const KeyType> current_key = i < node->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+
 		if (i < node->num_keys() && key == *current_key) {
 			// Can there ever be a null successor? That means there is no successor at all.
 			// That shouldn't happen I think.
@@ -1014,13 +1011,16 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetPredeces
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
 	if (node->is_leaf()) {
-		for (int i = 0; i < node->num_keys(); ++i) {
-			auto key_ptr = GetKey(node, i);
-			if (*key_ptr > key)
-				return key_ptr;
+		auto it = std::lower_bound(node->keys.begin(), node->keys.begin() + node->num_keys(), key,
+			[this](size_t lhs, const KeyType& rhs) {
+				return *blob_store_.Get<KeyType>(lhs) < rhs;
+			});
+
+		size_t i = std::distance(node->keys.begin(), it);
+		if (i < node->num_keys()) {
+			return blob_store_.Get<KeyType>(*it);
 		}
 		return BlobStoreObject<const KeyType>();
-
 	}
 	for (int i = 0; i <= node->num_keys(); ++i) {
 		auto internal_node = node.To<InternalNode>();
