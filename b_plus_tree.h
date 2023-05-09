@@ -428,8 +428,6 @@ private:
 	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 
-	// Returns the previous leaf node in the tree. If node is the first leaf node, returns nullptr.
-	void FindPreviousLeafNode(BlobStoreObject<const LeafNode> node, std::vector<size_t>* path_to_root);
 	void MergeInternalNodes(BlobStoreObject<InternalNode> left_child,
 	                        BlobStoreObject<const InternalNode> right_child,
 		                    size_t parent_key);
@@ -1011,50 +1009,6 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-void BPlusTree<KeyType, ValueType, Order>::FindPreviousLeafNode(BlobStoreObject<const LeafNode> node, std::vector<size_t>* path_to_root) {
-	path_to_root->clear();
-
-	BlobStoreObject<const KeyType> target_key = GetKey(node, 0);
-
-	// Start from the root node.
-	BlobStoreObject<const BaseNode> current_node;
-	{
-		BlobStoreObject<const BPlusTreeHeader> header = blob_store_.Get<BPlusTreeHeader>(1);
-		current_node = blob_store_.Get<BaseNode>(header->root_index);
-	}
-	BlobStoreObject<const BaseNode> previous_node;
-
-	// Traverse teh tree from root to leaf level.
-	while (current_node->type != NodeType::LEAF) {
-		path_to_root->push_back(current_node.Index());
-		bool found = false;
-		int i = 0;
-
-		// Search for |node| in the children of the current node.
-		BlobStoreObject<const KeyType> current_key;
-		for (int i = 0; i < node->num_keys(); ++i) {
-			current_key = GetKey(node, i);
-			if (*target_key <= *current_key) {
-				// Set prev_node before moving to the child node
-				if (i > 0) {
-					previous_node = GetChild(current_node.To<InternalNode>(), i - 1);
-				}
-				current_node = GetChild(current_node.To<InternalNode>(), i);
-				found = true;
-				break;
-			}
-		}
-		// If the node is not found in the children, then it must be in the rightmost child.
-		if (!found) {
-			if (current_node->num_keys() > 0) {
-				previous_node = GetChild(current_node.To<InternalNode>(), current_node->num_keys() - 1);
-			}
-			current_node = GetChild(current_node.To<InternalNode>(), current_node->num_keys());
-		}
-	}
-}
-
-template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::MergeInternalNodes(
 	BlobStoreObject<InternalNode> left_node,
 	BlobStoreObject<const InternalNode> right_node,
@@ -1098,7 +1052,6 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	BlobStoreObject<BaseNode> left_child;
 	BlobStoreObject<const BaseNode> right_child;
 	int key_index_in_parent;  
-	std::vector<size_t> prev_node_path_to_root;
 	if (child_index < parent->num_keys()) {
 		key_index_in_parent = child_index;
 		right_child = GetChildConst(parent, child_index + 1);
@@ -1111,9 +1064,6 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		left_child->set_version(version);
 		*out_child = left_child;
 		parent->children[child_index] = left_child.Index();
-		if (child->type == NodeType::LEAF) {
-			FindPreviousLeafNode(child.To<LeafNode>(), &prev_node_path_to_root);
-		}
 	}
 	else {
 		key_index_in_parent = child_index - 1;
@@ -1128,17 +1078,9 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		left_child->set_version(version);
 		parent->children[child_index - 1] = left_child.Index();
 		*out_child = left_child;
-		if (const_left_child->type == NodeType::LEAF) {
-			FindPreviousLeafNode(const_left_child.To<LeafNode>(), &prev_node_path_to_root);
-		}
 	}
 
 	if (left_child->type == NodeType::LEAF) {
-		// Walk the prev_node_path_to_root from the end to the beginning, printing out the nodes.
-		for (auto it = prev_node_path_to_root.rbegin(); it != prev_node_path_to_root.rend(); ++it) {
-			BlobStoreObject<const BaseNode> node = blob_store_.Get<BaseNode>(*it);
-			PrintNode(node);
-		}
 		MergeLeafNodes(
 			left_child.To<LeafNode>(),
 			right_child.To<const LeafNode>());
