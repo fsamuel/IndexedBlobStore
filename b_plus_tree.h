@@ -787,15 +787,17 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
-	int i = 0;
-	while (i < node->num_keys() && key != *GetKey(node, i)) {
-		i += 1;
-	}
+	auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.end(), key,
+		[this](size_t lhs, const KeyType& rhs) {
+			return *blob_store_.Get<KeyType>(lhs) < rhs;
+		});
 
-	if (i == node->num_keys()) {
+	if (it == node->base.keys.end() || key != *blob_store_.Get<KeyType>(*it)) {
 		// Key not found
 		return BlobStoreObject<const ValueType>();
 	}
+	
+	size_t i = std::distance(node->base.keys.begin(), it);
 
 	auto deleted_value = GetValue(node, i);
 
