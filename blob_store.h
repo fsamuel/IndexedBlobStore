@@ -130,10 +130,9 @@ public:
 		return *this;
 	}
 
-	template <typename U = T, typename V = T>
-	typename std::enable_if<std::is_copy_constructible<U>::value && std::is_copy_constructible<V>::value, BlobStoreObject< typename std::remove_const<V>::type>>::type
-		Clone() const {
-		return control_block_->store_->Clone<U>(control_block_->index_).To<std::remove_const<V>::type >();
+	template <typename U = T>
+	BlobStoreObject< typename std::remove_const<U>::type> Clone() const {
+		return control_block_->store_->Clone<U>(control_block_->index_);// .To<std::remove_const<V>::type >();
 	}
 
 	template<typename U>
@@ -380,7 +379,7 @@ public:
 
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	typename std::enable_if<std::is_standard_layout<T>::value, BlobStoreObject<T>>::type
+	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
 		New(Args&&... args);
 
 	template <typename T>
@@ -399,7 +398,7 @@ public:
 	}
 
 	template <typename T>
-	typename std::enable_if<std::is_copy_constructible<T>::value, BlobStoreObject<typename std::remove_const<T>::type>>::type
+	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<typename std::remove_const<T>::type>>::type
 		Clone(size_t index) {
 		// This is only safe if the calling object is holding a read or write lock.
 		// TODO(fsamuel): This whole method is NOT thread safe or buffer resize safe.
@@ -408,7 +407,8 @@ public:
 		char* ptr = allocator_.Allocate(metadata.size * metadata.count);
 		size_t offset;
 		const T* obj = GetRaw<T>(index, &offset);
-		allocator_.Construct(reinterpret_cast<std::remove_const<T>::type*>(ptr), *obj);
+		// Blobs are trivially copyable and standard layout so memcpy should be safe.
+		memcpy(ptr, obj, metadata.size * metadata.count);
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
 		clone_metadata.count = metadata.count;
@@ -629,7 +629,7 @@ private:
 };
 
 template <typename T, typename... Args>
-typename std::enable_if<std::is_standard_layout<T>::value, BlobStoreObject<T>>::type
+typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
 BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
 	char* ptr = allocator_.Allocate(sizeof(T));

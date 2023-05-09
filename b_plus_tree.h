@@ -55,9 +55,6 @@ private:
 			}
 		}
 
-		BaseNode(const BaseNode& other)
-			:type(other.type), n(other.n), version(other.version), keys(other.keys) {}
-
 		// Returns whether this node is a leaf node.
 		bool is_leaf() const { return type == NodeType::LEAF; }
 
@@ -99,7 +96,7 @@ private:
 		void set_key(size_t index, size_t key) { keys[index] = key; }
 	};
 
-	//static_assert(std::is_trivially_copyable<BaseNode>::value, "BaseNode is trivially copyable");
+	static_assert(std::is_trivially_copyable<BaseNode>::value, "BaseNode is trivially copyable");
 	static_assert(std::is_standard_layout<BaseNode>::value, "BaseNode is standard layout");
 
 
@@ -113,8 +110,6 @@ private:
 			}
 		}
 
-		InternalNode(const InternalNode& other) : base(other.base), children(other.children) {}
-
 		bool is_leaf() const { return base.is_leaf(); }
 		bool is_internal() const { return base.is_internal(); }
 		bool is_full() const { return base.is_full(); }
@@ -129,17 +124,19 @@ private:
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
 	};
 
-	//static_assert(std::is_trivially_copyable<InternalNode>::value, "InternalNode is trivially copyable");
+	static_assert(std::is_trivially_copyable<InternalNode>::value, "InternalNode is trivially copyable");
 	static_assert(std::is_standard_layout<InternalNode>::value, "InternalNode is standard layout");
 
 	struct LeafNode {
 		BaseNode base;
-		std::array<BlobStore::index_type, Order> values;
+		std::array<BlobStore::index_type, Order - 1> values;
 
-		LeafNode(std::size_t n = 0)
-			: base(NodeType::LEAF, n) {}
-
-		LeafNode(const LeafNode& other) : base(other.base), values(other.values) {}
+		LeafNode(std::size_t num_keys = 0)
+			: base(NodeType::LEAF, num_keys) {
+			for (size_t i = 0; i < Order - 1; ++i) {
+				values[i] = BlobStore::InvalidIndex;
+			}
+		}
 
 		bool is_leaf() const { return base.is_leaf(); }
 		bool is_internal() const { return base.is_internal(); }
@@ -155,7 +152,7 @@ private:
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
 	};
 
-	//static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
+	static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
 	static_assert(std::is_standard_layout<LeafNode>::value, "LeafNode is standard layout");
 
 	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
@@ -746,7 +743,7 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	if (root->is_leaf()) {
 		// If the root is a leaf node, then we can just delete the key from the leaf node.
-		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode, LeafNode>();
+		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode>();
 		new_root->set_version(new_header->version);
 		auto deleted = DeleteFromLeafNode(new_root, key);
 		new_header->root_index = new_root.Index();
@@ -758,7 +755,7 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 		return false;
 	}
 	// If the root is an internal node, then we need to find the leaf node where the key is located.
-	BlobStoreObject<InternalNode> new_root = root.Clone<InternalNode, InternalNode>();
+	BlobStoreObject<InternalNode> new_root = root.Clone<InternalNode>();
 	new_root->set_version(new_header->version);
 	int i = 0;
 	// Find the child node where the key should be deleted.
@@ -862,12 +859,12 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(size_t ver
 	BlobStoreObject<BaseNode> new_left_sibling;
 	BlobStoreObject<BaseNode> new_right_sibling;
 	if (left_sibling->is_leaf()) {
-		new_left_sibling = left_sibling.Clone<LeafNode>();
-		new_right_sibling = right_sibling.Clone<LeafNode>();
+		new_left_sibling = left_sibling.Clone();
+		new_right_sibling = right_sibling.Clone();
 	}
 	else {
-		new_left_sibling = left_sibling.Clone<InternalNode>();
-		new_right_sibling = right_sibling.Clone<InternalNode>();
+		new_left_sibling = left_sibling.Clone();
+		new_right_sibling = right_sibling.Clone();
 	}
 	new_left_sibling->set_version(version);
 	new_right_sibling->set_version(version);
@@ -924,12 +921,12 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 	BlobStoreObject<BaseNode> new_left_sibling;
 	BlobStoreObject<BaseNode> new_right_sibling;
 	if (right_sibling->is_leaf()) {
-		new_left_sibling = left_sibling.Clone<LeafNode>();
-		new_right_sibling = right_sibling.Clone<LeafNode>();
+		new_left_sibling = left_sibling.Clone();
+		new_right_sibling = right_sibling.Clone();
 	}
 	else {
-		new_left_sibling = left_sibling.Clone<InternalNode>();
-		new_right_sibling = right_sibling.Clone<InternalNode>();
+		new_left_sibling = left_sibling.Clone();
+		new_right_sibling = right_sibling.Clone();
 	}
 	new_left_sibling->set_version(version);
 	new_right_sibling->set_version(version);
@@ -1008,10 +1005,10 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 	else {
 		if (const_child->is_leaf()) {
 			// This is an abbreviation for clone the object as a leaf node and then cast it to a base node.
-			child = const_child.Clone<LeafNode>();
+			child = const_child.Clone();
 		}
 		else {
-			child = const_child.Clone<InternalNode>();
+			child = const_child.Clone();
 		}
 		parent_internal_node->children[child_index] = child.Index();
 	}
@@ -1104,10 +1101,10 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		key_index_in_parent = child_index;
 		right_child = GetChildConst(parent, child_index + 1);
 		if (child->is_leaf()) {
-			left_child = child.Clone<LeafNode>();
+			left_child = child.Clone();
 		}
 		else {
-			left_child = child.Clone<InternalNode>();
+			left_child = child.Clone();
 		}
 		left_child->set_version(version);
 		*out_child = left_child;
@@ -1118,10 +1115,10 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		BlobStoreObject<const BaseNode> const_left_child = GetChildConst(parent, child_index - 1);
 		right_child = child;
 		if (const_left_child->is_leaf()) {
-			left_child = const_left_child.Clone<LeafNode>();
+			left_child = const_left_child.Clone();
 		}
 		else {
-			left_child = const_left_child.Clone<InternalNode>();
+			left_child = const_left_child.Clone();
 		}
 		left_child->set_version(version);
 		parent->children[child_index - 1] = left_child.Index();
