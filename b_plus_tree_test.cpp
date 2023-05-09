@@ -90,7 +90,6 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		inserted.erase(val);
 	}
 	tree.PrintTree(21);
-	/*
 	for (int i = 0; i < 20; i++) {
 		auto it = tree.Search(i);
 		auto key_ptr = it.GetKey();
@@ -103,7 +102,6 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 			EXPECT_EQ(*it.GetValue(), i * 100);
 		}
 	}
-	*/
 }
 
 // Populate a B+ tree with 100 elements. Search for an element in the middle
@@ -118,8 +116,8 @@ TEST_F(BPlusTreeTest, BPlusTreeIteration) {
 	while (it.GetKey() != nullptr) {
 		int key = *it.GetKey();
 		int value = *it.GetValue();
-		EXPECT_EQ(value, key * 100);
-		EXPECT_GT(key, last_key);
+		ASSERT_EQ(value, key * 100);
+		ASSERT_EQ(key, last_key+1);
 		last_key = key;
 		std::cout << "Key: " << *it.GetKey() << ", Value: " << *it.GetValue() << std::endl;
 		++it;

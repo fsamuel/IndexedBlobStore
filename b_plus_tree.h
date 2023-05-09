@@ -163,13 +163,20 @@ public:
 		using pointer = value_type*;
 		using reference = value_type&;
 
-		Iterator(BlobStore* store, BlobStoreObject<const LeafNode> leaf_node, size_t key_index) : store_(store), leaf_node_(std::move(leaf_node)), key_index_(key_index) {}
+		Iterator(BlobStore* store, std::vector<size_t> path_to_root, size_t key_index) : store_(store), path_to_root_(std::move(path_to_root)), key_index_(key_index) {
+			leaf_node_ = store_->Get<LeafNode>(path_to_root_.back());
+			path_to_root_.pop_back();
+			if (key_index_ >= leaf_node_->num_keys()) {
+				key_index_ = 0;
+				AdvanceToNextNode();
+			}
+		}
 
 		Iterator& operator++() {
 			++key_index_;
 			if (key_index_ > leaf_node_->num_keys() - 1) {
 				key_index_ = 0;
-				leaf_node_ = BlobStoreObject<const LeafNode>(store_, leaf_node_->next);
+				AdvanceToNextNode();
 			}
 			return *this;
 		}
@@ -203,7 +210,46 @@ public:
 		}
 
 	private:
+		void AdvanceToNextNode() {
+			if (path_to_root_.empty()) {
+				leaf_node_ = nullptr;
+				return;
+			}
+			BlobStoreObject<const BaseNode> current_node = leaf_node_.To<BaseNode>();
+			BlobStoreObject<const InternalNode> parent_node = store_->Get<InternalNode>(path_to_root_.back());
+			while (parent_node != nullptr && current_node.Index() == parent_node->children[parent_node->num_keys()]) {
+				// Move up to the parent node until we find a node that is not the rightmost child
+				current_node = parent_node.To<BaseNode>();
+				path_to_root_.pop_back();
+				if (path_to_root_.empty()) {
+					parent_node = nullptr;
+				}
+				else {
+					parent_node = store_->Get<InternalNode>(path_to_root_.back());
+				}
+			}
+			if (parent_node == nullptr) {
+				leaf_node_ = nullptr;
+				return;
+			}
+			else {
+				// Find the index of the child node that corresponds to the current node
+				int child_index = 0;
+				while (child_index < parent_node->num_keys() && parent_node->children[child_index] != current_node.Index()) {
+					++child_index;
+				}
+				// Follow the rightmost child of the parent node to find the next element
+				BlobStoreObject<const BaseNode> next_node = store_->Get<BaseNode>(parent_node->children[child_index+1]);
+				while (next_node->type != NodeType::LEAF) {
+					path_to_root_.push_back(next_node.Index());
+					next_node = store_->Get<BaseNode>(next_node.To<InternalNode>()->children[0]);
+				}
+				leaf_node_ = next_node.To<LeafNode>();
+				key_index_ = 0;
+			}
+		}
 		BlobStore* store_;
+		std::vector<size_t> path_to_root_;
 		BlobStoreObject<const LeafNode> leaf_node_;
 		size_t key_index_;
 	};
@@ -391,7 +437,7 @@ private:
 		return BlobStoreObject<const ValueType>(&blob_store_, node->values[value_index]);
 	}
 
-	Iterator Search(BlobStoreObject<const BaseNode> node, const KeyType& key);
+	Iterator Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root);
 
 	// Split a leaf node into two leaf nodes and a middle key, all returned in InsertionBundle.
 	// left_node is modified directly.
@@ -482,13 +528,14 @@ template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
 	BlobStoreObject<const BPlusTreeHeader> header = blob_store_.Get<BPlusTreeHeader>(1);
 	if (header->root_index == BlobStore::InvalidIndex) {
-		return Iterator(&blob_store_, BlobStoreObject<const LeafNode>(), 0);
+		return Iterator(&blob_store_, std::vector<size_t>(), 0);
 	}
-	return Search(blob_store_.Get<BaseNode>(header->root_index), key);
+	return Search(blob_store_.Get<BaseNode>(header->root_index), key, std::vector<size_t>());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode> node, const KeyType& key) {
+typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root) {
+	path_to_root.push_back(node.Index());
 	int i = 0;
 	BlobStoreObject<const KeyType> current_key;
 	while (i < node->num_keys()) {
@@ -499,17 +546,13 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 		++i;
 	}
 	if (node->type == NodeType::LEAF) {
-		if (i < node->num_keys()) {
-			return Iterator(&blob_store_, node.To<LeafNode>(), i);
-		}
-		BlobStoreObject<const LeafNode> next = blob_store_.Get<LeafNode>(node.To<LeafNode>()->next);
-		return Iterator(&blob_store_, next, 0);
+		return Iterator(&blob_store_, std::move(path_to_root), i);
 	}
 	else {
 		if (i < node->num_keys() && key == *current_key) {
-			return Search(GetChild(node.To<InternalNode>(), i + 1), key);
+			return Search(GetChild(node.To<InternalNode>(), i + 1), key, std::move(path_to_root));
 		}
-		return Search(GetChild(node.To<InternalNode>(), i), key);
+		return Search(GetChild(node.To<InternalNode>(), i), key, std::move(path_to_root));
 	}
 }
 
