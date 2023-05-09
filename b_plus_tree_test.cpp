@@ -209,8 +209,10 @@ TEST_F(BPlusTreeTest, SearchNonExistentKey) {
 	for (int i = 1; i < 200; i += 2) {
 		auto it = tree.Search(i);
 		if (it.GetKey() != nullptr) {
-			EXPECT_EQ(*it.GetKey(), i + 1);
-			EXPECT_EQ(*it.GetValue(), (i + 1) * 100);
+			int key = *it.GetKey();
+			int value = *it.GetValue();
+			EXPECT_EQ(key, i + 1);
+			EXPECT_EQ(value, (i + 1) * 100);
 		}
 	}
 }

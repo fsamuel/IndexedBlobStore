@@ -58,6 +58,12 @@ private:
 		BaseNode(const BaseNode& other)
 			:type(other.type), n(other.n), version(other.version), keys(other.keys) {}
 
+		// Returns whether this node is a leaf node.
+		bool is_leaf() const { return type == NodeType::LEAF; }
+
+		// Returns whether this node is an internal node.
+		bool is_internal() const { return type == NodeType::INTERNAL; }
+
 		// Returns whether the node has the maximum number of keys it can hold.
 		bool is_full() const { return n == Order - 1; }
 
@@ -109,6 +115,8 @@ private:
 
 		InternalNode(const InternalNode& other) : base(other.base), children(other.children) {}
 
+		bool is_leaf() const { return base.is_leaf(); }
+		bool is_internal() const { return base.is_internal(); }
 		bool is_full() const { return base.is_full(); }
 		bool will_underflow() const { return base.will_underflow(); }
 		size_t num_keys() const { return base.num_keys(); }
@@ -133,6 +141,8 @@ private:
 
 		LeafNode(const LeafNode& other) : base(other.base), values(other.values) {}
 
+		bool is_leaf() const { return base.is_leaf(); }
+		bool is_internal() const { return base.is_internal(); }
 		bool is_full() const { return base.is_full(); }
 		bool will_underflow() const { return base.will_underflow(); }
 		size_t num_keys() const { return base.num_keys(); }
@@ -166,7 +176,6 @@ public:
 			leaf_node_ = store_->Get<LeafNode>(path_to_root_.back());
 			path_to_root_.pop_back();
 			if (key_index_ >= leaf_node_->num_keys()) {
-				key_index_ = 0;
 				AdvanceToNextNode();
 			}
 		}
@@ -174,7 +183,6 @@ public:
 		Iterator& operator++() {
 			++key_index_;
 			if (key_index_ > leaf_node_->num_keys() - 1) {
-				key_index_ = 0;
 				AdvanceToNextNode();
 			}
 			return *this;
@@ -296,7 +304,7 @@ public:
 			std::cout << "NULL Node" << std::endl;
 			return;
 		}
-		if (node->type == NodeType::INTERNAL) {
+		if (node->is_internal()) {
 			return PrintNode(node.To<InternalNode>());
 		}
 		return PrintNode(node.To<LeafNode>());
@@ -317,7 +325,7 @@ public:
 		while (!queue.empty()) {
 			NodeWithLevel node_with_level = queue.front();
 			queue.pop();
-			if (node_with_level.node->type == NodeType::INTERNAL) {
+			if (node_with_level.node->is_internal()) {
 				BlobStoreObject<const InternalNode> internal_node = node_with_level.node.To<InternalNode>();
 				for (size_t i = 0; i <= internal_node->num_keys(); ++i) {
 					queue.push({ GetChild(internal_node, i), node_with_level.level + 1 });
@@ -345,7 +353,7 @@ public:
 		while (!v.empty()) {
 			NodeWithLevel node_with_level = v.back();
 			v.pop_back();
-			if (node_with_level.node->type == NodeType::INTERNAL) {
+			if (node_with_level.node->is_internal()) {
 				BlobStoreObject<InternalNode> internal_node = node_with_level.node.To<InternalNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Internal node (n = " << internal_node->num_keys() << ") ";
 				for (size_t i = 0; i < internal_node->num_keys(); ++i) {
@@ -544,7 +552,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 		}
 		++i;
 	}
-	if (node->type == NodeType::LEAF) {
+	if (node->is_leaf()) {
 		return Iterator(&blob_store_, std::move(path_to_root), i);
 	}
 	else {
@@ -665,7 +673,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 
 template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
-	if (node->type == NodeType::LEAF) {
+	if (node->is_leaf()) {
 		return InsertIntoLeaf(version, node.To<LeafNode>(), std::move(key), std::move(value));
 	}
 	// Find the child node where the new key-value should be inserted.
@@ -736,7 +744,7 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, KeyValuePa
 	new_header->previous_header = new_header.Index();
 
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
-	if (root->type == NodeType::LEAF) {
+	if (root->is_leaf()) {
 		// If the root is a leaf node, then we can just delete the key from the leaf node.
 		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode, LeafNode>();
 		new_root->set_version(new_header->version);
@@ -852,7 +860,7 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(size_t ver
 
 	BlobStoreObject<BaseNode> new_left_sibling;
 	BlobStoreObject<BaseNode> new_right_sibling;
-	if (left_sibling->type == NodeType::LEAF) {
+	if (left_sibling->is_leaf()) {
 		new_left_sibling = left_sibling.Clone<LeafNode>();
 		new_right_sibling = right_sibling.Clone<LeafNode>();
 	}
@@ -871,7 +879,7 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(size_t ver
 		new_right_sibling->keys[i + 1] = new_right_sibling->keys[i];
 	}
 
-	if (new_right_sibling->type == NodeType::INTERNAL) {
+	if (new_right_sibling->is_internal()) {
 		auto new_right_sibling_internal_node = new_right_sibling.To<InternalNode>();
 		auto new_left_sibling_internal_node = new_left_sibling.To<InternalNode>();
 
@@ -914,7 +922,7 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 
 	BlobStoreObject<BaseNode> new_left_sibling;
 	BlobStoreObject<BaseNode> new_right_sibling;
-	if (right_sibling->type == NodeType::LEAF) {
+	if (right_sibling->is_leaf()) {
 		new_left_sibling = left_sibling.Clone<LeafNode>();
 		new_right_sibling = right_sibling.Clone<LeafNode>();
 	}
@@ -928,7 +936,7 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 	parent_node->children[child_index + 1] = new_right_sibling.Index();
 
 	size_t key_index;
-	if (new_left_sibling->type == NodeType::INTERNAL) {
+	if (new_left_sibling->is_internal()) {
 		auto new_left_internal_node = new_left_sibling.To<InternalNode>();
 		auto new_right_internal_node = new_right_sibling.To<InternalNode>();
 
@@ -997,7 +1005,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 		}
 	}
 	else {
-		if (const_child->type == NodeType::LEAF) {
+		if (const_child->is_leaf()) {
 			// This is an abbreviation for clone the object as a leaf node and then cast it to a base node.
 			child = const_child.Clone<LeafNode>();
 		}
@@ -1009,7 +1017,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 	child->set_version(version);
 
 	// The current child where we want to delete a node is a leaf node.
-	if (child->type == NodeType::LEAF) {
+	if (child->is_leaf()) {
 		return DeleteFromLeafNode(child.To<LeafNode>(), key);
 	}
 
@@ -1018,7 +1026,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetPredecessorKey(BlobStoreObject<BaseNode> node) {
-	while (node->type != NodeType::LEAF) {
+	while (!node->is_leaf()) {
 		auto internal_node = node.To<InternalNode>();
 		node = GetChild(internal_node, internal_node->num_keys()); // Get the rightmost child
 	}
@@ -1027,7 +1035,7 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetPredeces
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
-	if (node->type == NodeType::LEAF) {
+	if (node->is_leaf()) {
 		for (int i = 0; i < node->num_keys(); ++i) {
 			auto key_ptr = GetKey(node, i);
 			if (*key_ptr > key)
@@ -1094,7 +1102,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	if (child_index < parent->num_keys()) {
 		key_index_in_parent = child_index;
 		right_child = GetChildConst(parent, child_index + 1);
-		if (child->type == NodeType::LEAF) {
+		if (child->is_leaf()) {
 			left_child = child.Clone<LeafNode>();
 		}
 		else {
@@ -1108,7 +1116,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		key_index_in_parent = child_index - 1;
 		BlobStoreObject<const BaseNode> const_left_child = GetChildConst(parent, child_index - 1);
 		right_child = child;
-		if (const_left_child->type == NodeType::LEAF) {
+		if (const_left_child->is_leaf()) {
 			left_child = const_left_child.Clone<LeafNode>();
 		}
 		else {
@@ -1119,7 +1127,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		*out_child = left_child;
 	}
 
-	if (left_child->type == NodeType::LEAF) {
+	if (left_child->is_leaf()) {
 		MergeLeafNodes(
 			left_child.To<LeafNode>(),
 			right_child.To<const LeafNode>());
