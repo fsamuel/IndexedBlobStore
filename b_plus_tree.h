@@ -94,6 +94,20 @@ private:
 
 		// Sets the key at the given index.
 		void set_key(size_t index, size_t key) { keys[index] = key; }
+
+		// Returns the first key in the node that is greater than or equal to the given key and its index in the node.
+		BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
+			auto it = std::lower_bound(keys.begin(), keys.begin() + num_keys(), key,
+				[store](size_t lhs, const KeyType& rhs) {
+					return *store->Get<KeyType>(lhs) < rhs;
+				});
+
+			*index = std::distance(keys.begin(), it);
+			if (*index < num_keys()) {
+				return store->Get<KeyType>(*it);
+			}
+			return BlobStoreObject<const KeyType>();
+		}
 	};
 
 	static_assert(std::is_trivially_copyable<BaseNode>::value, "BaseNode is trivially copyable");
@@ -122,6 +136,9 @@ private:
 		void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
 		size_t get_key(size_t index) const { return base.get_key(index); }
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
+		BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
+			return base.Search(store, key, index);
+		}
 	};
 
 	static_assert(std::is_trivially_copyable<InternalNode>::value, "InternalNode is trivially copyable");
@@ -150,6 +167,9 @@ private:
 		void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
 		size_t get_key(size_t index) const { return base.get_key(index); }
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
+		BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
+			return base.Search(store, key, index);
+		}
 	};
 
 	static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
@@ -540,23 +560,17 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root) {
 	path_to_root.push_back(node.Index());
-	auto it = std::lower_bound(node->keys.begin(), node->keys.begin() + node->num_keys(), key,
-		[this](size_t lhs, const KeyType& rhs) {
-			return *blob_store_.Get<KeyType>(lhs) < rhs;
-		});
-
-	size_t i = std::distance(node->keys.begin(), it);
-	BlobStoreObject<const KeyType> current_key = i < node->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+	size_t key_index = 0;
+	BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
 	if (node->is_leaf()) {
-		return Iterator(&blob_store_, std::move(path_to_root), i);
+		return Iterator(&blob_store_, std::move(path_to_root), key_index);
 	}
-	else {
-		if (i < node->num_keys() && key == *current_key) {
-			return Search(GetChild(node.To<InternalNode>(), i + 1), key, std::move(path_to_root));
-		}
-		return Search(GetChild(node.To<InternalNode>(), i), key, std::move(path_to_root));
+
+	if (key_index < node->num_keys() && key == *key_found) {
+		return Search(GetChild(node.To<InternalNode>(), key_index + 1), key, std::move(path_to_root));
 	}
+	return Search(GetChild(node.To<InternalNode>(), key_index), key, std::move(path_to_root));
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -675,18 +689,15 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 
 	// Find the child node where the new key-value should be inserted.
 	BlobStoreObject<const InternalNode> internal_node = node.To<InternalNode>();
-	auto it = std::lower_bound(internal_node->base.keys.begin(), internal_node->base.keys.begin() + internal_node->num_keys(), key,
-		[this](size_t lhs, const BlobStoreObject<KeyType>& rhs) {
-			return *blob_store_.Get<KeyType>(lhs) < *rhs;
-		});
 
-	size_t i = std::distance(internal_node->base.keys.begin(), it);
+	size_t key_index = 0;
+	BlobStoreObject<const KeyType> key_found = internal_node->Search(&blob_store_, *key, &key_index);
 
-	BlobStoreObject<const BaseNode> child_node = GetChild(internal_node, i);
+	BlobStoreObject<const BaseNode> child_node = GetChild(internal_node, key_index);
 	InsertionBundle child_node_bundle = Insert(version, child_node, key, value);
 	BlobStoreObject<InternalNode> new_internal_node = internal_node.Clone();
 	new_internal_node->set_version(version);
-	new_internal_node->children[i] = child_node_bundle.new_left_node.Index();
+	new_internal_node->children[key_index] = child_node_bundle.new_left_node.Index();
 	// If the child node bundle has a new right node, then that means that a split occurred to insert
 	// the key/value pair. We need to find a place to insert the new middle key.
 	if (child_node_bundle.new_right_node != nullptr) {
@@ -714,13 +725,13 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 		}
 		// insert the new child node and its minimum key into the parent node
 		int j = new_internal_node->num_keys() - 1;
-		while (j >= static_cast<int>(i)) {
+		while (j >= static_cast<int>(key_index)) {
 			new_internal_node->children[j + 2] = new_internal_node->children[j + 1];
 			new_internal_node->set_key(j + 1, new_internal_node->get_key(j));
 			--j;
 		}
-		new_internal_node->children[i + 1] = child_node_bundle.new_right_node.Index();
-		new_internal_node->set_key(i, child_node_bundle.new_key.Index());
+		new_internal_node->children[key_index + 1] = child_node_bundle.new_right_node.Index();
+		new_internal_node->set_key(key_index, child_node_bundle.new_key.Index());
 		new_internal_node->increment_num_keys();
 	}
 	// No split occurred so nothing to return.
@@ -757,21 +768,16 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 	new_root->set_version(new_header->version);
 
 	// Find the child node where the key should be deleted.
-	auto it = std::lower_bound(new_root->base.keys.begin(), new_root->base.keys.begin() + new_root->num_keys(), key,
-		[this](size_t lhs, const KeyType& rhs) {
-			return *blob_store_.Get<KeyType>(lhs) < rhs;
-		});
-
-	size_t i = std::distance(new_root->base.keys.begin(), it);
-	BlobStoreObject<const KeyType> current_key = i < new_root->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+	size_t key_index = 0;
+	BlobStoreObject<const KeyType> key_found = new_root->Search(&blob_store_, key, &key_index);
 
 	BlobStoreObject<const ValueType> deleted;
 	BlobStoreObject<BaseNode> new_root_base = new_root.To<BaseNode>();
-	if (i < new_root->num_keys() && key == *current_key) {
-		deleted = Delete(new_header->version, &new_root_base, i + 1, key);
+	if (key_index < new_root->num_keys() && key == *key_found) {
+		deleted = Delete(new_header->version, &new_root_base, key_index + 1, key);
 	}
 	else {
-		deleted = Delete(new_header->version, &new_root_base, i, key);
+		deleted = Delete(new_header->version, &new_root_base, key_index, key);
 	}
 	new_header->root_index = new_root_base.Index();
 	if (old_header.CompareAndSwap(new_header)) {
@@ -784,22 +790,17 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
-	auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.begin() + node->num_keys(), key,
-		[this](size_t lhs, const KeyType& rhs) {
-			return *blob_store_.Get<KeyType>(lhs) < rhs;
-		});
+	size_t key_index = 0;
+	BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
-	if (it == node->base.keys.end() || key != *blob_store_.Get<KeyType>(*it)) {
-		// Key not found
+	if (!key_found) {
 		return BlobStoreObject<const ValueType>();
 	}
-	
-	size_t i = std::distance(node->base.keys.begin(), it);
 
-	auto deleted_value = GetValue(node, i);
+	auto deleted_value = GetValue(node, key_index);
 
 	// Shift keys and values to fill the gap
-	for (int j = i + 1; j < node->num_keys(); j++) {
+	for (int j = key_index + 1; j < node->num_keys(); j++) {
 		node->set_key(j - 1, node->get_key(j));
 		node->values[j - 1] = node->values[j];
 	}
@@ -810,43 +811,32 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key) {
-	auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.begin() + node->num_keys(), key,
-		[this](size_t lhs, const KeyType& rhs) {
-			return *blob_store_.Get<KeyType>(lhs) < rhs;
-		});
-
-	size_t i = std::distance(node->base.keys.begin(), it);
-	BlobStoreObject<const KeyType> current_key = i < node->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
+	size_t key_index = 0;
+	BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
 	BlobStoreObject<BaseNode> internal_node_base = node.To<BaseNode>();
 
 	// We found the first key larger or equal to the node we're looking for.
 	// Case 1: key == *current_key: we need to delete the key.
-	if (i < node->num_keys() && key == *current_key) {
+	if (key_index < node->num_keys() && key == *key_found) {
 		// The key/value pair is in the right child. Recurse down
 		// to delete the key/value pair first.
-		auto deleted_value = Delete(node->get_version(), &internal_node_base, i + 1, key);
+		auto deleted_value = Delete(node->get_version(), &internal_node_base, key_index + 1, key);
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
+		size_t key_index = 0;
+		BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
-		auto it = std::lower_bound(node->base.keys.begin(), node->base.keys.begin() + node->num_keys(), key,
-			[this](size_t lhs, const KeyType& rhs) {
-				return *blob_store_.Get<KeyType>(lhs) < rhs;
-			});
-
-		size_t i = std::distance(node->base.keys.begin(), it);
-		BlobStoreObject<const KeyType> current_key = i < node->num_keys() ? blob_store_.Get<KeyType>(*it) : BlobStoreObject<const KeyType>();
-
-		if (i < node->num_keys() && key == *current_key) {
+		if (key_index < node->num_keys() && key == *key_found) {
 			// Can there ever be a null successor? That means there is no successor at all.
 			// That shouldn't happen I think.
 			auto key_ptr = GetSuccessorKey(node.To<const BaseNode>(), key);
-			node->set_key(i, key_ptr.Index());
+			node->set_key(key_index, key_ptr.Index());
 		}
 		return deleted_value;
 	}
 	// Delete at the left child if the current key is larger.
-	return Delete(node->get_version(), &internal_node_base, i, key);
+	return Delete(node->get_version(), &internal_node_base, key_index, key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
@@ -1011,16 +1001,9 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetPredeces
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
 	if (node->is_leaf()) {
-		auto it = std::lower_bound(node->keys.begin(), node->keys.begin() + node->num_keys(), key,
-			[this](size_t lhs, const KeyType& rhs) {
-				return *blob_store_.Get<KeyType>(lhs) < rhs;
-			});
-
-		size_t i = std::distance(node->keys.begin(), it);
-		if (i < node->num_keys()) {
-			return blob_store_.Get<KeyType>(*it);
-		}
-		return BlobStoreObject<const KeyType>();
+		size_t key_index = 0;
+		BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
+		return key_found;
 	}
 	for (int i = 0; i <= node->num_keys(); ++i) {
 		auto internal_node = node.To<InternalNode>();
