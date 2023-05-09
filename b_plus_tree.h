@@ -287,7 +287,7 @@ public:
 	Iterator Search(const KeyType& key);
 
 	bool Insert(const KeyType& key, const ValueType& value);
-	bool Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value);
+	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
 
 	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
 
@@ -374,10 +374,10 @@ public:
 				BlobStoreObject<InternalNode> internal_node = node_with_level.node.To<InternalNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Internal node (n = " << internal_node->num_keys() << ") ";
 				for (size_t i = 0; i < internal_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<KeyType>(&blob_store_, internal_node->keys[i]) << " ";
+					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, internal_node->keys[i]) << " ";
 				}
 				for (int i = internal_node->num_keys(); i >= 0; --i) {
-					v.push_back({ BlobStoreObject<BaseNode>(&blob_store_, internal_node->children[i]), node_with_level.level + 1 });
+					v.push_back({ BlobStoreObject<const BaseNode>(&blob_store_, internal_node->children[i]), node_with_level.level + 1 });
 				}
 				std::cout << std::endl;
 			}
@@ -385,7 +385,7 @@ public:
 				BlobStoreObject<LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Leaf node (n = " << leaf_node->num_keys() << ") ";
 				for (size_t i = 0; i < leaf_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<KeyType>(&blob_store_, leaf_node->keys[i]) << " ";
+					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, leaf_node->keys[i]) << " ";
 				}
 				std::cout << std::endl;
 			}
@@ -478,15 +478,15 @@ private:
 	typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::LeafNode>::value,
 		InsertionBundle>::type InsertIntoLeaf(size_t version, BlobStoreObject<U> node,
-			BlobStoreObject<KeyType> key,
-			BlobStoreObject<ValueType> value);
+			BlobStoreObject<const KeyType> key,
+			BlobStoreObject<const ValueType> value);
 
 	// Insert new_key and new_child into node with the assumption that node is not full.
 	void InsertKeyChildIntoInternalNode(BlobStoreObject<InternalNode> node,
 		BlobStoreObject<const KeyType> new_key,
 		BlobStoreObject<BaseNode> new_child);
 
-	InsertionBundle Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
+	InsertionBundle Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
 
 	BlobStoreObject<const ValueType> Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
 	BlobStoreObject<const ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
@@ -522,11 +522,11 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const Valu
 	BlobStoreObject<KeyType> key_ptr = blob_store_.New<KeyType>(key);
 	BlobStoreObject<ValueType> value_ptr = blob_store_.New<ValueType>(value);
 
-	return Insert(std::move(key_ptr), std::move(value_ptr));
+	return Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value) {
+bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
 	++new_header->version;
@@ -630,7 +630,7 @@ template<typename U>
 typename std::enable_if<
 	std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::LeafNode>::value,
 	typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle>::type
-	BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(size_t version, BlobStoreObject<U> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
+	BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(size_t version, BlobStoreObject<U> node, BlobStoreObject<const KeyType> key, BlobStoreObject <const ValueType> value) {
 	BlobStoreObject<LeafNode> new_left_node = node.GetMutableOrClone();
 	new_left_node->set_version(version);
 	if (new_left_node->is_full()) {
@@ -682,7 +682,7 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject <ValueType> value) {
+typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<const KeyType> key, BlobStoreObject <const ValueType> value) {
 	if (node->is_leaf()) {
 		return InsertIntoLeaf(version, node.To<LeafNode>(), std::move(key), std::move(value));
 	}
