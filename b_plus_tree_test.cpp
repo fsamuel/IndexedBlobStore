@@ -46,10 +46,10 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 		EXPECT_EQ(value, i * 100);
 	}
     for (int i = 0; i < 100; i++) {
-		KeyValuePair<int, int> deleted;
+		BlobStoreObject<const int> deleted;
 		bool success = tree.Delete(i, &deleted);
 		EXPECT_TRUE(success);
-		EXPECT_EQ(*deleted.first, i);
+		EXPECT_EQ(*deleted, i*100);
 		auto it = tree.Search(i);
 		if (it.GetKey() != nullptr) {
 			EXPECT_GT(*it.GetKey(), i);
@@ -83,10 +83,10 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		while (inserted.count(val) == 0) {
 			val = rand() %20;
 		}
-		KeyValuePair<int, int> deleted;
+		BlobStoreObject<const int> deleted;
 		bool success = tree.Delete(val, &deleted);
 		EXPECT_TRUE(success);
-		EXPECT_EQ(*deleted.first, val);
+		EXPECT_EQ(*deleted, val*100);
 		inserted.erase(val);
 	}
 	tree.PrintTree(21);
@@ -157,11 +157,11 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
 		int val = rand() % 100;
 		while (deleted.count(val) > 0) {
 			val = rand() % 100;
-			KeyValuePair<int, int> deleted_kv_pair;
-			bool success = tree.Delete(i, &deleted_kv_pair);
+			BlobStoreObject<const int> deleted_value;
+			bool success = tree.Delete(i, &deleted_value);
 			EXPECT_TRUE(success);
-			EXPECT_EQ(*deleted_kv_pair.first, i);
-			std::cout << "Deleted " << i << " key: " << *deleted_kv_pair.first << ", value: " << *deleted_kv_pair.second << std::endl;
+			EXPECT_EQ(*deleted_value, i * 100);
+			std::cout << "Deleted key: " << i << ", value: " << *deleted_value << std::endl;
 			deleted.insert(i);
 		}
 	}
@@ -186,11 +186,10 @@ TEST_F(BPlusTreeTest, DeleteNonExistentKey) {
 	for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
-	KeyValuePair<int, int> deleted;
+	BlobStoreObject<const int> deleted;
 	bool success = tree.Delete(1000, &deleted);
 	EXPECT_TRUE(success);
-	EXPECT_EQ(deleted.first, nullptr);
-	EXPECT_EQ(deleted.second, nullptr);
+	EXPECT_EQ(deleted, nullptr);
 }
 
 // If a key isn't in the tree, the search operation should return an iterator

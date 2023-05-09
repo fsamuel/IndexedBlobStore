@@ -272,7 +272,7 @@ public:
 	bool Insert(const KeyType& key, const ValueType& value);
 	bool Insert(BlobStoreObject<KeyType>&& key, BlobStoreObject<ValueType>&& value);
 
-	bool Delete(const KeyType& key, KeyValuePair<KeyType, ValueType>* deleted);
+	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
 
 	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
 	void PrintNode(BlobStoreObject<const InternalNode> node) {
@@ -471,9 +471,9 @@ private:
 
 	InsertionBundle Insert(size_t version, BlobStoreObject<const BaseNode> node, BlobStoreObject<KeyType> key, BlobStoreObject<ValueType> value);
 
-	KeyValuePair<KeyType, ValueType> Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
-	KeyValuePair<KeyType, ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
-	KeyValuePair<KeyType, ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
+	BlobStoreObject<const ValueType> Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
+	BlobStoreObject<const ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
+	BlobStoreObject<const ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
 
 	bool TryToBorrowFromLeftSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling);
 	bool TryToBorrowFromRightSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling);
@@ -733,10 +733,10 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, KeyValuePair<KeyType, ValueType>* deleted) {
+bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value) {
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	if (old_header->root_index == BlobStore::InvalidIndex) {
-		*deleted =  std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
+		*deleted_value =  BlobStoreObject<const ValueType>();
 		return false;
 	}
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
@@ -748,13 +748,13 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, KeyValuePa
 		// If the root is a leaf node, then we can just delete the key from the leaf node.
 		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode, LeafNode>();
 		new_root->set_version(new_header->version);
-		auto kv = DeleteFromLeafNode(new_root, key);
+		auto deleted = DeleteFromLeafNode(new_root, key);
 		new_header->root_index = new_root.Index();
 		if (old_header.CompareAndSwap(new_header)) {
-			*deleted = kv;
+			*deleted_value = deleted;
 			return true;
 		}
-		*deleted = std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
+		*deleted_value = BlobStoreObject<const ValueType>();
 		return false;
 	}
 	// If the root is an internal node, then we need to find the leaf node where the key is located.
@@ -771,35 +771,36 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, KeyValuePa
 		}
 		i += 1;
 	}
-	std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>> kv;
+	BlobStoreObject<const ValueType> deleted;
 	BlobStoreObject<BaseNode> new_root_base = new_root.To<BaseNode>();
 	if (i < new_root->num_keys() && key == *current_key) {
-		kv = Delete(new_header->version, &new_root_base, i + 1, key);
+		deleted = Delete(new_header->version, &new_root_base, i + 1, key);
 	}
 	else {
-		kv = Delete(new_header->version, &new_root_base, i, key);
+		deleted = Delete(new_header->version, &new_root_base, i, key);
 	}
 	new_header->root_index = new_root_base.Index();
 	if (old_header.CompareAndSwap(new_header)) {
-		*deleted = kv;
+		*deleted_value = deleted;
 		return true;
 	}
-	*deleted = std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>());
+	*deleted_value = BlobStoreObject<const ValueType>();
 	return false;
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
 	int i = 0;
 	while (i < node->num_keys() && key != *GetKey(node, i)) {
 		i += 1;
 	}
 
 	if (i == node->num_keys()) {
-		return std::make_pair(BlobStoreObject<const KeyType>(), BlobStoreObject<const ValueType>()); // Key not found
+		// Key not found
+		return BlobStoreObject<const ValueType>();
 	}
 
-	auto kv = std::make_pair(GetKey(node, i), GetValue(node, i));
+	auto deleted_value = GetValue(node, i);
 
 	// Shift keys and values to fill the gap
 	for (int j = i + 1; j < node->num_keys(); j++) {
@@ -808,11 +809,11 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 	}
 	node->decrement_num_keys();
 
-	return kv; // Key successfully removed
+	return deleted_value; // Key successfully removed
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key) {
 	int i = 0;
 	BlobStoreObject<const KeyType> current_key;
 	while (i < node->num_keys()) {
@@ -829,7 +830,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 	if (i < node->num_keys() && key == *current_key) {
 		// The key/value pair is in the right child. Recurse down
 		// to delete the key/value pair first.
-		auto kv = Delete(node->get_version(),  &internal_node_base, i + 1, key);
+		auto deleted_value = Delete(node->get_version(),  &internal_node_base, i + 1, key);
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
 		BlobStoreObject<const KeyType> current_key;
@@ -846,7 +847,7 @@ KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 			auto key_ptr = GetSuccessorKey(node.To<const BaseNode>(), key);
 			node->set_key(i, key_ptr.Index());
 		}
-		return kv;
+		return deleted_value;
 	}
 	// Delete at the left child if the current key is larger.
 	return Delete(node->get_version(), &internal_node_base, i, key);
@@ -980,7 +981,7 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-KeyValuePair<KeyType, ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
 	BlobStoreObject<InternalNode> parent_internal_node = parent_node->To<InternalNode>();
 	BlobStoreObject<const BaseNode> const_child = GetChildConst(parent_internal_node, child_index);
 	BlobStoreObject<BaseNode> child;
