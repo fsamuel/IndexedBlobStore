@@ -66,7 +66,7 @@ private:
 
 		// Returns whether the node has the minimum number of keys it can hold.
 		bool will_underflow() const { return n == (Order - 1) / 2; }
-		
+
 		// Returns the number of keys in the node.
 		size_t num_keys() const { return n; }
 
@@ -243,7 +243,7 @@ public:
 					++child_index;
 				}
 				// Follow the rightmost child of the parent node to find the next element
-				BlobStoreObject<const BaseNode> next_node = store_->Get<BaseNode>(parent_node->children[child_index+1]);
+				BlobStoreObject<const BaseNode> next_node = store_->Get<BaseNode>(parent_node->children[child_index + 1]);
 				while (next_node->type != NodeType::LEAF) {
 					path_to_root_.push_back(next_node.Index());
 					next_node = store_->Get<BaseNode>(next_node.To<InternalNode>()->children[0]);
@@ -479,8 +479,8 @@ private:
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 
 	void MergeInternalNodes(BlobStoreObject<InternalNode> left_child,
-	                        BlobStoreObject<const InternalNode> right_child,
-		                    size_t parent_key);
+		BlobStoreObject<const InternalNode> right_child,
+		size_t parent_key);
 	void MergeLeafNodes(BlobStoreObject<LeafNode> left_child, BlobStoreObject<const LeafNode> right_child);
 	void MergeChildWithLeftOrRightSibling(
 		size_t version,
@@ -733,7 +733,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value) {
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	if (old_header->root_index == BlobStore::InvalidIndex) {
-		*deleted_value =  BlobStoreObject<const ValueType>();
+		*deleted_value = BlobStoreObject<const ValueType>();
 		return false;
 	}
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
@@ -827,7 +827,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 	if (i < node->num_keys() && key == *current_key) {
 		// The key/value pair is in the right child. Recurse down
 		// to delete the key/value pair first.
-		auto deleted_value = Delete(node->get_version(),  &internal_node_base, i + 1, key);
+		auto deleted_value = Delete(node->get_version(), &internal_node_base, i + 1, key);
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
 		BlobStoreObject<const KeyType> current_key;
@@ -993,7 +993,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 		// If we end up merging nodes, we might remove a key from the parent which is why the child
 		// must be rebalanced before the recursive calls below.
 		RebalanceChildWithLeftOrRightSibling(version, parent_internal_node, child_index, const_child, &child);
-		
+
 		// TODO(fsamuel): This shouldn't happen here. This should happen at the first call.
 		if (parent_internal_node->num_keys() == 0) {
 			// The root node is empty, so make the left child the new root node
@@ -1096,7 +1096,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	size_t version, BlobStoreObject<InternalNode> parent, int child_index, BlobStoreObject<const BaseNode> child, BlobStoreObject<BaseNode>* out_child) {
 	BlobStoreObject<BaseNode> left_child;
 	BlobStoreObject<const BaseNode> right_child;
-	int key_index_in_parent;  
+	int key_index_in_parent;
 	if (child_index < parent->num_keys()) {
 		key_index_in_parent = child_index;
 		right_child = GetChildConst(parent, child_index + 1);
@@ -1132,8 +1132,8 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	}
 	else {
 		MergeInternalNodes(
-			left_child.To<InternalNode>(), 
-			right_child.To<const InternalNode>(), 
+			left_child.To<InternalNode>(),
+			right_child.To<const InternalNode>(),
 			parent->get_key(key_index_in_parent));
 	}
 
@@ -1157,12 +1157,12 @@ void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
 	if (TryToBorrowFromLeftSibling(version, parent, left_sibling, child, child_index, new_child)) {
 		return;
 	}
-	
+
 	BlobStoreObject<const BaseNode> right_sibling = (child_index + 1) <= parent->num_keys() ? GetChildConst(parent, child_index + 1) : BlobStoreObject<const BaseNode>();
 	if (TryToBorrowFromRightSibling(version, parent, child, right_sibling, child_index, new_child)) {
 		return;
 	}
-	
+
 	MergeChildWithLeftOrRightSibling(version, parent, child_index, child, new_child);
 }
 
