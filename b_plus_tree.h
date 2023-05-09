@@ -856,16 +856,8 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(size_t ver
 		return false;
 	}
 
-	BlobStoreObject<BaseNode> new_left_sibling;
-	BlobStoreObject<BaseNode> new_right_sibling;
-	if (left_sibling->is_leaf()) {
-		new_left_sibling = left_sibling.Clone();
-		new_right_sibling = right_sibling.Clone();
-	}
-	else {
-		new_left_sibling = left_sibling.Clone();
-		new_right_sibling = right_sibling.Clone();
-	}
+	BlobStoreObject<BaseNode> new_left_sibling = left_sibling.Clone();
+	BlobStoreObject<BaseNode> new_right_sibling = right_sibling.Clone();
 	new_left_sibling->set_version(version);
 	new_right_sibling->set_version(version);
 
@@ -918,16 +910,8 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 		return false;
 	}
 
-	BlobStoreObject<BaseNode> new_left_sibling;
-	BlobStoreObject<BaseNode> new_right_sibling;
-	if (right_sibling->is_leaf()) {
-		new_left_sibling = left_sibling.Clone();
-		new_right_sibling = right_sibling.Clone();
-	}
-	else {
-		new_left_sibling = left_sibling.Clone();
-		new_right_sibling = right_sibling.Clone();
-	}
+	BlobStoreObject<BaseNode> new_left_sibling = left_sibling.Clone();
+	BlobStoreObject<BaseNode> new_right_sibling = right_sibling.Clone();
 	new_left_sibling->set_version(version);
 	new_right_sibling->set_version(version);
 	parent_node->children[child_index] = new_left_sibling.Index();
@@ -1003,13 +987,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 		}
 	}
 	else {
-		if (const_child->is_leaf()) {
-			// This is an abbreviation for clone the object as a leaf node and then cast it to a base node.
-			child = const_child.Clone();
-		}
-		else {
-			child = const_child.Clone();
-		}
+		child = const_child.Clone();
 		parent_internal_node->children[child_index] = child.Index();
 	}
 	child->set_version(version);
@@ -1099,13 +1077,8 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	int key_index_in_parent;
 	if (child_index < parent->num_keys()) {
 		key_index_in_parent = child_index;
+		left_child = child.Clone();
 		right_child = GetChildConst(parent, child_index + 1);
-		if (child->is_leaf()) {
-			left_child = child.Clone();
-		}
-		else {
-			left_child = child.Clone();
-		}
 		left_child->set_version(version);
 		*out_child = left_child;
 		parent->children[child_index] = left_child.Index();
@@ -1113,13 +1086,8 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	else {
 		key_index_in_parent = child_index - 1;
 		BlobStoreObject<const BaseNode> const_left_child = GetChildConst(parent, child_index - 1);
+		left_child = const_left_child.Clone();
 		right_child = child;
-		if (const_left_child->is_leaf()) {
-			left_child = const_left_child.Clone();
-		}
-		else {
-			left_child = const_left_child.Clone();
-		}
 		left_child->set_version(version);
 		parent->children[child_index - 1] = left_child.Index();
 		*out_child = left_child;
