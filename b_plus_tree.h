@@ -127,12 +127,11 @@ private:
 	struct LeafNode {
 		BaseNode base;
 		std::array<BlobStore::index_type, Order> values;
-		BlobStore::index_type next;
 
-		LeafNode(BlobStore::index_type next, std::size_t n = 0)
-			: base(NodeType::LEAF, n), next(next) {}
+		LeafNode(std::size_t n = 0)
+			: base(NodeType::LEAF, n) {}
 
-		LeafNode(const LeafNode& other) : base(other.base), values(other.values), next(other.next) {}
+		LeafNode(const LeafNode& other) : base(other.base), values(other.values) {}
 
 		bool is_full() const { return base.is_full(); }
 		bool will_underflow() const { return base.will_underflow(); }
@@ -285,7 +284,7 @@ public:
 			std::cout << "NULL Node" << std::endl;
 			return;
 		}
-		std::cout << "Leaf node (Index = " << node.Index() << ", n = " << node->num_keys() << ", next = " << node->next << ", version = " << node->get_version() << ") ";
+		std::cout << "Leaf node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
 		for (size_t i = 0; i < node->num_keys(); ++i) {
 			std::cout << *GetKey(node, i) << " ";
 		}
@@ -374,7 +373,7 @@ private:
 
 	void CreateRoot() {
 		auto header = blob_store_.New<BPlusTreeHeader>();
-		auto root = blob_store_.New<LeafNode>(BlobStore::InvalidIndex);
+		auto root = blob_store_.New<LeafNode>();
 		header->version = 0;
 		header->root_index = root.Index();
 		header->previous_header = BlobStore::InvalidIndex;
@@ -558,7 +557,7 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 
 template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitLeafNode(BlobStoreObject<LeafNode> left_node) {
-	BlobStoreObject<LeafNode> new_right_node = blob_store_.New<LeafNode>(Order);
+	BlobStoreObject<LeafNode> new_right_node = blob_store_.New<LeafNode>();
 	new_right_node->set_version(left_node->get_version());
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
@@ -575,8 +574,6 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 		new_leaf_node->values[i] = child_leaf_node->values[middle_key_index + i];
 		child_leaf_node->values[middle_key_index + i] = BlobStore::InvalidIndex;
 	}
-	new_leaf_node->next = child_leaf_node->next;
-	child_leaf_node->next = new_right_node.Index();
 	child_leaf_node->values[middle_key_index] = BlobStore::InvalidIndex;
 
 	left_node->set_num_keys(middle_key_index);
@@ -1086,7 +1083,6 @@ void BPlusTree<KeyType, ValueType, Order>::MergeLeafNodes(
 		left_node->values[left_node->num_keys()] = right_node->values[i];
 		left_node->increment_num_keys();
 	}
-	left_node->next = right_node->next;
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
