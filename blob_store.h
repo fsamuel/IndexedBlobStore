@@ -8,7 +8,6 @@
 #include <iostream>
 #include <type_traits>
 
-#include "rwlock.h"
 #include "shared_memory_allocator.h"
 #include "shared_memory_vector.h"
 
@@ -17,6 +16,18 @@ typedef __int64 ssize_t;
 #else
 typedef int ssize_t;
 #endif
+
+constexpr std::int32_t WRITE_LOCK_FLAG = 0x80000000;
+
+namespace {
+	void SpinWait() {
+#if defined(_WIN32)
+		Sleep(0);
+#else
+		std::this_thread::yield();
+#endif
+	}
+}
 
 class BlobStore;
 
@@ -299,16 +310,14 @@ private:
 
 		bool DecrementRefCount() {
 			if (--ref_count_ == 0) {
-				if (lock_ != nullptr) {
-					lock_->unlock();
-				}
+				store_->Unlock(index_);
 				return true;
 			}
 			return false;
 		}
 
 		void DowngradeLock() {
-			lock_->DowngradeWriteToReadLock();
+			store_->DowngradeWriteLock(index_);
 			--ref_count_;
 		}
 
@@ -316,7 +325,6 @@ private:
 		size_t index_;					// Index of the object in the BlobStore
 		size_t offset_;                 // Offset of the object in the shared memory buffer.
 		T* ptr_;						// Pointer to the object
-		std::unique_ptr<RWLock> lock_;	// RWLock for this object.
 		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
 
 	private:
@@ -325,9 +333,6 @@ private:
 		// the BlobStore's GetPointer method.
 		void UpdatePointer() {
 			ptr_ = store_->GetRaw<T>(index_, &offset_);
-			// We need to recreate the lock every time we relocate memory.
-			// TODO(fsamuel): THIS IS A HUGE HACK.
-			lock_ = store_->CreateLock(index_);
 		}
 
 		// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
@@ -346,6 +351,7 @@ private:
 				ptr_ = nullptr;
 			}
 		}
+
 	};
 
 	ControlBlock* control_block_;
@@ -610,14 +616,75 @@ private:
 		return allocator_.ToPtr<T>(metadata_entry.offset);
 	}
 
-	// Creates an RWLock for the object at the specified index.
-	std::unique_ptr<RWLock> CreateLock(size_t index) {
+	// Acquires a read lock for the object at the specified index.
+	bool AcquireReadLock(size_t index) {
 		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
-			return nullptr;
+			return false;
 		}
 		BlobMetadata& metadata_entry = metadata_[index];
-		return std::make_unique<RWLock>(&metadata_entry.lock_state);
+		while (true) {
+			int state = metadata_entry.lock_state.load(std::memory_order_acquire);
+			if (state >= 0) {
+				if (metadata_entry.lock_state.compare_exchange_weak(state, state + 1, std::memory_order_acquire)) {
+					break;
+				}
+			}
+			SpinWait();
+		}
+
+		return true;
 	}
+
+	// Acquires a write lock for the object at the specified index.
+	bool AcquireWriteLock(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return false;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		while (true) {
+			std::int32_t expected = 0;
+			if (metadata_entry.lock_state.compare_exchange_weak(expected, WRITE_LOCK_FLAG, std::memory_order_acquire)) {
+				break;
+			}
+			SpinWait();
+		}
+		return true;
+	}
+
+	// Unlocks the object at the specified index.
+	void Unlock(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		std::int32_t expected;
+
+		while (true) {
+			expected = metadata_entry.lock_state.load();
+			std::int32_t new_state = std::max<int32_t>((expected & ~WRITE_LOCK_FLAG) - 1, 0);
+
+			if (metadata_entry.lock_state.compare_exchange_weak(expected, new_state)) {
+				break;
+			}
+			SpinWait();
+		}
+	}
+
+	// Downgrades a write lock to a read lock at the specified index.
+	void DowngradeWriteLock(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		std::int32_t expected;
+		while (true) {
+			std::int32_t expected = WRITE_LOCK_FLAG;
+			if (metadata_entry.lock_state.compare_exchange_weak(expected, 1)) {
+				break;
+			}
+			SpinWait();
+		}
+	}	
 
 	Allocator allocator_;
 	BlobMetadataAllocator metadata_allocator_;
@@ -665,12 +732,12 @@ BlobStoreObject<T>::BlobStoreObject(BlobStore* store, size_t index) :
 
 template<typename T>
 BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(BlobStore* store, size_t index)
-	: store_(store), index_(index), lock_(store->CreateLock(index)), ref_count_(1) {
+	: store_(store), index_(index), ref_count_(1) {
 	if (std::is_const<T>::value) {
-		lock_->lockRead();
+		store_->AcquireReadLock(index_);
 	}
 	else {
-		lock_->lockWrite();
+		store_->AcquireWriteLock(index_);
 	}
 	if (store_ != nullptr) {
 		store_->AddObserver(this);

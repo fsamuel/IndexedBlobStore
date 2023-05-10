@@ -33,9 +33,6 @@
     <ClInclude Include="b_plus_tree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="rwlock.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -45,9 +42,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="blob_store.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="rwlock.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
