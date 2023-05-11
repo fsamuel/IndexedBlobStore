@@ -275,3 +275,34 @@ TEST_F(BlobStoreTest, BlobStoreObjectClone) {
 	EXPECT_EQ(*ptr2, 1337);
 	EXPECT_NE(*ptr, *ptr2);
 }
+
+// Verify that if we have multiple non-const pointers to the same blob and we downgrade one of them,
+// the newly downgraded pointer will be invalidated.
+TEST_F(BlobStoreTest, BlobStoreObjectDowngradeInvalidates) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<int> ptr = store.New<int>(64);
+	EXPECT_EQ(ptr.GetSize(), sizeof(int));
+	EXPECT_EQ(*ptr, 64);
+	BlobStoreObject<int> ptr2 = ptr;
+	EXPECT_EQ(ptr2.Index(), ptr.Index());
+	EXPECT_EQ(*ptr, *ptr2);
+	BlobStoreObject<const int> ptr3 = std::move(ptr2).Downgrade();
+	EXPECT_EQ(ptr2, nullptr);
+	EXPECT_EQ(ptr3, nullptr);
+}
+
+// Tests upgrading a const BlobStoreObject to non-const. Also tests that if we have multiple
+// const pointers to the same blob and we upgrade one of them, the newly upgraded pointer will
+// be invalidated.
+TEST_F(BlobStoreTest, BlobStoreObjectUpgradeInvalidates) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<const int> ptr = store.New<int>(64).Downgrade();
+	EXPECT_EQ(ptr.GetSize(), sizeof(int));
+	EXPECT_EQ(*ptr, 64);
+	BlobStoreObject<const int> ptr2 = ptr;
+	EXPECT_EQ(ptr2.Index(), ptr.Index());
+	EXPECT_EQ(*ptr, *ptr2);
+	BlobStoreObject<int> ptr3 = std::move(ptr2).Upgrade();
+	EXPECT_EQ(ptr2, nullptr);
+	EXPECT_EQ(ptr3, nullptr);
+}

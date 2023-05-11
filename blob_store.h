@@ -198,10 +198,27 @@ public:
 	BlobStoreObject<const T> Downgrade()&& {
 		ControlBlock* control_block = control_block_;
 		control_block_ = nullptr;
-		if (control_block != nullptr) {
-			control_block->DowngradeLock();
+		// We should only return a BlobStoreObject<const T> cast of this control_block if it has a refcount of 1.
+		// Otherwise, we should return a nullptr BlobStoreObject<const T>.
+		if (control_block == nullptr || control_block->ref_count_ != 1) {
+			return BlobStoreObject<const T>();
 		}
+		control_block->DowngradeLock();
 		return BlobStoreObject<const T>(reinterpret_cast<BlobStoreObject<const T>::ControlBlock*>(control_block));
+	}
+
+	// Upgrades a const T BlobStoreObject to a non-const T BlobStoreObject.
+	// This is only valid if the BlobStoreObject is the only owner of the Blob.
+	BlobStoreObject<non_const_T> Upgrade()&& {
+		ControlBlock* control_block = control_block_;
+		control_block_ = nullptr;
+		// We should only return a BlobStoreObject<non_const_T> cast of this control_block if it has a refcount of 1.
+		// Otherwise, we should return a nullptr BlobStoreObject<non_const_T>.
+		if (control_block == nullptr || control_block->ref_count_ != 1) {
+			return BlobStoreObject<non_const_T>();
+		}
+		control_block->UpgradeLock();
+		return BlobStoreObject<non_const_T>(reinterpret_cast<BlobStoreObject<non_const_T>::ControlBlock*>(control_block));
 	}
 
 	BlobStoreObject& operator=(const BlobStoreObject& other) {
@@ -318,6 +335,11 @@ private:
 
 		void DowngradeLock() {
 			store_->DowngradeWriteLock(index_);
+			--ref_count_;
+		}
+
+		void UpgradeLock() {
+			store_->UpgradeReadLock(index_);
 			--ref_count_;
 		}
 
@@ -684,7 +706,24 @@ private:
 			}
 			SpinWait();
 		}
-	}	
+	}
+
+	// Upgrades a read lock to a write lock at the specified index.
+	// Note that this is dangerous and should only be used when the caller knows that no other thread is holding a read lock.
+	void UpgradeReadLock(size_t index) {
+		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+			return;
+		}
+		BlobMetadata& metadata_entry = metadata_[index];
+		std::int32_t expected;
+		while (true) {
+			std::int32_t expected = 1;
+			if (metadata_entry.lock_state.compare_exchange_weak(expected, WRITE_LOCK_FLAG)) {
+				break;
+			}
+			SpinWait();
+		}
+	}
 
 	Allocator allocator_;
 	BlobMetadataAllocator metadata_allocator_;

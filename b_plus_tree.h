@@ -290,6 +290,7 @@ public:
 	// or there was a conflicting operation in progress.
 	bool Insert(const KeyType& key, const ValueType& value);
 	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
+	void Insert(BlobStoreObject<BPlusTreeHeader> header, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
 
 	// Deletes a key-value pair from the tree. Returns true if the operation was successful, false if there was a conflicting operation in progress.
 	// If deleted_value is not null, the deleted value is stored in deleted_value.
@@ -344,7 +345,6 @@ public:
 			      << ")"
 			      << std::endl;
 	}
-
 
 	// Prints the tree in a human-readable format in breadth-first order.
 	void PrintTree(size_t version) {
@@ -562,11 +562,21 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const Valu
 
 template<typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
+	// Create Transaction.
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
 	++new_header->version;
 	new_header->previous_header = new_header.Index();
-	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(old_header->root_index);
+
+	Insert(new_header, std::move(key), std::move(value));
+
+	// Commit Transaction.
+	return old_header.CompareAndSwap(new_header);
+}
+
+template<typename KeyType, typename ValueType, size_t Order>
+void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<BPlusTreeHeader> new_header, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
+	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	InsertionBundle bundle = Insert(new_header->version, root, key, value);
 	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = blob_store_.New<InternalNode>(1);
@@ -580,7 +590,6 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType>
 	else {
 		new_header->root_index = bundle.new_left_node.Index();
 	}
-	return old_header.CompareAndSwap(new_header);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
