@@ -183,6 +183,33 @@ private:
 
 public:
 	using offset_type = std::ptrdiff_t;
+	friend class Transaction;
+	class Transaction {
+	public:
+		explicit Transaction(BPlusTree* tree) :
+			tree_(tree) {
+			old_header_ = tree_->blob_store_.Get<BPlusTreeHeader>(1);
+			new_header_ = old_header_.Clone();
+			++new_header_->version;
+			new_header_->previous_header = new_header_.Index();
+		}
+
+		void Insert(const KeyType& key, const ValueType& value) {
+			BlobStoreObject<KeyType> key_ptr = tree_->blob_store_.New<KeyType>(key);
+			BlobStoreObject<ValueType> value_ptr = tree_->blob_store_.New<ValueType>(value);
+			tree_->Insert(new_header_, std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
+		}
+
+
+		bool Commit() && {
+			return old_header_.CompareAndSwap(new_header_);
+		}
+
+	private:
+		BPlusTree* tree_;
+		BlobStoreObject<const BPlusTreeHeader> old_header_;
+		BlobStoreObject<BPlusTreeHeader> new_header_;
+	};
 
 	// Iterator class for BPlusTree
 	class Iterator {
@@ -282,6 +309,10 @@ public:
 		if (blob_store_.IsEmpty()) {
 			CreateRoot();
 		}
+	}
+
+	Transaction CreateTransaction() {
+		return Transaction(this);
 	}
 
 	// Returns an iterator to the first element greater than or equal to key.

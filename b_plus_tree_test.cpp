@@ -215,3 +215,27 @@ TEST_F(BPlusTreeTest, SearchNonExistentKey) {
 		}
 	}
 }
+
+// Inserts 50 elements into a B+ tree. Creates a transaction and inserts
+// 50 more elements into the tree through the transaction. Verifies that
+// all 100 elements are in the tree.
+TEST_F(BPlusTreeTest, TransactionInsertion) {
+	BPlusTree<int, int, 4> tree(*blob_store);
+	for (int i = 0; i < 50; i++) {
+		tree.Insert(i, i * 100);
+	}
+	auto txn = tree.CreateTransaction();
+	for (int i = 50; i < 100; i++) {
+		txn.Insert(i, i * 100);
+	}
+	tree.PrintTree(1000);
+	std::move(txn).Commit();
+	tree.PrintTree(1000);
+	for (int i = 0; i < 100; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+}
