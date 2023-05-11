@@ -31,9 +31,53 @@ struct InsertionBundle {
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
 private:
+	enum class OperationType : uint8_t { INSERT_OP, DELETE_OP, UPDATE_OP, CREATE_OP };
+	static constexpr std::string OperationTypeToString(OperationType type) {
+		switch (type) {
+			case OperationType::INSERT_OP:
+				return "Insert";
+			case OperationType::DELETE_OP:
+				return "Delete";
+			case OperationType::UPDATE_OP:
+				return "Update";
+			case OperationType::CREATE_OP:
+				return "Create";
+		}
+	}
+	struct Operation {
+		// The type of operation.
+		OperationType type;
+		// The index of the key to be inserted/deleted/updated.
+		BlobStore::index_type key;
+		// The value to be inserted/updated.
+		BlobStore::index_type value;
+		Operation(OperationType type, BlobStore::index_type key, BlobStore::index_type value) :
+			type(type), key(key), value(value) {}
+		Operation(): type(OperationType::CREATE_OP), key(BlobStore::InvalidIndex), value(BlobStore::InvalidIndex) {}
+
+		std::string ToString(BlobStore* store) const {
+			std::stringstream ss;
+			ss << OperationTypeToString(type);
+			if (key != BlobStore::InvalidIndex) {
+				ss << "(key = \"" << *store->Get<KeyType>(key) << "\"";
+				if (value != BlobStore::InvalidIndex) {
+					ss << ", value = \"" << *store->Get<ValueType>(value) << "\"";
+				}
+				ss << ")";
+			}
+			return ss.str();
+		}
+	};
+
+
 	struct BPlusTreeHeader {
+		// The version of the tree.
 		size_t version;
+		// The index of the root node.
 		BlobStore::index_type root_index;
+		// The operation performed on the tree at this version.
+		Operation operation;
+		// The index of the previous header.
 		BlobStore::index_type previous_header;
 	};
 	enum class NodeType : uint8_t { INTERNAL, LEAF };
@@ -327,6 +371,15 @@ public:
 		return PrintNode(node.To<LeafNode>());
 	}
 
+	void PrintNode(BlobStoreObject<const BPlusTreeHeader> node) {
+		if (node == nullptr) {
+			std::cout << "NULL Header" << std::endl;
+			return;
+		}
+		std::cout << "Header (Operation(" << node->operation.ToString(&blob_store_) << ") Index = " << node.Index() << ", root = " << node->root_index << ", version = " << node->version << ")" << std::endl;
+	}
+
+
 	// Prints the tree in a human-readable format in breadth-first order.
 	void PrintTree(size_t version) {
 		struct NodeWithLevel {
@@ -338,7 +391,8 @@ public:
 		while (header->previous_header != BlobStore::InvalidIndex && header->version > version) {
 			header = blob_store_.Get<BPlusTreeHeader>(header->previous_header);
 		}
-		queue.push({ blob_store_.Get<BaseNode>(header->root_index), 0 });
+		PrintNode(header);
+		queue.push({ blob_store_.Get<BaseNode>(header->root_index), 1 });
 		while (!queue.empty()) {
 			NodeWithLevel node_with_level = queue.front();
 			queue.pop();
@@ -530,6 +584,9 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType>
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
 	++new_header->version;
+	new_header->operation.type = OperationType::INSERT_OP;
+	new_header->operation.key = key.Index();
+	new_header->operation.value = value.Index();
 	new_header->previous_header = new_header.Index();
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(old_header->root_index);
 	InsertionBundle bundle = Insert(new_header->version, root, key, value);
@@ -748,6 +805,7 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
 	++new_header->version;
 	new_header->previous_header = new_header.Index();
+	new_header->operation.type = OperationType::DELETE_OP;
 
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	if (root->is_leaf()) {
@@ -780,6 +838,9 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 		deleted = Delete(new_header->version, &new_root_base, key_index, key);
 	}
 	new_header->root_index = new_root_base.Index();
+	if (deleted != nullptr) {
+		new_header->operation.value = deleted.Index();
+	}
 	if (old_header.CompareAndSwap(new_header)) {
 		*deleted_value = deleted;
 		return true;
