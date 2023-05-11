@@ -229,6 +229,16 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 		txn.Insert(i, i * 100);
 	}
 	tree.PrintTree(1000);
+	// Search for 75 inside the transaction to find it, see it's the correct value and outside to
+	// verify that it's not there.
+	auto it = txn.Search(75);
+	EXPECT_NE(it.GetKey(), nullptr);
+	EXPECT_EQ(*it.GetKey(), 75);
+	EXPECT_EQ(*it.GetValue(), 7500);
+	it = tree.Search(75);
+	EXPECT_EQ(it.GetKey(), nullptr);
+	EXPECT_EQ(it.GetValue(), nullptr);
+	// Commit the transaction and verify that all 100 elements are in the tree.
 	std::move(txn).Commit();
 	tree.PrintTree(1000);
 	for (int i = 0; i < 100; i++) {

@@ -183,33 +183,6 @@ private:
 
 public:
 	using offset_type = std::ptrdiff_t;
-	friend class Transaction;
-	class Transaction {
-	public:
-		explicit Transaction(BPlusTree* tree) :
-			tree_(tree) {
-			old_header_ = tree_->blob_store_.Get<BPlusTreeHeader>(1);
-			new_header_ = old_header_.Clone();
-			++new_header_->version;
-			new_header_->previous_header = new_header_.Index();
-		}
-
-		void Insert(const KeyType& key, const ValueType& value) {
-			BlobStoreObject<KeyType> key_ptr = tree_->blob_store_.New<KeyType>(key);
-			BlobStoreObject<ValueType> value_ptr = tree_->blob_store_.New<ValueType>(value);
-			tree_->Insert(new_header_, std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
-		}
-
-
-		bool Commit() && {
-			return old_header_.CompareAndSwap(new_header_);
-		}
-
-	private:
-		BPlusTree* tree_;
-		BlobStoreObject<const BPlusTreeHeader> old_header_;
-		BlobStoreObject<BPlusTreeHeader> new_header_;
-	};
 
 	// Iterator class for BPlusTree
 	class Iterator {
@@ -305,6 +278,41 @@ public:
 		size_t key_index_;
 	};
 
+	friend class Transaction;
+	class Transaction {
+	public:
+		explicit Transaction(BPlusTree* tree) :
+			tree_(tree) {
+			old_header_ = tree_->blob_store_.Get<BPlusTreeHeader>(1);
+			new_header_ = old_header_.Clone();
+			++new_header_->version;
+			new_header_->previous_header = new_header_.Index();
+		}
+
+		void Insert(const KeyType& key, const ValueType& value) {
+			BlobStoreObject<KeyType> key_ptr = tree_->blob_store_.New<KeyType>(key);
+			BlobStoreObject<ValueType> value_ptr = tree_->blob_store_.New<ValueType>(value);
+			Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
+		}
+
+		void Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
+			tree_->Insert(new_header_, std::move(key), std::move(value));
+		}
+
+		Iterator Search(const KeyType& key) {
+			return tree_->Search(new_header_, key);
+		}
+
+		bool Commit()&& {
+			return old_header_.CompareAndSwap(new_header_);
+		}
+
+	private:
+		BPlusTree* tree_;
+		BlobStoreObject<const BPlusTreeHeader> old_header_;
+		BlobStoreObject<BPlusTreeHeader> new_header_;
+	};
+
 	BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
 		if (blob_store_.IsEmpty()) {
 			CreateRoot();
@@ -317,6 +325,7 @@ public:
 
 	// Returns an iterator to the first element greater than or equal to key.
 	Iterator Search(const KeyType& key);
+	Iterator Search(BlobStoreObject<BPlusTreeHeader> new_header, const KeyType& key);
 
 	// Inserts a key-value pair into the tree. Returns true if the key-value pair was inserted, false if the key already existed in the tree
 	// or there was a conflicting operation in progress.
@@ -597,16 +606,9 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const Valu
 
 template<typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
-	// Create Transaction.
-	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
-	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
-	++new_header->version;
-	new_header->previous_header = new_header.Index();
-
-	Insert(new_header, std::move(key), std::move(value));
-
-	// Commit Transaction.
-	return old_header.CompareAndSwap(new_header);
+	Transaction txn(CreateTransaction());
+	txn.Insert(std::move(key), std::move(value));
+	return std::move(txn).Commit();
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -614,9 +616,14 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<BPlusTreeHeade
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	InsertionBundle bundle; 
 	if (root->version != new_header->version) {
+		// Root has not been updated since the transaction started so we cannot hold
+		// a mutable reference to it. Insert will clone the root and return a new
+		// root node.
 		bundle = Insert(new_header->version, root, key, value);
 	}
 	else {
+		// Root has been updated since the transaction started so we can hold a
+		// mutable reference to it. Insert will modify the root in place.
 		bundle = Insert(new_header->version, std::move(root).Upgrade(), key, value);
 	}
 	if (bundle.new_right_node != nullptr) {
@@ -640,6 +647,15 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 		return Iterator(&blob_store_, std::vector<size_t>(), 0);
 	}
 	return Search(blob_store_.Get<BaseNode>(header->root_index), key, std::vector<size_t>());
+}
+
+template <typename KeyType, typename ValueType, size_t Order>
+typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<BPlusTreeHeader> new_header, const KeyType& key) {
+	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
+	if (new_header->root_index == BlobStore::InvalidIndex) {
+		return Iterator(&blob_store_, std::vector<size_t>(), 0);
+	}
+	return Search(std::move(root), key, std::vector<size_t>());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
@@ -786,7 +802,6 @@ typename std::enable_if<
 	InsertionBundle child_node_bundle = Insert(version, child_node, key, value);
 	BlobStoreObject<InternalNode> new_internal_node;
 	if (internal_node->get_version() == version) {
-		// The child node was not split so we are done.
 		new_internal_node = internal_node.GetMutableOrClone();
 	}
 	else {
