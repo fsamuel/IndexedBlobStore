@@ -31,52 +31,11 @@ struct InsertionBundle {
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
 private:
-	enum class OperationType : uint8_t { INSERT_OP, DELETE_OP, UPDATE_OP, CREATE_OP };
-	static constexpr std::string OperationTypeToString(OperationType type) {
-		switch (type) {
-			case OperationType::INSERT_OP:
-				return "Insert";
-			case OperationType::DELETE_OP:
-				return "Delete";
-			case OperationType::UPDATE_OP:
-				return "Update";
-			case OperationType::CREATE_OP:
-				return "Create";
-		}
-	}
-	struct Operation {
-		// The type of operation.
-		OperationType type;
-		// The index of the key to be inserted/deleted/updated.
-		BlobStore::index_type key;
-		// The value to be inserted/updated.
-		BlobStore::index_type value;
-		Operation(OperationType type, BlobStore::index_type key, BlobStore::index_type value) :
-			type(type), key(key), value(value) {}
-		Operation(): type(OperationType::CREATE_OP), key(BlobStore::InvalidIndex), value(BlobStore::InvalidIndex) {}
-
-		std::string ToString(BlobStore* store) const {
-			std::stringstream ss;
-			ss << OperationTypeToString(type);
-			if (key != BlobStore::InvalidIndex) {
-				ss << "(key = \"" << *store->Get<KeyType>(key) << "\"";
-				if (value != BlobStore::InvalidIndex) {
-					ss << ", value = \"" << *store->Get<ValueType>(value) << "\"";
-				}
-				ss << ")";
-			}
-			return ss.str();
-		}
-	};
-
-
 	struct BPlusTreeHeader {
 		// The version of the tree.
 		size_t version;
 		// The index of the root node.
 		BlobStore::index_type root_index;
-		// The operation performed on the tree at this version.
-		Operation operation;
 		// The index of the previous header.
 		BlobStore::index_type previous_header;
 	};
@@ -278,6 +237,8 @@ public:
 		}
 
 	private:
+		// Advances leaf_node_ to the next leaf node in the tree. If there are no more leaf nodes, leaf_node_ is set to nullptr.
+		// This function also updates path_to_root_ to reflect the new path to the root of the tree.
 		void AdvanceToNextNode() {
 			if (path_to_root_.empty()) {
 				leaf_node_ = nullptr;
@@ -290,31 +251,25 @@ public:
 				current_node = parent_node.To<BaseNode>();
 				path_to_root_.pop_back();
 				if (path_to_root_.empty()) {
-					parent_node = nullptr;
+					leaf_node_ = nullptr;
+					return;
 				}
-				else {
-					parent_node = store_->Get<InternalNode>(path_to_root_.back());
-				}
+				parent_node = store_->Get<InternalNode>(path_to_root_.back());
 			}
-			if (parent_node == nullptr) {
-				leaf_node_ = nullptr;
-				return;
+
+			// Find the index of the child node that corresponds to the current node
+			int child_index = 0;
+			while (child_index < parent_node->num_keys() && parent_node->children[child_index] != current_node.Index()) {
+				++child_index;
 			}
-			else {
-				// Find the index of the child node that corresponds to the current node
-				int child_index = 0;
-				while (child_index < parent_node->num_keys() && parent_node->children[child_index] != current_node.Index()) {
-					++child_index;
-				}
-				// Follow the rightmost child of the parent node to find the next element
-				BlobStoreObject<const BaseNode> next_node = store_->Get<BaseNode>(parent_node->children[child_index + 1]);
-				while (next_node->type != NodeType::LEAF) {
-					path_to_root_.push_back(next_node.Index());
-					next_node = store_->Get<BaseNode>(next_node.To<InternalNode>()->children[0]);
-				}
-				leaf_node_ = next_node.To<LeafNode>();
-				key_index_ = 0;
+			// Follow the rightmost child of the parent node to find the next element
+			BlobStoreObject<const BaseNode> next_node = store_->Get<BaseNode>(parent_node->children[child_index + 1]);
+			while (next_node->type != NodeType::LEAF) {
+				path_to_root_.push_back(next_node.Index());
+				next_node = store_->Get<BaseNode>(next_node.To<InternalNode>()->children[0]);
 			}
+			leaf_node_ = next_node.To<LeafNode>();
+			key_index_ = 0;
 		}
 		BlobStore* store_;
 		std::vector<size_t> path_to_root_;
@@ -328,11 +283,16 @@ public:
 		}
 	}
 
+	// Returns an iterator to the first element greater than or equal to key.
 	Iterator Search(const KeyType& key);
 
+	// Inserts a key-value pair into the tree. Returns true if the key-value pair was inserted, false if the key already existed in the tree
+	// or there was a conflicting operation in progress.
 	bool Insert(const KeyType& key, const ValueType& value);
 	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
 
+	// Deletes a key-value pair from the tree. Returns true if the operation was successful, false if there was a conflicting operation in progress.
+	// If deleted_value is not null, the deleted value is stored in deleted_value.
 	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
 
 	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
@@ -376,7 +336,13 @@ public:
 			std::cout << "NULL Header" << std::endl;
 			return;
 		}
-		std::cout << "Header (Operation(" << node->operation.ToString(&blob_store_) << ") Index = " << node.Index() << ", root = " << node->root_index << ", version = " << node->version << ")" << std::endl;
+		std::cout << "Header (Index = " << node.Index()
+			      << ", root = "
+			      << node->root_index
+			      << ", version = "
+			      << node->version
+			      << ")"
+			      << std::endl;
 	}
 
 
@@ -388,6 +354,7 @@ public:
 		};
 		std::queue<NodeWithLevel> queue;
 		BlobStoreObject<const BPlusTreeHeader> header = blob_store_.Get<BPlusTreeHeader>(1);
+		// Find the header with the given version
 		while (header->previous_header != BlobStore::InvalidIndex && header->version > version) {
 			header = blob_store_.Get<BPlusTreeHeader>(header->previous_header);
 		}
@@ -458,6 +425,7 @@ private:
 		header->previous_header = BlobStore::InvalidIndex;
 	}
 
+	// Returns the child at the given index of the given node preserving constness.
 	template<typename U, typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, InternalNode>::value
 	>::type* = nullptr>
@@ -515,6 +483,9 @@ private:
 		return BlobStoreObject<const ValueType>(&blob_store_, node->values[value_index]);
 	}
 
+	// Searches for the provided key in the provided subtree rooted at node. Returns an iterator starting at the
+	// first key >= key. If the key is not found, the iterator will be invalid. If the key is found, the path
+	// from the leaf to the root of the tree is returned in path_to_root.
 	Iterator Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root);
 
 	// Split a leaf node into two leaf nodes and a middle key, all returned in InsertionBundle.
@@ -546,22 +517,32 @@ private:
 	BlobStoreObject<const ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
 	BlobStoreObject<const ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
 
+	// Try to borrow a key from the left sibling of node and return the new right sibling.
 	bool TryToBorrowFromLeftSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling);
+	// Try to borrow a key from the right sibling of node and return the new left sibling.
 	bool TryToBorrowFromRightSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling);
 
+	// Returns the key of the predecessor of node.
 	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
+	// Returns the key of the successor of node.
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 
+	// Merges the right child into the left child. The parent key separating the two children is merged into the left child.
 	void MergeInternalNodes(BlobStoreObject<InternalNode> left_child,
 		BlobStoreObject<const InternalNode> right_child,
 		size_t parent_key);
+	// Merges the right child into the left child. Leaves contain all the keys so we don't need to pass the parent key.
 	void MergeLeafNodes(BlobStoreObject<LeafNode> left_child, BlobStoreObject<const LeafNode> right_child);
+	// Merges the provded child with its left or right sibling depending on whether child is the rightmost child of its parent.
+	// The new child is returned in out_child.
 	void MergeChildWithLeftOrRightSibling(
 		size_t version,
 		BlobStoreObject<InternalNode> parent,
 		int child_index,
 		BlobStoreObject<const BaseNode> child,
 		BlobStoreObject<BaseNode>* out_child);
+	// If the left or right sibling of child has more than the minimum number of keys, borrow a key from the sibling. Otherwise,
+	// merge the child with its sibling. The new child is returned in new_child.
 	void RebalanceChildWithLeftOrRightSibling(
 		size_t version,
 		BlobStoreObject<InternalNode> parent,
@@ -584,9 +565,6 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType>
 	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
 	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
 	++new_header->version;
-	new_header->operation.type = OperationType::INSERT_OP;
-	new_header->operation.key = key.Index();
-	new_header->operation.value = value.Index();
 	new_header->previous_header = new_header.Index();
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(old_header->root_index);
 	InsertionBundle bundle = Insert(new_header->version, root, key, value);
@@ -802,12 +780,11 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 		*deleted_value = BlobStoreObject<const ValueType>();
 		return false;
 	}
-	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
-	++new_header->version;
+	BlobStoreObject<BPlusTreeHeader> new_header = blob_store_.New<BPlusTreeHeader>();
+	new_header->version = old_header->version + 1;
 	new_header->previous_header = new_header.Index();
-	new_header->operation.type = OperationType::DELETE_OP;
 
-	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
+	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(old_header->root_index);
 	if (root->is_leaf()) {
 		// If the root is a leaf node, then we can just delete the key from the leaf node.
 		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode>();
@@ -838,9 +815,6 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 		deleted = Delete(new_header->version, &new_root_base, key_index, key);
 	}
 	new_header->root_index = new_root_base.Index();
-	if (deleted != nullptr) {
-		new_header->operation.value = deleted.Index();
-	}
 	if (old_header.CompareAndSwap(new_header)) {
 		*deleted_value = deleted;
 		return true;
@@ -1084,7 +1058,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeInternalNodes(
 	BlobStoreObject<const InternalNode> right_node,
 	size_t parent_key) {
 	// Move the key from the parent node down to the left sibling node
-	left_node->set_key(left_node->num_keys(), /*parent_node->get_key(key_index_in_parent)*/parent_key);
+	left_node->set_key(left_node->num_keys(), parent_key);
 	left_node->increment_num_keys();
 
 	// Move all keys and child pointers from the right sibling node to the left sibling node
