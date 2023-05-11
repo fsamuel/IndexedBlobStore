@@ -784,7 +784,14 @@ typename std::enable_if<
 
 	auto child_node = GetChild(internal_node, key_index);
 	InsertionBundle child_node_bundle = Insert(version, child_node, key, value);
-	BlobStoreObject<InternalNode> new_internal_node = internal_node.GetMutableOrClone();
+	BlobStoreObject<InternalNode> new_internal_node;
+	if (internal_node->get_version() == version) {
+		// The child node was not split so we are done.
+		new_internal_node = internal_node.GetMutableOrClone();
+	}
+	else {
+		new_internal_node = internal_node.Clone();
+	}
 	new_internal_node->set_version(version);
 	new_internal_node->children[key_index] = child_node_bundle.new_left_node.Index();
 	// If the child node bundle has a new right node, then that means that a split occurred to insert
