@@ -700,7 +700,7 @@ private:
 		BlobMetadata& metadata_entry = metadata_[index];
 		std::int32_t expected;
 		while (true) {
-			std::int32_t expected = WRITE_LOCK_FLAG;
+			std::int32_t expected = metadata_entry.lock_state.load() & WRITE_LOCK_FLAG;
 			if (metadata_entry.lock_state.compare_exchange_weak(expected, 1)) {
 				break;
 			}

@@ -988,6 +988,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(size_t version,
 		}
 		new_right_sibling_internal_node->children[0] = new_left_sibling_internal_node->children[new_left_sibling_internal_node->num_keys()];
 		new_left_sibling_internal_node->children[new_left_sibling_internal_node->num_keys()] = BlobStore::InvalidIndex;
+		new_right_sibling->set_key(0, parent_node->get_key(child_index - 1));
 	}
 	else {
 		auto new_right_sibling_leaf_node = new_right_sibling.To<LeafNode>();
@@ -998,9 +999,9 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(size_t version,
 			new_right_sibling_leaf_node->values[i + 1] = new_right_sibling_leaf_node->values[i];
 		}
 		new_right_sibling_leaf_node->values[0] = new_left_sibling_leaf_node->values[new_left_sibling_leaf_node->num_keys() - 1];
+		new_right_sibling->set_key(0, new_left_sibling_leaf_node->get_key(new_left_sibling_leaf_node->num_keys() - 1));
 	}
 
-	new_right_sibling->set_key(0, parent_node->get_key(child_index - 1));
 	// We want to move this out so we need to return the last key of the left sibling that we're bumping up.
 	parent_node->set_key(child_index - 1, new_left_sibling->get_key(new_left_sibling->num_keys() - 1));
 

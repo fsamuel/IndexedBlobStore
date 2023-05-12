@@ -20,7 +20,7 @@ protected:
 };
 
 TEST_F(BPlusTreeTest, BasicTree) {
-	BPlusTree<int, int, 4> tree(*blob_store);
+	BPlusTree<int, int, 16> tree(*blob_store);
     for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
@@ -33,6 +33,25 @@ TEST_F(BPlusTreeTest, BasicTree) {
 	}
 }
 
+// Similar to BasicTree, but inserts all 100 elements in a transaction,
+// and then verifies they exist outside the transaction.
+TEST_F(BPlusTreeTest, BasicTreeWithTransaction) {
+	BPlusTree<int, int, 4> tree(*blob_store);
+	{
+		auto txn(tree.CreateTransaction());
+		for (int i = 0; i < 100; i++) {
+			txn.Insert(i, i * 100);
+		}
+		std::move(txn).Commit();
+	}
+	for (int i = 0; i < 100; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+}
 TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 	BPlusTree<int, int, 4> tree(*blob_store);
     for (int i = 0; i < 100; i++) {
@@ -60,13 +79,13 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 // Builds a B+ tree with 100 elements, randomly deletes some of them, and then
 // checks that the remaining elements are still in the tree.
 TEST_F(BPlusTreeTest, DeleteAndVerify) {
-	BPlusTree<int, int, 4> tree(*blob_store);
+	BPlusTree<int, int, 16> tree(*blob_store);
 	std::set<int> inserted;
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 		inserted.insert(i);
 	}
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 100; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
@@ -74,23 +93,22 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
 		EXPECT_EQ(value, i * 100);
 	}
 
-	tree.PrintTree(20);
 	// Delete a random half the elements in random order and store 
 	// the deleted keys in a set so we can check that they're not
 	// in the tree later.
-	for (int i = 0; i < 10; ++i) {
-		int val = rand() % 20;
+	for (int i = 0; i < 50; ++i) {
+		int val = rand() % 50;
 		while (inserted.count(val) == 0) {
-			val = rand() %20;
+			val = rand() %50;
 		}
 		BlobStoreObject<const int> deleted;
 		bool success = tree.Delete(val, &deleted);
+
 		EXPECT_TRUE(success);
 		EXPECT_EQ(*deleted, val*100);
 		inserted.erase(val);
 	}
-	tree.PrintTree(21);
-	for (int i = 0; i < 20; i++) {
+	for (int i = 0; i < 100; i++) {
 		auto it = tree.Search(i);
 		auto key_ptr = it.GetKey();
 		int key = key_ptr == nullptr ? 0 : *key_ptr;
