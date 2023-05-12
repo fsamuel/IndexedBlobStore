@@ -248,4 +248,18 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 		EXPECT_NE(value_ptr, nullptr);
 		EXPECT_EQ(value, i * 100);
 	}
+	{
+		auto txn = tree.CreateTransaction();
+		auto value1 = txn.Delete(51);
+		auto value2 = txn.Delete(52);
+		auto it = tree.Search(51);
+		EXPECT_EQ(*it.GetKey(), 51);
+		EXPECT_EQ(*it.GetValue(), 5100);
+		it = txn.Search(51);
+		EXPECT_EQ(*it.GetKey(), 53);
+		EXPECT_EQ(*it.GetValue(), 5300);
+		std::move(txn).Commit();
+		tree.PrintTree(1000);
+	}
+
 }

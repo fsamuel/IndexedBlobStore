@@ -230,11 +230,11 @@ public:
 			return BlobStoreObject<const KeyType>();
 		}
 
-		BlobStoreObject<ValueType> GetValue() const {
+		BlobStoreObject<const ValueType> GetValue() const {
 			if (leaf_node_ != nullptr) {
-				return BlobStoreObject<ValueType>(store_, leaf_node_->values[key_index_]);
+				return BlobStoreObject<const ValueType>(store_, leaf_node_->values[key_index_]);
 			}
-			return BlobStoreObject<ValueType>();
+			return BlobStoreObject<const ValueType>();
 		}
 
 	private:
@@ -869,31 +869,34 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(BlobStoreObject<BPlusTreeHeader> new_header, const KeyType& key) {
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
-	if (root->is_leaf()) {
-		// If the root is a leaf node, then we can just delete the key from the leaf node.
-		BlobStoreObject<LeafNode> new_root = root.Clone<LeafNode>();
-		new_root->set_version(new_header->version);
-		new_header->root_index = new_root.Index();
-		return DeleteFromLeafNode(new_root, key);
+	BlobStoreObject<BaseNode> new_root;
+	if (root->get_version() == new_header->version) {
+		new_root = std::move(root).Upgrade();
 	}
-	// If the root is an internal node, then we need to find the leaf node where the key is located.
-	BlobStoreObject<InternalNode> new_root = root.Clone<InternalNode>();
-	new_root->set_version(new_header->version);
+	else {
+		new_root = root.Clone();
+		new_root->set_version(new_header->version);
+	}
+
+	if (new_root->is_leaf()) {
+		// If the root is a leaf node, then we can just delete the key from the leaf node.
+		new_header->root_index = new_root.Index();
+		return DeleteFromLeafNode(new_root.To<LeafNode>(), key);
+	}
 
 	// Find the child node where the key should be deleted.
 	size_t key_index = 0;
 	BlobStoreObject<const KeyType> key_found = new_root->Search(&blob_store_, key, &key_index);
 
 	BlobStoreObject<const ValueType> deleted;
-	BlobStoreObject<BaseNode> new_root_base = new_root.To<BaseNode>();
 	// As part of the Delete operation, the root node may have been deleted and replaced with a new root node.
 	if (key_index < new_root->num_keys() && key == *key_found) {
-		deleted = Delete(new_header->version, &new_root_base, key_index + 1, key);
+		deleted = Delete(new_header->version, &new_root, key_index + 1, key);
 	}
 	else {
-		deleted = Delete(new_header->version, &new_root_base, key_index, key);
+		deleted = Delete(new_header->version, &new_root, key_index, key);
 	}
-	new_header->root_index = new_root_base.Index();
+	new_header->root_index = new_root.Index();
 	return deleted;
 }
 
@@ -954,10 +957,22 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromLeftSibling(size_t ver
 		return false;
 	}
 
-	BlobStoreObject<BaseNode> new_left_sibling = left_sibling.Clone();
-	BlobStoreObject<BaseNode> new_right_sibling = right_sibling.Clone();
-	new_left_sibling->set_version(version);
-	new_right_sibling->set_version(version);
+	BlobStoreObject<BaseNode> new_left_sibling;
+	if (left_sibling->version == version) {
+		new_left_sibling = std::move(left_sibling).Upgrade();
+	}
+	else {
+		new_left_sibling = left_sibling.Clone();
+		new_left_sibling->set_version(version);
+	}
+	BlobStoreObject<BaseNode> new_right_sibling;
+	if (right_sibling->version == version) {
+		new_right_sibling = std::move(right_sibling).Upgrade();
+	}
+	else {
+		new_right_sibling = right_sibling.Clone();
+		new_right_sibling->set_version(version);
+	}
 
 	parent_node->children[child_index - 1] = new_left_sibling.Index();
 	parent_node->children[child_index] = new_right_sibling.Index();
@@ -1008,10 +1023,22 @@ bool BPlusTree<KeyType, ValueType, Order>::TryToBorrowFromRightSibling(size_t ve
 		return false;
 	}
 
-	BlobStoreObject<BaseNode> new_left_sibling = left_sibling.Clone();
-	BlobStoreObject<BaseNode> new_right_sibling = right_sibling.Clone();
-	new_left_sibling->set_version(version);
-	new_right_sibling->set_version(version);
+	BlobStoreObject<BaseNode> new_left_sibling;
+	if (left_sibling->version == version) {
+		new_left_sibling = std::move(left_sibling).Upgrade();
+	}
+	else {
+		new_left_sibling = left_sibling.Clone();
+		new_left_sibling->set_version(version);
+	}
+	BlobStoreObject<BaseNode> new_right_sibling;
+	if (right_sibling->version == version) {
+		new_right_sibling = std::move(right_sibling).Upgrade();
+	}
+	else {
+		new_right_sibling = right_sibling.Clone();
+		new_right_sibling->set_version(version);
+	}
 	parent_node->children[child_index] = new_left_sibling.Index();
 	parent_node->children[child_index + 1] = new_right_sibling.Index();
 
@@ -1074,7 +1101,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 		// rightmost child within the parent. This is why child is an output parameter.
 		// If we end up merging nodes, we might remove a key from the parent which is why the child
 		// must be rebalanced before the recursive calls below.
-		RebalanceChildWithLeftOrRightSibling(version, parent_internal_node, child_index, const_child, &child);
+		RebalanceChildWithLeftOrRightSibling(version, parent_internal_node, child_index, std::move(const_child), &child);
 
 		if (parent_internal_node->num_keys() == 0) {
 			// The root node is empty, so make the left child the new root node
@@ -1084,7 +1111,12 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 		}
 	}
 	else {
-		child = const_child.Clone();
+		if (const_child->version == version) {
+			child = std::move(const_child).Upgrade();
+		}
+		else {
+			child = const_child.Clone();
+		}
 		parent_internal_node->children[child_index] = child.Index();
 	}
 	child->set_version(version);
@@ -1170,18 +1202,29 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	int key_index_in_parent;
 	if (child_index < parent->num_keys()) {
 		key_index_in_parent = child_index;
-		left_child = child.Clone();
+		if (child->version == version) {
+			left_child = std::move(child).Upgrade();
+		}
+		else {
+			left_child = child.Clone();
+			left_child->set_version(version);
+		}
 		right_child = GetChildConst(parent, child_index + 1);
-		left_child->set_version(version);
 		*out_child = left_child;
 		parent->children[child_index] = left_child.Index();
 	}
 	else {
 		key_index_in_parent = child_index - 1;
 		BlobStoreObject<const BaseNode> const_left_child = GetChildConst(parent, child_index - 1);
-		left_child = const_left_child.Clone();
+		if (const_left_child->version == version) {
+			left_child = std::move(const_left_child).Upgrade();
+		}
+		else {
+			left_child = const_left_child.Clone();
+			left_child->set_version(version);
+		}
 		right_child = child;
-		left_child->set_version(version);
+
 		parent->children[child_index - 1] = left_child.Index();
 		*out_child = left_child;
 	}
@@ -1224,7 +1267,7 @@ void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
 		return;
 	}
 
-	MergeChildWithLeftOrRightSibling(version, parent, child_index, child, new_child);
+	MergeChildWithLeftOrRightSibling(version, parent, child_index, std::move(child), new_child);
 }
 
 #endif // B_PLUS_TREE_H_
