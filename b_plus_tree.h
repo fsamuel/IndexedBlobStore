@@ -303,6 +303,10 @@ public:
 			return tree_->Search(new_header_, key);
 		}
 
+		BlobStoreObject<const ValueType> Delete(const KeyType& key) {
+			return tree_->Delete(new_header_, key);
+		}
+
 		bool Commit()&& {
 			return old_header_.CompareAndSwap(new_header_);
 		}
@@ -852,18 +856,9 @@ typename std::enable_if<
 
 template <typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value) {
-	BlobStoreObject<const BPlusTreeHeader> old_header = blob_store_.Get<BPlusTreeHeader>(1);
-	if (old_header->root_index == BlobStore::InvalidIndex) {
-		*deleted_value = BlobStoreObject<const ValueType>();
-		return false;
-	}
-	BlobStoreObject<BPlusTreeHeader> new_header = old_header.Clone();
-	++new_header->version;
-	new_header->previous_header = new_header.Index();
-
-	BlobStoreObject<const ValueType> deleted = Delete(new_header, key);
-
-	if (old_header.CompareAndSwap(new_header)) {
+	Transaction txn(CreateTransaction());
+	BlobStoreObject<const ValueType> deleted = txn.Delete(key);
+	if (std::move(txn).Commit()) {
 		*deleted_value = deleted;
 		return true;
 	}
