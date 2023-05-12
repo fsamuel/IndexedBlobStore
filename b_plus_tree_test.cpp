@@ -220,7 +220,7 @@ TEST_F(BPlusTreeTest, SearchNonExistentKey) {
 // 50 more elements into the tree through the transaction. Verifies that
 // all 100 elements are in the tree.
 TEST_F(BPlusTreeTest, TransactionInsertion) {
-	BPlusTree<int, int, 4> tree(*blob_store);
+	BPlusTree<int, int, 8> tree(*blob_store);
 	for (int i = 0; i < 50; i++) {
 		tree.Insert(i, i * 100);
 	}
@@ -250,14 +250,15 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 	}
 	{
 		auto txn = tree.CreateTransaction();
-		auto value1 = txn.Delete(51);
-		auto value2 = txn.Delete(52);
+		for (int i = 0; i < 20; ++i) {
+			auto value = txn.Delete(50 + i);
+		}
 		auto it = tree.Search(51);
 		EXPECT_EQ(*it.GetKey(), 51);
 		EXPECT_EQ(*it.GetValue(), 5100);
 		it = txn.Search(51);
-		EXPECT_EQ(*it.GetKey(), 53);
-		EXPECT_EQ(*it.GetValue(), 5300);
+		EXPECT_EQ(*it.GetKey(), 70);
+		EXPECT_EQ(*it.GetValue(), 7000);
 		std::move(txn).Commit();
 		tree.PrintTree(1000);
 	}
