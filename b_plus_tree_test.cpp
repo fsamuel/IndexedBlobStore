@@ -20,10 +20,11 @@ protected:
 };
 
 TEST_F(BPlusTreeTest, BasicTree) {
-	BPlusTree<int, int, 16> tree(*blob_store);
+	BPlusTree<int, int, 4> tree(*blob_store);
     for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
+	tree.PrintTree(10000);
     for (int i = 0; i < 100; i++) {
         auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
@@ -53,7 +54,7 @@ TEST_F(BPlusTreeTest, BasicTreeWithTransaction) {
 	}
 }
 TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
-	BPlusTree<int, int, 4> tree(*blob_store);
+	BPlusTree<int, int, 16> tree(*blob_store);
     for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
@@ -146,12 +147,13 @@ TEST_F(BPlusTreeTest, BPlusTreeIteration) {
 // in the tree. Delete the elements also in random order. Verify that the elements
 // are no longer in the tree.
 TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
-	BPlusTree<int, int, 4> tree(*blob_store);
+	BPlusTree<int, int, 8> tree(*blob_store);
 	std::set<int> inserted;
-	for (int i = 0; i < 100; i++) {
-		int val = rand() % 100;
+	constexpr int kNumElements = 100;
+	for (int i = 0; i < kNumElements; i++) {
+		int val = rand() % kNumElements;
 		while (inserted.count(val) > 0) {
-			val = rand() % 100;
+			val = rand() % kNumElements;
 		}
 		tree.Insert(val, val * 100);
 		inserted.insert(val);
@@ -171,10 +173,10 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
 	// the deleted keys in a set so we can check that they're not
 	// in the tree later.
 	std::set<int> deleted;
-	for (int i = 0; i < 50; ++i) {
-		int val = rand() % 100;
+	for (int i = 0; i < 2* kNumElements / 3; ++i) {
+		int val = rand() % kNumElements;
 		while (deleted.count(val) > 0) {
-			val = rand() % 100;
+			val = rand() % kNumElements;
 			BlobStoreObject<const int> deleted_value;
 			bool success = tree.Delete(i, &deleted_value);
 			EXPECT_TRUE(success);
@@ -183,7 +185,7 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
 			deleted.insert(i);
 		}
 	}
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < kNumElements; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
@@ -238,7 +240,7 @@ TEST_F(BPlusTreeTest, SearchNonExistentKey) {
 // 50 more elements into the tree through the transaction. Verifies that
 // all 100 elements are in the tree.
 TEST_F(BPlusTreeTest, TransactionInsertion) {
-	BPlusTree<int, int, 8> tree(*blob_store);
+	BPlusTree<int, int, 32> tree(*blob_store);
 	for (int i = 0; i < 50; i++) {
 		tree.Insert(i, i * 100);
 	}

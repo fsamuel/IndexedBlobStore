@@ -571,8 +571,6 @@ private:
 	// Borrow a key from the right sibling of node and return the new left sibling.
 	bool BorrowFromRightSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling);
 
-	// Returns the key of the predecessor of node.
-	BlobStoreObject<const KeyType> GetPredecessorKey(BlobStoreObject<BaseNode> node);
 	// Returns the key of the successor of node.
 	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 
@@ -1119,15 +1117,6 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(si
 	}
 
 	return DeleteFromInternalNode(child.To<InternalNode>(), key);
-}
-
-template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetPredecessorKey(BlobStoreObject<BaseNode> node) {
-	while (!node->is_leaf()) {
-		auto internal_node = node.To<InternalNode>();
-		node = GetChild(internal_node, internal_node->num_keys()); // Get the rightmost child
-	}
-	return GetKey(node, node->num_keys() - 1); // Return the rightmost key in the leaf node
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
