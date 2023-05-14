@@ -369,3 +369,5 @@ FodyWeavers.xsd
 /testfile1
 /sized_file.bin
 /testfile
+/chunked_vector_test_1
+/chunked_vector_test_0
