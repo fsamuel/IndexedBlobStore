@@ -57,6 +57,12 @@ public:
     // Accesses the element at the specified index in the ChunkedVector (const version).
     const T& operator[](std::size_t index) const;
 
+    // Ensures that the ChunkedVector has enough capacity to store the specified number of elements.
+    void reserve(std::size_t new_cap);
+
+    // Resizes the ChunkedVector to the specified size, either truncating or adding elements as necessary.
+    void resize(std::size_t new_size);
+
 private:
     std::string name_prefix_;
     std::vector<SharedMemoryBuffer> chunks_;
@@ -97,19 +103,19 @@ bool ChunkedVector<T, ChunkSize>::empty() const {
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::capacity() const {
-    return (ChunkSize * ((1 << chunks_.size()) - 1) - sizeof(std::size_t)) / sizeof(T);
+    return (ChunkSize * ((1 << chunks_.size()) - 1)) / sizeof(T);
 }
 
 template <typename T, std::size_t ChunkSize>
 void ChunkedVector<T, ChunkSize>::load_chunks() {
     // Load the first chunk and add it to the vector
-    chunks_.emplace_back(name_prefix_ + "_0", ChunkSize);
+    chunks_.emplace_back(name_prefix_ + "_0", ChunkSize + sizeof(std::size_t));
 
     // Read the size from the first chunk
     size_t size = *reinterpret_cast<std::size_t*>(chunks_[0].data()) / sizeof(T);
 
     // Calculate the number of chunks needed
-    std::size_t num_chunks = ((size * sizeof(T) + sizeof(size_t) + ChunkSize * sizeof(T) - 1) / (ChunkSize * sizeof(T)));
+    size_t num_chunks = log2(size * sizeof(T) / ChunkSize) + 1;
 
     // Load the additional chunks
     for (std::size_t i = 1; i < num_chunks; ++i) {
@@ -132,43 +138,30 @@ std::size_t ChunkedVector<T, ChunkSize>::log2(size_t n) const {
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::chunk_index(std::size_t index) const {
-    std::size_t position_in_bytes = index * sizeof(T) + sizeof(size_t);
-
-    // Now, we need to find the position of the highest set bit in shifted_index.
-    // This bit position, minus one, corresponds to the chunk index because the
-    // chunk size doubles after each chunk. Thus, the chunk index is equivalent
-    // to the position of the highest set bit in the index, minus one.
+    std::size_t num_chunks = ((index + 1) * sizeof(T)) / ChunkSize;
 
     // Initialize the chunk index to 0.
     std::size_t chunk_index = 0;
 
     // Use a bit shift to check each bit position in shifted_index.
-    while (position_in_bytes >>= 1) {
+    while (num_chunks >>= 1) {
         ++chunk_index;
     }
 
     // Return the calculated chunk index.
-    return chunk_index - HighestOnePosition<ChunkSize>::value;
+    return chunk_index;
 }
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::position_in_chunk(std::size_t index) const {
-
-    std::size_t postion_in_bytes = index * sizeof(T) + sizeof(size_t);
-
-    // Now, we need to find the position within the chunk. This is equivalent
-    // to the index modulo the size of the chunk at the calculated chunk index.
-
-    // Compute the size of the chunk at the chunk index. This is simply
-    // (2 ^ chunk_index) * ChunkSize. Since the chunk size doubles for each
-    // chunk, the size of the chunk at a given chunk index is equal to
-    // 2 raised to the power of the chunk index, times the base chunk size.
-    std::size_t chunk_size = (std::size_t(1) << chunk_index(index)) * ChunkSize;
+    std::size_t postion_in_bytes = index * sizeof(T);
+    std::size_t chunk = chunk_index(index);
+    std::size_t chunk_size = (std::size_t(1) << chunk) * ChunkSize;
 
     // Return the index within the chunk. This is equivalent to the adjusted
     // index modulo the size of the chunk. Note that since chunk_size is a power
     // of 2, we can use a bitwise AND operation to compute the modulo efficiently.
-    return postion_in_bytes & (chunk_size - 1);
+    return (postion_in_bytes & (chunk_size - 1)) + (chunk == 0 ? sizeof(size_t) : 0);
 }
 
 template <typename T, std::size_t ChunkSize>
@@ -177,7 +170,7 @@ void ChunkedVector<T, ChunkSize>::emplace_back(Args&&... args) {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
 	std::size_t old_size = size_ptr->fetch_add(1);
 	std::size_t new_size = old_size + 1;
-    if ((new_size * sizeof(T) + sizeof(std::size_t)) > ChunkSize * ((1 << chunks_.size()) - 1)) {
+    if ((new_size * sizeof(T)) > ChunkSize * ((1 << chunks_.size()) - 1)) {
 		expand();
 	}
 	size_t cindex = chunk_index(old_size);
@@ -219,5 +212,34 @@ const T& ChunkedVector<T, ChunkSize>::operator[](std::size_t index) const {
     std::size_t pos_in_chunk = position_in_chunk(index);
     return *(reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[cindex].data()) + pos_in_chunk));
 }
+
+template <typename T, std::size_t ChunkSize>
+void ChunkedVector<T, ChunkSize>::reserve(std::size_t new_cap) {
+    std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
+    std::size_t old_size = *size_ptr;
+    std::size_t current_cap = capacity();
+    if (new_cap <= current_cap) {
+        // current capacity is enough, nothing to do
+        return;
+    }
+    while (new_cap > current_cap) {
+        expand();
+        current_cap = capacity();
+    }
+}
+
+template <typename T, std::size_t ChunkSize>
+void ChunkedVector<T, ChunkSize>::resize(std::size_t new_size) {
+    std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
+    std::size_t expected_size;
+    do {
+        expected_size = *size_ptr;
+        if (new_size > expected_size) {
+            // If the new size is larger than the expected size, reserve space.
+            reserve(new_size);
+        }
+    } while (!std::atomic_compare_exchange_strong(size_ptr, &expected_size, new_size));
+}
+
 
 #endif // CHUNKED_VECTOR_H_

@@ -46,7 +46,7 @@ TEST_F(ChunkedVectorTest, BasicTest) {
 	for (int i = 0; i < 10; i++) {
 		vector.push_back(i);
 	}
-	EXPECT_EQ(vector.capacity(), 13);
+	EXPECT_EQ(vector.capacity(), 15);
 	EXPECT_EQ(vector.size(), 10);
 	for (int i = 0; i < 10; i++) {
 		EXPECT_EQ(vector[i], i);
@@ -62,4 +62,18 @@ TEST_F(ChunkedVectorTest, PushbackAndPop) {
 	EXPECT_EQ(vec.size(), 1);
 	vec.pop_back();
 	EXPECT_EQ(vec.size(), 0);
+}
+
+// Tests reserve, capacity, and resize operations on ChunkedVector.
+TEST_F(ChunkedVectorTest, ReserveCapacityResize) {
+	ChunkedVector<int, 4> vec("chunked_vector_test");
+	EXPECT_EQ(vec.capacity(), 1);
+	vec.reserve(10);
+	EXPECT_EQ(vec.capacity(), 15);
+	vec.resize(10);
+	EXPECT_EQ(vec.size(), 10);
+	EXPECT_EQ(vec.capacity(), 15);
+	vec.resize(20);
+	EXPECT_EQ(vec.size(), 20);
+	EXPECT_EQ(vec.capacity(), 31);
 }
