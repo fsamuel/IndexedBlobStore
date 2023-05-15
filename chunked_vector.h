@@ -7,21 +7,6 @@
 #include <memory>
 #include <atomic>
 
-template <size_t N>
-struct HighestOnePosition {
-    static constexpr size_t value = 1 + HighestOnePosition<N / 2>::value;
-};
-
-template <>
-struct HighestOnePosition<0> {
-    static constexpr size_t value = 0;
-};
-
-template <>
-struct HighestOnePosition<1> {
-    static constexpr size_t value = 0;
-};
-
 // ChunkedVector is a dynamic array-like data structure that uses SharedMemoryBuffer
 // to allocate its memory in chunks. Each chunk is double the size of the previous chunk.
 // It supports basic operations like push_back, pop_back, access at a particular index,
@@ -32,6 +17,19 @@ public:
     // Constructs a ChunkedVector with the specified name_prefix for the shared memory buffers.
     // Each SharedMemoryBuffer will be named as name_prefix_i, where i is the chunk index.
     explicit ChunkedVector(const std::string& name_prefix);
+
+    ChunkedVector(ChunkedVector&& other):
+        name_prefix_(std::move(other.name_prefix_)), chunks_(std::move(other.chunks_)) {}
+
+    explicit ChunkedVector(SharedMemoryBuffer&& first_buffer):
+        name_prefix_(first_buffer.name()) {
+        chunks_.emplace_back(std::move(first_buffer));
+    }
+
+    ChunkedVector& operator=(ChunkedVector&& other) {
+        name_prefix_ = std::move(other.name_prefix_);
+        chunks_ = std::move(other.chunks_);
+    }
 
     // Returns the number of elements in the ChunkedVector.
     std::size_t size() const;
@@ -196,6 +194,7 @@ void ChunkedVector<T, ChunkSize>::pop_back() {
 template <typename T, std::size_t ChunkSize>
 T& ChunkedVector<T, ChunkSize>::operator[](std::size_t index) {
     if (index >= size()) {
+        std::cout << "Index: " << index << ", Size: " << size() << std::endl;
         throw std::out_of_range("Index out of range");
     }
     std::size_t cindex = chunk_index(index);
@@ -210,7 +209,7 @@ const T& ChunkedVector<T, ChunkSize>::operator[](std::size_t index) const {
     }
     std::size_t cindex = chunk_index(index);
     std::size_t pos_in_chunk = position_in_chunk(index);
-    return *(reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[cindex].data()) + pos_in_chunk));
+    return *(reinterpret_cast<const T*>(reinterpret_cast<const char*>(chunks_[cindex].data()) + pos_in_chunk));
 }
 
 template <typename T, std::size_t ChunkSize>
