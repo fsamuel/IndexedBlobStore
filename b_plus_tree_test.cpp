@@ -24,7 +24,6 @@ TEST_F(BPlusTreeTest, BasicTree) {
     for (int i = 0; i < 100; i++) {
 		tree.Insert(i, i * 100);
 	}
-	tree.PrintTree(10000);
     for (int i = 0; i < 100; i++) {
         auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();

@@ -40,7 +40,6 @@
     <ClInclude Include="chunked_vector.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
-    <ClInclude Include="shared_memory_vector.h" />
     <ClInclude Include="blob_store.h" />
     <ClInclude Include="b_plus_tree.h" />
   </ItemGroup>
@@ -52,7 +51,6 @@
     <ClCompile Include="b_plus_tree_test.cpp" />
     <ClCompile Include="shared_memory_buffer_test.cpp" />
     <ClCompile Include="shared_memory_allocator_test.cpp" />
-    <ClCompile Include="shared_memory_vector_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BPlusTree\BPlusTree.vcxproj">

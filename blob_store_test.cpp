@@ -7,8 +7,8 @@ protected:
 		std::remove("DataBuffer");
 		std::remove("MetadataBuffer");
 		// create a shared memory allocator
-		dataBuffer = new SharedMemoryBuffer("DataBuffer");
-		metadataBuffer = new SharedMemoryBuffer("MetadataBuffer");
+		dataBuffer = new SharedMemoryBuffer("DataBuffer", 4096);
+		metadataBuffer = new SharedMemoryBuffer("MetadataBuffer", 4096);
 	}
 
 	virtual void TearDown() {

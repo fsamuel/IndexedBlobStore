@@ -24,9 +24,6 @@
     <ClInclude Include="shared_memory_allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="shared_memory_vector.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="blob_store.h">
       <Filter>Header Files</Filter>
     </ClInclude>

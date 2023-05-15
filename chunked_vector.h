@@ -15,8 +15,12 @@ template <typename T, std::size_t RequestedChunkSize>
 class ChunkedVector {
 public:
     static constexpr std::size_t MinChunkSize = sizeof(T);
-    static constexpr std::size_t AdjustedChunkSize =
-        ((std::max(MinChunkSize, RequestedChunkSize) + sizeof(T) - 1) / sizeof(T)) * sizeof(T);
+    static constexpr std::size_t max_size(std::size_t a, std::size_t b) {
+        return a < b ? b : a;
+    }
+
+    static constexpr std::size_t ChunkSize =
+        max_size(MinChunkSize, RequestedChunkSize) / sizeof(T) * sizeof(T);
 
     // Constructs a ChunkedVector with the specified name_prefix for the shared memory buffers.
     // Each SharedMemoryBuffer will be named as name_prefix_i, where i is the chunk index.
@@ -79,37 +83,34 @@ private:
     std::size_t log2(size_t n) const;
 
     // Calculates the index of the chunk that contains the element at the specified index.
-    std::size_t chunk_index(std::size_t index) const;
-
-    // Calculates the position of the element within its chunk for the specified index.
-    std::size_t position_in_chunk(std::size_t index) const;
+    void chunk_index_and_offset(std::size_t index, std::size_t* chunk_index, std::size_t* byte_offset) const;
 };
 
-template <typename T, std::size_t ChunkSize>
-ChunkedVector<T, ChunkSize>::ChunkedVector(const std::string& name_prefix)
+template <typename T, std::size_t RequestedChunkSize>
+ChunkedVector<T, RequestedChunkSize>::ChunkedVector(const std::string& name_prefix)
     : name_prefix_(name_prefix) {
     load_chunks();
 }
 
-template <typename T, std::size_t ChunkSize>
-std::size_t ChunkedVector<T, ChunkSize>::size() const {
+template <typename T, std::size_t RequestedChunkSize>
+std::size_t ChunkedVector<T, RequestedChunkSize>::size() const {
     // The size is stored at the start of the first chunk.
     const std::size_t* size_ptr = static_cast<const std::size_t*>(chunks_[0].data());
     return *size_ptr;
 }
 
-template <typename T, std::size_t ChunkSize>
-bool ChunkedVector<T, ChunkSize>::empty() const {
+template <typename T, std::size_t RequestedChunkSize>
+bool ChunkedVector<T, RequestedChunkSize>::empty() const {
     return size() == 0;
 }
 
-template <typename T, std::size_t ChunkSize>
-std::size_t ChunkedVector<T, ChunkSize>::capacity() const {
+template <typename T, std::size_t RequestedChunkSize>
+std::size_t ChunkedVector<T, RequestedChunkSize>::capacity() const {
     return (ChunkSize * ((1 << chunks_.size()) - 1)) / sizeof(T);
 }
 
-template <typename T, std::size_t ChunkSize>
-void ChunkedVector<T, ChunkSize>::load_chunks() {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::load_chunks() {
     // Load the first chunk and add it to the vector
     chunks_.emplace_back(name_prefix_ + "_0", ChunkSize + sizeof(std::size_t));
 
@@ -126,75 +127,62 @@ void ChunkedVector<T, ChunkSize>::load_chunks() {
 }
 
 
-template <typename T, std::size_t ChunkSize>
-void ChunkedVector<T, ChunkSize>::expand() {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::expand() {
     chunks_.emplace_back(name_prefix_ + "_" + std::to_string(chunks_.size()), ChunkSize * (1 << chunks_.size()));
 }
 
-template <typename T, std::size_t ChunkSize>
-std::size_t ChunkedVector<T, ChunkSize>::log2(size_t n) const {
+template <typename T, std::size_t RequestedChunkSize>
+std::size_t ChunkedVector<T, RequestedChunkSize>::log2(size_t n) const {
     std::size_t log = 0;
     while (n >>= 1) ++log;
     return log;
 }
 
-template <typename T, std::size_t ChunkSize>
-std::size_t ChunkedVector<T, ChunkSize>::chunk_index(std::size_t index) const {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::chunk_index_and_offset(std::size_t index, std::size_t* chunk_index, std::size_t* byte_offset) const {
     // Calculate the total byte offset for the desired index
-    std::size_t byte_offset = index * sizeof(T);
+    *byte_offset = index * sizeof(T);
 
     // Calculate the number of chunks needed to reach the byte offset.
     // We start with chunk_index 0, which has a capacity of ChunkSize.
-    std::size_t chunk_index = 0;
+    *chunk_index = 0;
     std::size_t chunk_capacity = ChunkSize;
 
     // Increase the chunk_index and double the chunk_capacity until
     // we have enough capacity to reach the byte_offset.
-    while (byte_offset >= chunk_capacity) {
-        byte_offset -= chunk_capacity;
+    while (*byte_offset >= chunk_capacity) {
+        *byte_offset -= chunk_capacity;
         chunk_capacity *= 2;
-        ++chunk_index;
+        ++(*chunk_index);
     }
-
-    // Return the chunk_index that contains the desired index.
-    return chunk_index;
+    *byte_offset += (*chunk_index == 0 ? sizeof(size_t) : 0);
 }
 
-template <typename T, std::size_t ChunkSize>
-std::size_t ChunkedVector<T, ChunkSize>::position_in_chunk(std::size_t index) const {
-    std::size_t postion_in_bytes = index * sizeof(T);
-    std::size_t chunk = chunk_index(index);
-    std::size_t chunk_size = (std::size_t(1) << chunk) * ChunkSize;
-
-    // Return the index within the chunk. This is equivalent to the adjusted
-    // index modulo the size of the chunk. Note that since chunk_size is a power
-    // of 2, we can use a bitwise AND operation to compute the modulo efficiently.
-    return (postion_in_bytes & (chunk_size - 1)) + (chunk == 0 ? sizeof(size_t) : 0);
-}
-
-template <typename T, std::size_t ChunkSize>
+template <typename T, std::size_t RequestedChunkSize>
 template <typename... Args>
-void ChunkedVector<T, ChunkSize>::emplace_back(Args&&... args) {
+void ChunkedVector<T, RequestedChunkSize>::emplace_back(Args&&... args) {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
 	std::size_t old_size = size_ptr->fetch_add(1);
 	std::size_t new_size = old_size + 1;
 
-	size_t cindex = chunk_index(old_size);
-    while (cindex > (chunks_.size() - 1)) {
+    std::size_t chunk_index;
+    std::size_t byte_offset;
+	chunk_index_and_offset(old_size, &chunk_index, &byte_offset);
+    while (chunk_index > (chunks_.size() - 1)) {
         expand();
     }
-	size_t pos_in_chunk = position_in_chunk(old_size);
-	T* element_ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[cindex].data()) + pos_in_chunk);
+	T* element_ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
 	new (element_ptr) T(std::forward<Args>(args)...);
 }
 
-template <typename T, std::size_t ChunkSize>
-void ChunkedVector<T, ChunkSize>::push_back(const T& value) {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::push_back(const T& value) {
     emplace_back(value);
 }
 
-template <typename T, std::size_t ChunkSize>
-void ChunkedVector<T, ChunkSize>::pop_back() {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::pop_back() {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
     std::size_t old_size = size_ptr->fetch_sub(1);
     if (old_size == 0) {
@@ -202,29 +190,31 @@ void ChunkedVector<T, ChunkSize>::pop_back() {
     }
 }
 
-template <typename T, std::size_t ChunkSize>
-T& ChunkedVector<T, ChunkSize>::operator[](std::size_t index) {
+template <typename T, std::size_t RequestedChunkSize>
+T& ChunkedVector<T, RequestedChunkSize>::operator[](std::size_t index) {
     if (index >= size()) {
         std::cout << "Index: " << index << ", Size: " << size() << std::endl;
         throw std::out_of_range("Index out of range");
     }
-    std::size_t cindex = chunk_index(index);
-    std::size_t pos_in_chunk = position_in_chunk(index);
-    return *(reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[cindex].data()) + pos_in_chunk));
+    std::size_t chunk_index;
+    std::size_t byte_offset;
+    chunk_index_and_offset(index, &chunk_index, &byte_offset);  
+    return *(reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset));
 }
 
-template <typename T, std::size_t ChunkSize>
-const T& ChunkedVector<T, ChunkSize>::operator[](std::size_t index) const {
+template <typename T, std::size_t RequestedChunkSize>
+const T& ChunkedVector<T, RequestedChunkSize>::operator[](std::size_t index) const {
     if (index >= size()) {
         throw std::out_of_range("Index out of range");
     }
-    std::size_t cindex = chunk_index(index);
-    std::size_t pos_in_chunk = position_in_chunk(index);
-    return *(reinterpret_cast<const T*>(reinterpret_cast<const char*>(chunks_[cindex].data()) + pos_in_chunk));
+    std::size_t chunk_index;
+    std::size_t byte_offset;
+    chunk_index_and_offset(index, &chunk_index, &byte_offset);
+    return *(reinterpret_cast<const T*>(reinterpret_cast<const char*>(chunks_[chunk_index].data()) + byte_offset));
 }
 
-template <typename T, std::size_t ChunkSize>
-void ChunkedVector<T, ChunkSize>::reserve(std::size_t new_cap) {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::reserve(std::size_t new_cap) {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
     std::size_t old_size = *size_ptr;
     std::size_t current_cap = capacity();
@@ -238,8 +228,8 @@ void ChunkedVector<T, ChunkSize>::reserve(std::size_t new_cap) {
     }
 }
 
-template <typename T, std::size_t ChunkSize>
-void ChunkedVector<T, ChunkSize>::resize(std::size_t new_size) {
+template <typename T, std::size_t RequestedChunkSize>
+void ChunkedVector<T, RequestedChunkSize>::resize(std::size_t new_size) {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
     std::size_t expected_size;
     do {

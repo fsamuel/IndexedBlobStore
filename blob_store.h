@@ -8,8 +8,8 @@
 #include <iostream>
 #include <type_traits>
 
+#include "chunked_vector.h"
 #include "shared_memory_allocator.h"
-#include "shared_memory_vector.h"
 
 #ifdef _WIN64
 typedef __int64 ssize_t;
@@ -400,11 +400,6 @@ public:
 	// BlobStore destructor
 	~BlobStore();
 
-	// Returns the metadata buffer name.
-	const std::string& GetMetadataBufferName() const {
-		return metadata_allocator_.buffer_name();
-	}
-
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
 	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
@@ -608,7 +603,7 @@ private:
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
-	using MetadataVector = SharedMemoryVector<BlobMetadata, BlobMetadataAllocator>;
+	using MetadataVector = ChunkedVector<BlobMetadata, 4096>;
 
 	// Returns the index of the first free slot in the metadata vector.
 	size_t FindFreeSlot();
@@ -726,7 +721,7 @@ private:
 	}
 
 	Allocator allocator_;
-	BlobMetadataAllocator metadata_allocator_;
+	//BlobMetadataAllocator metadata_allocator_;
 	MetadataVector metadata_;
 	std::vector<BlobStoreObserver*> observers_;
 

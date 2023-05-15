@@ -2,8 +2,7 @@
 
 BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& dataBuffer) :
     allocator_(std::move(dataBuffer)),
-    metadata_allocator_(std::move(metadataBuffer)),
-    metadata_(metadata_allocator_)
+    metadata_(std::move(metadataBuffer))
 {
     if (metadata_.empty()) {
         metadata_.emplace_back();
@@ -16,7 +15,13 @@ BlobStore::~BlobStore() {
 }
 
 void BlobStore::Drop(size_t index) {
-    if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+    if (index == BlobStore::InvalidIndex) {
+		return;
+	}
+    size_t metadata_size = metadata_.size();
+    BlobMetadata& metadata = metadata_[index];
+
+    if (index >= metadata_size || metadata.next_free_index != -1) {
         return;
     }
     allocator_.Deallocate(allocator_.ToPtr<char>(metadata_[index].offset));
@@ -76,8 +81,10 @@ void BlobStore::NotifyObserversOnDroppedBlob(size_t index) {
 
 size_t BlobStore::FindFreeSlot() {
     if (metadata_[0].next_free_index != 0) {
-        size_t free_index = metadata_[0].next_free_index;
-        metadata_[0].next_free_index = metadata_[free_index].next_free_index;
+        BlobMetadata& free_list_head = metadata_[0];
+        size_t free_index = free_list_head.next_free_index;
+        BlobMetadata& first_free_slot = metadata_[free_index];
+        free_list_head.next_free_index = first_free_slot.next_free_index;
         return free_index;
     }
     else {

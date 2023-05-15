@@ -4,7 +4,6 @@
 #include "blob_store.h"
 #include "shared_memory_allocator.h"
 #include "shared_memory_buffer.h"
-#include "shared_memory_vector.h"
 
 int main() {
     try {
