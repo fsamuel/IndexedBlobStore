@@ -11,12 +11,12 @@
 // to allocate its memory in chunks. Each chunk is double the size of the previous chunk.
 // It supports basic operations like push_back, pop_back, access at a particular index,
 // and checking the size of the vector.
-template <typename T, std::size_t ChunkSize>
+template <typename T, std::size_t RequestedChunkSize>
 class ChunkedVector {
 public:
     static constexpr std::size_t MinChunkSize = sizeof(T);
-    static_assert(ChunkSize >= MinChunkSize, "ChunkSize must be at least sizeof(T)");
-    static_assert(ChunkSize % sizeof(T) == 0, "ChunkSize must be a multiple of sizeof(T)");
+    static constexpr std::size_t AdjustedChunkSize =
+        ((std::max(MinChunkSize, RequestedChunkSize) + sizeof(T) - 1) / sizeof(T)) * sizeof(T);
 
     // Constructs a ChunkedVector with the specified name_prefix for the shared memory buffers.
     // Each SharedMemoryBuffer will be named as name_prefix_i, where i is the chunk index.
@@ -140,32 +140,25 @@ std::size_t ChunkedVector<T, ChunkSize>::log2(size_t n) const {
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::chunk_index(std::size_t index) const {
-    // Compute the byte offset of the element.
+    // Calculate the total byte offset for the desired index
     std::size_t byte_offset = index * sizeof(T);
 
-    // If the byte offset is within the first chunk, the chunk index is 0.
-    if (byte_offset < ChunkSize) {
-        return 0;
-    }
+    // Calculate the number of chunks needed to reach the byte offset.
+    // We start with chunk_index 0, which has a capacity of ChunkSize.
+    std::size_t chunk_index = 0;
+    std::size_t chunk_capacity = ChunkSize;
 
-    // Adjust the byte offset for the subsequent chunks.
-    byte_offset -= ChunkSize;
-
-    // Compute the number of chunks, rounding up to nearest chunk boundary.
-    std::size_t num_chunks = (byte_offset + ChunkSize - 1) / ChunkSize;
-
-    // Initialize the chunk index to 1 (for the second chunk).
-    std::size_t chunk_index = 1;
-
-    // Use a bit shift to check each bit position in num_chunks.
-    while (num_chunks >>= 1) {
+    // Increase the chunk_index and double the chunk_capacity until
+    // we have enough capacity to reach the byte_offset.
+    while (byte_offset >= chunk_capacity) {
+        byte_offset -= chunk_capacity;
+        chunk_capacity *= 2;
         ++chunk_index;
     }
 
+    // Return the chunk_index that contains the desired index.
     return chunk_index;
 }
-
-
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::position_in_chunk(std::size_t index) const {
