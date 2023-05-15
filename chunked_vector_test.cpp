@@ -77,3 +77,102 @@ TEST_F(ChunkedVectorTest, ReserveCapacityResize) {
 	EXPECT_EQ(vec.size(), 20);
 	EXPECT_EQ(vec.capacity(), 31);
 }
+
+// Write 1000 elements to the ChunkedVector and then read them back and make sure
+// they are all there. Modify a few elements and make sure they are updated. Also
+// make sure that the other elements are still there and unchanged.
+TEST_F(ChunkedVectorTest, WriteAndRead) {
+	ChunkedVector<int, 4> vec("chunked_vector_test");
+	for (int i = 0; i < 1000; i++) {
+		vec.push_back(i);
+	}
+	EXPECT_EQ(vec.size(), 1000);
+	for (int i = 0; i < 1000; i++) {
+		EXPECT_EQ(vec[i], i);
+	}
+	EXPECT_EQ(vec.capacity(), 1023);
+	vec[0] = 1000;
+	vec[1] = 1001;
+	vec[2] = 1002;
+	EXPECT_EQ(vec[0], 1000);
+	EXPECT_EQ(vec[1], 1001);
+	EXPECT_EQ(vec[2], 1002);
+	for (int i = 3; i < 1000; i++) {
+		EXPECT_EQ(vec[i], i);
+	}
+}
+
+// Try a ChunkedVector with a different chunk size and a different type.
+TEST_F(ChunkedVectorTest, LargeChunkWithStruct) {
+	struct TestStruct {
+		int a;
+		int b;
+		int c;
+		int d;
+	};
+	ChunkedVector<TestStruct, 16> vec("chunked_vector_test");
+	EXPECT_EQ(vec.size(), 0);
+	TestStruct obj;
+	obj.a = 1;
+	obj.b = 2;
+	obj.c = 3;
+	obj.d = 4;
+	vec.push_back(obj);
+	EXPECT_EQ(vec.size(), 1);
+	EXPECT_EQ(vec[0].a, 1);
+	EXPECT_EQ(vec[0].b, 2);
+	EXPECT_EQ(vec[0].c, 3);
+	EXPECT_EQ(vec[0].d, 4);
+}
+
+// Insert 1000 elements into a ChunkedVector and then erase them all and make sure
+// the size is updated appropriately.
+TEST_F(ChunkedVectorTest, Erase) {
+	ChunkedVector<int, 4> vec("chunked_vector_test");
+	for (int i = 0; i < 1000; i++) {
+		vec.push_back(i);
+	}
+	EXPECT_EQ(vec.size(), 1000);
+	for (int i = 0; i < 1000; i++) {
+		vec.pop_back();
+	}
+	EXPECT_EQ(vec.size(), 0);
+}
+
+// Insert 1000 structs into a ChunkedVector and modify a few of them making
+// sure that the modifications are reflected in the ChunkedVector and other elements
+// are unchanged.
+TEST_F(ChunkedVectorTest, EraseStruct) {
+	struct TestStruct {
+		int a;
+		int b;
+		int c;
+		int d;
+	};
+	ChunkedVector<TestStruct, 16> vec("chunked_vector_test");
+	for (int i = 0; i < 1000; i++) {
+		TestStruct obj;
+		obj.a = i;
+		obj.b = i + 1;
+		obj.c = i + 2;
+		obj.d = i + 3;
+		vec.push_back(obj);
+	}
+	EXPECT_EQ(vec.size(), 1000);
+	for (int i = 1; i < 1000; i++) {
+		vec[i].a = 1000;
+		vec[i].b = 1001;
+		vec[i].c = 1002;
+		vec[i].d = 1003;
+	}
+	for (int i = 1; i < 1000; i++) {
+		EXPECT_EQ(vec[i].a, 1000);
+		EXPECT_EQ(vec[i].b, 1001);
+		EXPECT_EQ(vec[i].c, 1002);
+		EXPECT_EQ(vec[i].d, 1003);
+	}
+	EXPECT_EQ(vec[0].a, 0);
+	EXPECT_EQ(vec[0].b, 1);
+	EXPECT_EQ(vec[0].c, 2);
+	EXPECT_EQ(vec[0].d, 3);
+}
