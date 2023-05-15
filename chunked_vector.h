@@ -14,6 +14,10 @@
 template <typename T, std::size_t ChunkSize>
 class ChunkedVector {
 public:
+    static constexpr std::size_t MinChunkSize = sizeof(T);
+    static_assert(ChunkSize >= MinChunkSize, "ChunkSize must be at least sizeof(T)");
+    static_assert(ChunkSize % sizeof(T) == 0, "ChunkSize must be a multiple of sizeof(T)");
+
     // Constructs a ChunkedVector with the specified name_prefix for the shared memory buffers.
     // Each SharedMemoryBuffer will be named as name_prefix_i, where i is the chunk index.
     explicit ChunkedVector(const std::string& name_prefix);
@@ -136,19 +140,32 @@ std::size_t ChunkedVector<T, ChunkSize>::log2(size_t n) const {
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::chunk_index(std::size_t index) const {
-    std::size_t num_chunks = ((index + 1) * sizeof(T)) / ChunkSize;
+    // Compute the byte offset of the element.
+    std::size_t byte_offset = index * sizeof(T);
 
-    // Initialize the chunk index to 0.
-    std::size_t chunk_index = 0;
+    // If the byte offset is within the first chunk, the chunk index is 0.
+    if (byte_offset < ChunkSize) {
+        return 0;
+    }
 
-    // Use a bit shift to check each bit position in shifted_index.
+    // Adjust the byte offset for the subsequent chunks.
+    byte_offset -= ChunkSize;
+
+    // Compute the number of chunks, rounding up to nearest chunk boundary.
+    std::size_t num_chunks = (byte_offset + ChunkSize - 1) / ChunkSize;
+
+    // Initialize the chunk index to 1 (for the second chunk).
+    std::size_t chunk_index = 1;
+
+    // Use a bit shift to check each bit position in num_chunks.
     while (num_chunks >>= 1) {
         ++chunk_index;
     }
 
-    // Return the calculated chunk index.
     return chunk_index;
 }
+
+
 
 template <typename T, std::size_t ChunkSize>
 std::size_t ChunkedVector<T, ChunkSize>::position_in_chunk(std::size_t index) const {
@@ -168,10 +185,11 @@ void ChunkedVector<T, ChunkSize>::emplace_back(Args&&... args) {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
 	std::size_t old_size = size_ptr->fetch_add(1);
 	std::size_t new_size = old_size + 1;
-    if ((new_size * sizeof(T)) > ChunkSize * ((1 << chunks_.size()) - 1)) {
-		expand();
-	}
+
 	size_t cindex = chunk_index(old_size);
+    while (cindex > (chunks_.size() - 1)) {
+        expand();
+    }
 	size_t pos_in_chunk = position_in_chunk(old_size);
 	T* element_ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[cindex].data()) + pos_in_chunk);
 	new (element_ptr) T(std::forward<Args>(args)...);
