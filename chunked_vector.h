@@ -14,13 +14,15 @@
 template <typename T, std::size_t RequestedChunkSize>
 class ChunkedVector {
 public:
-    static constexpr std::size_t MinChunkSize = sizeof(T);
     static constexpr std::size_t max_size(std::size_t a, std::size_t b) {
         return a < b ? b : a;
     }
 
+    static constexpr std::size_t ElementSize = sizeof(T);
+
     static constexpr std::size_t ChunkSize =
-        max_size(MinChunkSize, RequestedChunkSize) / sizeof(T) * sizeof(T);
+        max_size(ElementSize, RequestedChunkSize) / ElementSize * ElementSize;
+
 
     // Constructs a ChunkedVector with the specified name_prefix for the shared memory buffers.
     // Each SharedMemoryBuffer will be named as name_prefix_i, where i is the chunk index.
@@ -79,9 +81,6 @@ private:
     // Adds a new chunk to the vector with double the size of the previous chunk.
     void expand();
 
-    // Calculates the log base 2 of the specified number.
-    std::size_t log2(size_t n) const;
-
     // Calculates the index of the chunk that contains the element at the specified index.
     void chunk_index_and_offset(std::size_t index, std::size_t* chunk_index, std::size_t* byte_offset) const;
 };
@@ -106,19 +105,22 @@ bool ChunkedVector<T, RequestedChunkSize>::empty() const {
 
 template <typename T, std::size_t RequestedChunkSize>
 std::size_t ChunkedVector<T, RequestedChunkSize>::capacity() const {
-    return (ChunkSize * ((1 << chunks_.size()) - 1)) / sizeof(T);
+    return (ChunkSize * ((1 << chunks_.size()) - 1)) / ElementSize;
 }
 
 template <typename T, std::size_t RequestedChunkSize>
 void ChunkedVector<T, RequestedChunkSize>::load_chunks() {
-    // Load the first chunk and add it to the vector
+    // Load the first chunk and add it to the vector. The first chunk also stores the size of the vector.
     chunks_.emplace_back(name_prefix_ + "_0", ChunkSize + sizeof(std::size_t));
 
     // Read the size from the first chunk
-    size_t size = *reinterpret_cast<std::size_t*>(chunks_[0].data()) / sizeof(T);
+    size_t size = *reinterpret_cast<std::size_t*>(chunks_[0].data()) / ElementSize;
 
     // Calculate the number of chunks needed
-    size_t num_chunks = log2(size * sizeof(T) / ChunkSize) + 1;
+    size_t chunk_index;
+    size_t byte_offset;
+    chunk_index_and_offset(size, &chunk_index, &byte_offset);
+    size_t num_chunks = chunk_index + 1;
 
     // Load the additional chunks
     for (std::size_t i = 1; i < num_chunks; ++i) {
@@ -126,23 +128,15 @@ void ChunkedVector<T, RequestedChunkSize>::load_chunks() {
     }
 }
 
-
 template <typename T, std::size_t RequestedChunkSize>
 void ChunkedVector<T, RequestedChunkSize>::expand() {
     chunks_.emplace_back(name_prefix_ + "_" + std::to_string(chunks_.size()), ChunkSize * (1 << chunks_.size()));
 }
 
 template <typename T, std::size_t RequestedChunkSize>
-std::size_t ChunkedVector<T, RequestedChunkSize>::log2(size_t n) const {
-    std::size_t log = 0;
-    while (n >>= 1) ++log;
-    return log;
-}
-
-template <typename T, std::size_t RequestedChunkSize>
 void ChunkedVector<T, RequestedChunkSize>::chunk_index_and_offset(std::size_t index, std::size_t* chunk_index, std::size_t* byte_offset) const {
     // Calculate the total byte offset for the desired index
-    *byte_offset = index * sizeof(T);
+    *byte_offset = index * ElementSize;
 
     // Calculate the number of chunks needed to reach the byte offset.
     // We start with chunk_index 0, which has a capacity of ChunkSize.
