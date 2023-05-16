@@ -22,30 +22,27 @@ void BlobStore::Drop(size_t index) {
     BlobMetadata& free_list_head = metadata_[0];
     while (true) {
         BlobMetadata* metadata = metadata_.at(index);
-        if (metadata == nullptr) {
+        // Set a tombstone on the blob to ensure that no new locks are acquired on it.
+        // We cannot drop a blob that is on the free list.
+        if (metadata == nullptr || !metadata->SetTombstone()) {
 			return;
 		}
-        
-        // Set a tombstone on the blob to ensure that no new locks are acquired on it.
-        metadata->tombstone = true;
 
         // Check if a lock is held on the blob, and if so, return. It will be dropped when the lock is released.
         if (metadata->lock_state != 0) {
 			return;
 		}
         size_t allocated_offset = metadata->offset;
-        ssize_t next_free_index = metadata->next_free_index;
-        if (next_free_index != -1) {
-            return;
-        }
+
         ssize_t first_free_index = free_list_head.next_free_index.load();
-        if (!metadata->next_free_index.compare_exchange_weak(next_free_index, first_free_index)) {
+        ssize_t tombstone = 0;
+        if (!metadata->next_free_index.compare_exchange_weak(tombstone, first_free_index)) {
 			continue;
 		}
-        // If the head of the free list has changed, undo the change we made if possible and try again.
 
+        // If the head of the free list has changed, undo the change we made if possible and try again.
         if (!free_list_head.next_free_index.compare_exchange_weak(first_free_index, index)) {
-            metadata->next_free_index.compare_exchange_weak(first_free_index, next_free_index);
+            metadata->next_free_index.compare_exchange_weak(first_free_index, tombstone);
             continue;
         }
 
@@ -115,7 +112,7 @@ size_t BlobStore::FindFreeSlot() {
         if (free_list_head.next_free_index.compare_exchange_weak(free_index, next_free_index)) {
             // Make sure the tombstone bit is not set for the recycled metadata.
             BlobMetadata& metadata = metadata_[free_index];
-            metadata.tombstone = false;
+            metadata.next_free_index = -1;
 			return free_index;
 		}
     }
@@ -123,14 +120,14 @@ size_t BlobStore::FindFreeSlot() {
 
 // Returns the number of free slots in the metadata vector
 size_t BlobStore::GetFreeSlotCount() const {
-	size_t count = 0;
-	size_t index = metadata_[0].next_free_index;
-    // The free list is a circular linked list with a dummy node at the head.
-    while (index !=0) {
-		++count;
-		index = metadata_[index].next_free_index;
-	}
-	return count;
+    size_t count = 0;
+    for (size_t i = 1; i < metadata_.size(); i++) {
+        const BlobMetadata& metadata = metadata_[i];
+        if (metadata.is_deleted()) {
+            count++;
+        }
+    }
+    return count;
 }
 
 void BlobStore::OnBufferResize() {

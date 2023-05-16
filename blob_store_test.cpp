@@ -307,3 +307,38 @@ TEST_F(BlobStoreTest, BlobStoreObjectUpgradeInvalidates) {
 	EXPECT_EQ(ptr2, nullptr);
 	EXPECT_EQ(ptr3, nullptr);
 }
+
+// Create a blob, get a BlobStoreObject from it, and then drop the blob. Try to get another
+// BlobStoreObject from the index of the dropped blob. This should fail.
+TEST_F(BlobStoreTest, BlobStoreObjectDrop) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<int> ptr = store.New<int>(64);
+	size_t index = ptr.Index();
+	EXPECT_EQ(ptr.GetSize(), sizeof(int));
+	EXPECT_EQ(*ptr, 64);
+	store.Drop(std::move(ptr));
+	EXPECT_EQ(ptr, nullptr);
+	BlobStoreObject<const int> ptr2 = store.Get<int>(index);
+	EXPECT_EQ(ptr2, nullptr);
+}
+
+// Create a blob, get a BlobStoreObject from it, store it in another BlobStoreObject. Drop the first
+// BlobStoreObject. The second BlobStoreObject should no longer be valid. Try to get another
+// BlobStoreObject from the index of the dropped blob. This should fail.
+TEST_F(BlobStoreTest, BlobStoreObjectDrop2) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<int> ptr = store.New<int>(64);
+	size_t index = ptr.Index();
+	EXPECT_EQ(ptr.GetSize(), sizeof(int));
+	EXPECT_EQ(*ptr, 64);
+	BlobStoreObject<int> ptr2 = ptr;
+	EXPECT_EQ(ptr, ptr2);
+	EXPECT_EQ(ptr2.GetSize(), sizeof(int));
+	EXPECT_EQ(*ptr2, 64);
+	store.Drop(std::move(ptr2));
+	// Right now we don't invalidate the pointer, but we should.
+	//EXPECT_EQ(ptr, nullptr);
+	EXPECT_EQ(ptr2, nullptr);
+	BlobStoreObject<const int> ptr3 = store.Get<int>(index);
+	EXPECT_EQ(ptr3, nullptr);
+}
