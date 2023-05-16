@@ -42,6 +42,7 @@
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="blob_store.h" />
     <ClInclude Include="b_plus_tree.h" />
+    <ClInclude Include="string_slice.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="chunked_vector_test.cpp" />
@@ -51,6 +52,8 @@
     <ClCompile Include="b_plus_tree_test.cpp" />
     <ClCompile Include="shared_memory_buffer_test.cpp" />
     <ClCompile Include="shared_memory_allocator_test.cpp" />
+    <ClCompile Include="string_slice.cpp" />
+    <ClCompile Include="string_slice_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BPlusTree\BPlusTree.vcxproj">

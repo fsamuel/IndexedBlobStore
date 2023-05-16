@@ -799,7 +799,6 @@ private:
 	}
 
 	Allocator allocator_;
-	//BlobMetadataAllocator metadata_allocator_;
 	MetadataVector metadata_;
 	std::vector<BlobStoreObserver*> observers_;
 
