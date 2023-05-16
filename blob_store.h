@@ -382,7 +382,6 @@ private:
 	friend class BlobStoreObject;
 };
 
-
 // BlobStore is a class that manages the storage and retrieval of objects
 // (blobs) in shared memory. It supports storing, getting, and deleting
 // objects while maintaining a compact memory footprint.
@@ -424,8 +423,7 @@ public:
 	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<typename std::remove_const<T>::type>>::type
 		Clone(size_t index) {
 		// This is only safe if the calling object is holding a read or write lock.
-		// TODO(fsamuel): This whole method is NOT thread safe or buffer resize safe.
-		BlobMetadata metadata = metadata_[index];
+		BlobMetadata& metadata = metadata_[index];
 		size_t clone_index = FindFreeSlot();
 		char* ptr = allocator_.Allocate(metadata.size * metadata.count);
 		size_t offset;

@@ -283,3 +283,52 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 	}
 
 }
+
+// Insert 50 elements into the B+ tree. Create a transaction, insert a few more through the transaction.
+// Verify that the first 50  appear outside the transaction and all 55 appear inside the transaction.
+// Abort the transaction and verify that the first 50 elements are still in the tree and the last 5 are not.
+TEST_F(BPlusTreeTest, InsertTransactionAbort) {
+	BPlusTree<int, int, 32> tree(*blob_store);
+	for (int i = 0; i < 50; i++) {
+		tree.Insert(i, i * 100);
+	}
+	auto txn = tree.CreateTransaction();
+	for (int i = 50; i < 55; i++) {
+		txn.Insert(i, i * 100);
+	}
+	// Verify that all 55 elements are in the tree in the transaction.
+	for (int i = 0; i < 55; i++) {
+		auto it = txn.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+	// Verify that only the first 50 elements are in the tree outside the transaction.
+	for (int i = 0; i < 55; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		if (i < 50) {
+			EXPECT_NE(value_ptr, nullptr);
+			EXPECT_EQ(value, i * 100);
+		}
+		else {
+			EXPECT_EQ(value_ptr, nullptr);
+		}
+	}
+	std::move(txn).Abort();
+	for (int i = 0; i < 50; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
+	}
+	for (int i = 50; i < 55; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_EQ(value_ptr, nullptr);
+	}
+}
