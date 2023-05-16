@@ -25,11 +25,12 @@ void BlobStore::Drop(size_t index) {
         if (metadata == nullptr) {
 			return;
 		}
-        // Check if a lock is held on the blob, and if so, tombstone the blob and return.
-        if (metadata->lock_state.load() != 0) {
-            // This is safe because we know that the blob is not locked and we can
-            // only go from not tombstoned to tombstoned.
-            metadata->tombstone = true;
+        
+        // Set a tombstone on the blob to ensure that no new locks are acquired on it.
+        metadata->tombstone = true;
+
+        // Check if a lock is held on the blob, and if so, return. It will be dropped when the lock is released.
+        if (metadata->lock_state != 0) {
 			return;
 		}
         size_t allocated_offset = metadata->offset;

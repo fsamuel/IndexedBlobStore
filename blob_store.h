@@ -484,7 +484,8 @@ public:
 	size_t GetTombstonedSlotCount() const {
 		size_t count = 0;
 		for (size_t i = 0; i < metadata_.size(); i++) {
-			if (metadata_[i].tombstone) {
+			const BlobMetadata& metadata = metadata_[i];
+			if (metadata.tombstone && metadata.next_free_index == -1) {
 				count++;
 			}
 		}
