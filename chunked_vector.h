@@ -51,13 +51,19 @@ public:
     std::size_t capacity() const;
 
     template <typename... Args>
-    void emplace_back(Args&&... args);
+    size_t emplace_back(Args&&... args);
 
     // Adds an element to the end of the ChunkedVector.
-    void push_back(const T& value);
+    size_t push_back(const T& value);
 
     // Removes the last element of the ChunkedVector.
     void pop_back();
+
+    // Accesses the element at the specified index in the ChunkedVector.
+    T* at(std::size_t index);
+
+    // Accesses the element at the specified index in the ChunkedVector (const version).
+    const T* at(std::size_t index) const;
 
     // Accesses the element at the specified index in the ChunkedVector.
     T& operator[](std::size_t index);
@@ -155,7 +161,7 @@ void ChunkedVector<T, RequestedChunkSize>::chunk_index_and_offset(std::size_t in
 
 template <typename T, std::size_t RequestedChunkSize>
 template <typename... Args>
-void ChunkedVector<T, RequestedChunkSize>::emplace_back(Args&&... args) {
+std::size_t ChunkedVector<T, RequestedChunkSize>::emplace_back(Args&&... args) {
     std::atomic_size_t* size_ptr = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
 	std::size_t old_size = size_ptr->fetch_add(1);
 	std::size_t new_size = old_size + 1;
@@ -168,11 +174,13 @@ void ChunkedVector<T, RequestedChunkSize>::emplace_back(Args&&... args) {
     }
 	T* element_ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
 	new (element_ptr) T(std::forward<Args>(args)...);
+
+    return old_size;
 }
 
 template <typename T, std::size_t RequestedChunkSize>
-void ChunkedVector<T, RequestedChunkSize>::push_back(const T& value) {
-    emplace_back(value);
+size_t ChunkedVector<T, RequestedChunkSize>::push_back(const T& value) {
+    return emplace_back(value);
 }
 
 template <typename T, std::size_t RequestedChunkSize>
@@ -185,26 +193,36 @@ void ChunkedVector<T, RequestedChunkSize>::pop_back() {
 }
 
 template <typename T, std::size_t RequestedChunkSize>
-T& ChunkedVector<T, RequestedChunkSize>::operator[](std::size_t index) {
+T* ChunkedVector<T, RequestedChunkSize>::at(std::size_t index) {
     if (index >= size()) {
-        std::cout << "Index: " << index << ", Size: " << size() << std::endl;
-        throw std::out_of_range("Index out of range");
+        return nullptr;
     }
-    std::size_t chunk_index;
-    std::size_t byte_offset;
-    chunk_index_and_offset(index, &chunk_index, &byte_offset);  
-    return *(reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset));
+    std::size_t chunk_index, byte_offset;
+    chunk_index_and_offset(index, &chunk_index, &byte_offset);
+    return reinterpret_cast<T*>(reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
+}
+
+template <typename T, std::size_t RequestedChunkSize>
+const T* ChunkedVector<T, RequestedChunkSize>::at(std::size_t index) const {
+    return const_cast<ChunkedVector*>(this)->at(index);
+}
+
+template <typename T, std::size_t RequestedChunkSize>
+T& ChunkedVector<T, RequestedChunkSize>::operator[](std::size_t index) {
+    T* ptr = at(index);
+    if (ptr == nullptr) {
+		throw std::out_of_range("Index out of range");
+	}
+	return *ptr;
 }
 
 template <typename T, std::size_t RequestedChunkSize>
 const T& ChunkedVector<T, RequestedChunkSize>::operator[](std::size_t index) const {
-    if (index >= size()) {
+    const T* ptr = at(index);
+    if (ptr == nullptr) {
         throw std::out_of_range("Index out of range");
     }
-    std::size_t chunk_index;
-    std::size_t byte_offset;
-    chunk_index_and_offset(index, &chunk_index, &byte_offset);
-    return *(reinterpret_cast<const T*>(reinterpret_cast<const char*>(chunks_[chunk_index].data()) + byte_offset));
+    return *ptr;
 }
 
 template <typename T, std::size_t RequestedChunkSize>

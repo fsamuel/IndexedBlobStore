@@ -470,17 +470,32 @@ public:
 
 	template<typename U>
 	void Drop(BlobStoreObject<U>&& object) {
-		Drop(object.Index());
+		size_t index = object.Index();
+		// This ensures that we're no longer holding a lock on this object.
+		object = nullptr;
+		Drop(index);
 	}
 
 	// Compacts the BlobStore, removing any unused space between objects.
 	void Compact();
-
+		
+	// Returns the number of slots marked as tombstoned by iterating over
+	// all metadata entries and counting all with the tombstone flag set.
+	size_t GetTombstonedSlotCount() const {
+		size_t count = 0;
+		for (size_t i = 0; i < metadata_.size(); i++) {
+			if (metadata_[i].tombstone) {
+				count++;
+			}
+		}
+		return count;
+	}
 	// Returns the number of stored objects in the BlobStore.
 	size_t GetSize() const {
 		// The first slot in the metadata vector is always reserved for the free list.
 		size_t size = metadata_.size() - 1;
 		size -= GetFreeSlotCount();
+		size -= GetTombstonedSlotCount();
 		return size;
 	}
 
@@ -561,7 +576,15 @@ public:
 
 	private:
 		void AdvanceToValidIndex() {
-			while (index_ < store_->metadata_.size() && store_->metadata_[index_].next_free_index != -1) {
+			while (true) {
+				BlobMetadata* metadata = store_->metadata_.at(index_);
+				if (metadata == nullptr) {
+					break;
+				}
+
+				if (metadata->next_free_index == -1 && !metadata->tombstone) {
+					break;
+				}
 				++index_;
 			}
 		}
@@ -588,16 +611,27 @@ public:
 
 private:
 	struct BlobMetadata {
-		size_t size;                      // The size of the type stored.
-		size_t count;                     // The number of elements of type stored.
-		std::atomic<offset_type> offset;  // The offset of the blob in the shared memory buffer.
-		std::atomic<int> lock_state;      // The lock state of the blob.
-		ssize_t next_free_index;          // -1 if the slot is occupied, or the index of the next free slot in the free list
-		BlobMetadata() : size(0), count(0), offset(0), lock_state(0), next_free_index(0) {}
+		// The size of the type stored.
+		// TODO(fsamuel): Can we get this from the allocator?
+		size_t size;
+		// The number of elements of type stored.
+		// TODO(fsamuel): Is this really necessary?
+		size_t count;
+		// The offset of the blob in the shared memory buffer.
+		std::atomic<offset_type> offset;
+		// The lock state of the blob.
+		std::atomic<int> lock_state;
+		// -1 if the slot is occupied, or the index of the next free slot in the free list
+		std::atomic<ssize_t> next_free_index;          
+		// Tombstone flag used to indicate that the blob has been dropped but is not yet ready to be reused.
+		// This can happen if there is a pending read or write operation on the blob.
+		std::atomic<bool> tombstone;
 
-		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), offset(offset), lock_state(0), next_free_index(-1) {}
+		BlobMetadata() : size(0), count(0), offset(0), lock_state(0), next_free_index(0), tombstone(false) {}
 
-		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index) {}
+		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), offset(offset), lock_state(0), next_free_index(-1), tombstone(false) {}
+
+		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index.load()), tombstone(false) {}
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
@@ -618,29 +652,39 @@ private:
 	// Gets the object of type T at the specified index as a raw pointer.
 	template<typename T>
 	T* GetRaw(size_t index, size_t* offset) {
-		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+		if (index == BlobStore::InvalidIndex) {
 			return nullptr;
 		}
-		BlobMetadata& metadata_entry = metadata_[index];
-		if (metadata_entry.size == 0 || metadata_entry.count == 0) {
+		BlobMetadata* metadata = metadata_.at(index);
+		if (metadata == nullptr ||
+			metadata->next_free_index != -1 ||
+			metadata->tombstone ||
+			metadata->size == 0 || 
+			metadata->count == 0) {
 			return nullptr;
 		}
+		
+		offset_type offset_value = metadata->offset;
 		if (offset != nullptr) {
-			*offset = metadata_entry.offset;
+			*offset = offset_value;
 		}
-		return allocator_.ToPtr<T>(metadata_entry.offset);
+		return allocator_.ToPtr<T>(offset_value);
 	}
 
 	// Acquires a read lock for the object at the specified index.
 	bool AcquireReadLock(size_t index) {
-		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+		if (index == BlobStore::InvalidIndex) {
 			return false;
 		}
-		BlobMetadata& metadata_entry = metadata_[index];
 		while (true) {
-			int state = metadata_entry.lock_state.load(std::memory_order_acquire);
+			BlobMetadata* metadata = metadata_.at(index);
+			// It's possible that the blob was deleted while we were waiting for the lock.
+			if (metadata == nullptr || metadata->next_free_index != -1) {
+				return false;
+			}
+			int state = metadata->lock_state.load(std::memory_order_acquire);
 			if (state >= 0) {
-				if (metadata_entry.lock_state.compare_exchange_weak(state, state + 1, std::memory_order_acquire)) {
+				if (metadata->lock_state.compare_exchange_weak(state, state + 1, std::memory_order_acquire)) {
 					break;
 				}
 			}
@@ -652,13 +696,17 @@ private:
 
 	// Acquires a write lock for the object at the specified index.
 	bool AcquireWriteLock(size_t index) {
-		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+		if (index == BlobStore::InvalidIndex) {
 			return false;
 		}
-		BlobMetadata& metadata_entry = metadata_[index];
 		while (true) {
+			BlobMetadata* metadata = metadata_.at(index);
+			// It's possible that the blob was deleted while we were waiting for the lock.
+			if (metadata == nullptr || metadata->next_free_index != -1) {
+				return false;
+			}
 			std::int32_t expected = 0;
-			if (metadata_entry.lock_state.compare_exchange_weak(expected, WRITE_LOCK_FLAG, std::memory_order_acquire)) {
+			if (metadata->lock_state.compare_exchange_weak(expected, WRITE_LOCK_FLAG, std::memory_order_acquire)) {
 				break;
 			}
 			SpinWait();
@@ -682,6 +730,10 @@ private:
 				break;
 			}
 			SpinWait();
+		}
+		// Check if the blob was tombstoned and is now ready to be reused.
+		if (metadata_entry.tombstone.load() && metadata_entry.lock_state.load() == 0) {
+			Drop(index);
 		}
 	}
 

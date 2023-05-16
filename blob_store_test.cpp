@@ -207,7 +207,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 
 	store.Drop(std::move(ptr3));
 	EXPECT_EQ(ptr3, nullptr);
-	EXPECT_EQ(ptr4, nullptr);
+	// The blob hasn't been dropped yet because ptr4 still references it.
+	EXPECT_NE(ptr4, nullptr);
 }
 
 // Tests BlobStoreObject: creates a blob, gets a BlobStoreObject from it,

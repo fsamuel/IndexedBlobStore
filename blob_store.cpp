@@ -18,16 +18,40 @@ void BlobStore::Drop(size_t index) {
     if (index == BlobStore::InvalidIndex) {
 		return;
 	}
-    size_t metadata_size = metadata_.size();
-    BlobMetadata& metadata = metadata_[index];
 
-    if (index >= metadata_size || metadata.next_free_index != -1) {
+    BlobMetadata& free_list_head = metadata_[0];
+    while (true) {
+        BlobMetadata* metadata = metadata_.at(index);
+        if (metadata == nullptr) {
+			return;
+		}
+        // Check if a lock is held on the blob, and if so, tombstone the blob and return.
+        if (metadata->lock_state.load() != 0) {
+            // This is safe because we know that the blob is not locked and we can
+            // only go from not tombstoned to tombstoned.
+            metadata->tombstone = true;
+			return;
+		}
+        size_t allocated_offset = metadata->offset;
+        ssize_t next_free_index = metadata->next_free_index;
+        if (next_free_index != -1) {
+            return;
+        }
+        ssize_t first_free_index = free_list_head.next_free_index.load();
+        if (!metadata->next_free_index.compare_exchange_weak(next_free_index, first_free_index)) {
+			continue;
+		}
+        // If the head of the free list has changed, undo the change we made if possible and try again.
+
+        if (!free_list_head.next_free_index.compare_exchange_weak(first_free_index, index)) {
+            metadata->next_free_index.compare_exchange_weak(first_free_index, next_free_index);
+            continue;
+        }
+
+        allocator_.Deallocate(allocator_.ToPtr<char>(allocated_offset));
+        NotifyObserversOnDroppedBlob(index);
         return;
     }
-    allocator_.Deallocate(allocator_.ToPtr<char>(metadata_[index].offset));
-    metadata_[index].next_free_index = metadata_[0].next_free_index;
-    metadata_[0].next_free_index = index;
-    NotifyObserversOnDroppedBlob(index);
 }
 
 void BlobStore::Compact() {
@@ -80,16 +104,19 @@ void BlobStore::NotifyObserversOnDroppedBlob(size_t index) {
 }
 
 size_t BlobStore::FindFreeSlot() {
-    if (metadata_[0].next_free_index != 0) {
+    while (true) {
         BlobMetadata& free_list_head = metadata_[0];
-        size_t free_index = free_list_head.next_free_index;
-        BlobMetadata& first_free_slot = metadata_[free_index];
-        free_list_head.next_free_index = first_free_slot.next_free_index;
-        return free_index;
-    }
-    else {
-        metadata_.emplace_back();
-        return metadata_.size() - 1;
+		ssize_t free_index = free_list_head.next_free_index.load();
+        if (free_index == 0) {
+            return metadata_.emplace_back();
+        }
+        ssize_t next_free_index = metadata_[free_index].next_free_index.load();
+        if (free_list_head.next_free_index.compare_exchange_weak(free_index, next_free_index)) {
+            // Make sure the tombstone bit is not set for the recycled metadata.
+            BlobMetadata& metadata = metadata_[free_index];
+            metadata.tombstone = false;
+			return free_index;
+		}
     }
 }
 
