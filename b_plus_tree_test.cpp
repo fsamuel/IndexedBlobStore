@@ -317,6 +317,8 @@ TEST_F(BPlusTreeTest, InsertTransactionAbort) {
 			EXPECT_EQ(value_ptr, nullptr);
 		}
 	}
+	// Abort the transaction and verify that the first 50 elements are still in
+	// the tree and the last 5 are not.
 	std::move(txn).Abort();
 	for (int i = 0; i < 50; i++) {
 		auto it = tree.Search(i);
@@ -330,5 +332,17 @@ TEST_F(BPlusTreeTest, InsertTransactionAbort) {
 		auto value_ptr = it.GetValue();
 		int value = value_ptr == nullptr ? 0 : *value_ptr;
 		EXPECT_EQ(value_ptr, nullptr);
+	}
+	// Insert some more elements into the tree and verify that they are there.
+	for (int i = 50; i < 100; i++) {
+		tree.Insert(i, i * 100);
+	}
+	// Verify that all 100 elements are in the tree.
+	for (int i = 0; i < 100; i++) {
+		auto it = tree.Search(i);
+		auto value_ptr = it.GetValue();
+		int value = value_ptr == nullptr ? 0 : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value, i * 100);
 	}
 }

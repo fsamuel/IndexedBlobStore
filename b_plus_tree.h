@@ -294,6 +294,8 @@ public:
 		void Insert(const KeyType& key, const ValueType& value) {
 			BlobStoreObject<KeyType> key_ptr = tree_->blob_store_.New<KeyType>(key);
 			BlobStoreObject<ValueType> value_ptr = tree_->blob_store_.New<ValueType>(value);
+			new_objects_.insert(key_ptr.Index());
+			new_objects_.insert(value_ptr.Index());
 			Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
 		}
 
