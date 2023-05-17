@@ -48,6 +48,11 @@ public:
         return at(pos);
     }
 
+    // Returns a pointer to the underlying character data.
+    const char* data() const {
+        return str_ + offset_;
+    }
+
     // Returns a new StringSlice representing a slice of this StringSlice. 
     // The new slice starts at the given offset within this slice and has the given size.
     // If the given offset and size would extend beyond the end of this slice,
@@ -73,7 +78,21 @@ private:
 
     // Stream insertion operator to print the StringSlice to an output stream.
     friend std::ostream& operator<<(std::ostream& os, const StringSlice& slice);
-
 };
+
+namespace std {
+    template <>
+    struct hash<StringSlice> {
+        size_t operator()(const StringSlice& slice) const {
+            size_t hash = 0;
+            for (size_t i = 0; i < slice.size(); ++i) {
+                // This is a simple hash function based on the djb2 algorithm.
+                // It may not be suitable for all purposes, but it's a good starting point.
+                hash = ((hash << 5) + hash) + slice[i]; // hash * 33 + c
+            }
+            return hash;
+        }
+    };
+}
 
 #endif // STRING_SLICE_H_

@@ -38,6 +38,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ClInclude Include="chunked_vector.h" />
+    <ClInclude Include="fixed_string.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="blob_store.h" />

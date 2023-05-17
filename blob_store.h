@@ -10,6 +10,8 @@
 
 #include "chunked_vector.h"
 #include "shared_memory_allocator.h"
+#include "size_traits.h"
+#include "string_slice.h"
 
 #ifdef _WIN64
 typedef __int64 ssize_t;
@@ -403,6 +405,8 @@ public:
 	template <typename T, typename... Args>
 	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
 		New(Args&&... args);
+
+	BlobStoreObject<StringSlice> New(const StringSlice& slice);
 
 	template <typename T>
 	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T[]>>::type NewArray(size_t count);
@@ -810,10 +814,11 @@ template <typename T, typename... Args>
 typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T>>::type
 BlobStore::New(Args&&... args) {
 	size_t index = FindFreeSlot();
-	char* ptr = allocator_.Allocate(sizeof(T));
+	size_t size = SizeTraits<T, Args...>::size(std::forward<Args>(args)...);
+	char* ptr = allocator_.Allocate(size);
 	allocator_.Construct(reinterpret_cast<T*>(ptr), std::forward<Args>(args)...);
 	BlobMetadata& metadata = metadata_[index];
-	metadata.size = sizeof(T);
+	metadata.size = size;
 	metadata.count = 1;
 	metadata.offset = allocator_.ToOffset(ptr);
 	metadata.lock_state = 0;

@@ -1,6 +1,8 @@
 #include "blob_store.h"
 #include "gtest/gtest.h"
 
+#include "fixed_string.h"
+
 class BlobStoreTest : public ::testing::Test {
 protected:
 	virtual void SetUp() {
@@ -341,4 +343,22 @@ TEST_F(BlobStoreTest, BlobStoreObjectDrop2) {
 	EXPECT_EQ(ptr2, nullptr);
 	BlobStoreObject<const int> ptr3 = store.Get<int>(index);
 	EXPECT_EQ(ptr3, nullptr);
+}
+
+// Create blobs using FixedString, try to access them using BlobStoreObject. Convert back
+// to std::string or StringSlice and verify that the contents are the same.
+TEST_F(BlobStoreTest, FixedString) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<FixedString> ptr = store.New<FixedString>("Hello, world!");
+	BlobStoreObject<FixedString> ptr2 = store.New<FixedString>("New World");
+	// 13 bytes for the string, 8 bytes for the size, 8 bytes for the hash.
+	EXPECT_EQ(ptr.GetSize(), 29);
+	EXPECT_EQ(ptr->size, 13);
+	StringSlice slice = *ptr;
+	EXPECT_EQ(slice.size(), 13);
+	std::string str = *ptr;
+	EXPECT_EQ(str.size(), 13);
+	std::cout << *ptr << std::endl;
+	std::cout << *ptr2 << std::endl;
+	EXPECT_NE(*ptr, *ptr2);
 }
