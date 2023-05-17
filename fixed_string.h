@@ -26,12 +26,14 @@ public:
     char data[1];
 
     // Regular constructor from std::string
-    FixedString(const std::string& str) : size(str.size()), hash(std::hash<std::string>{}(str)) {
+    // This isn't safe unless memory was preallocated for the FixedString.
+    explicit FixedString(const std::string& str) : size(str.size()), hash(std::hash<std::string>{}(str)) {
         std::memcpy(data, str.data(), size);
     }
 
-    // Regular constructor from StringSlice
-    FixedString(const StringSlice& slice) : size(slice.size()), hash(std::hash<StringSlice>{}(slice)) {
+    // Regular constructor from StringSlice.
+    // This isn't safe unless memory was preallocated for the FixedString.
+    explicit FixedString(const StringSlice& slice) : size(slice.size()), hash(std::hash<StringSlice>{}(slice)) {
         std::memcpy(data, slice.data(), size);
     }
 
@@ -84,22 +86,16 @@ __attribute__((packed))
 #pragma pack(pop)
 #endif
 
-std::ostream& operator<<(std::ostream& os, const FixedString& str) {
-    for (size_t i = 0; i < str.size; ++i) {
-        os << str.data[i];
-    }
-    return os;
-}
-
 template <typename... Args>
 struct SizeTraits<FixedString, Args...> {
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
     }
 
+    /*
     static size_t size(const StringSlice& slice) {
-        return sizeof(FixedString) + slice.getSize() - 1;
-    }
+        return sizeof(FixedString) + slice.size() - 1;
+    }*/
 
     template <std::size_t N>
     static size_t size(const char(&)[N]) {
