@@ -86,32 +86,43 @@ __attribute__((packed))
 #pragma pack(pop)
 #endif
 
-template <typename... Args>
-struct StorageTraits<std::string, Args...> {
+template <>
+struct StorageTraits<std::string> {
     using StorageType = FixedString;
 
+    template <typename... Args>
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
     }
 };
 
-template <typename... Args>
-struct StorageTraits<StringSlice, Args...> {
+template <>
+struct StorageTraits<const std::string> {
+    using StorageType = const FixedString;
+
+    template <typename... Args>
+    static size_t size(const std::string& str) {
+        return sizeof(FixedString) + str.size() - 1;
+    }
+};
+
+template <>
+struct StorageTraits<StringSlice> {
     using StorageType = FixedString;
 
+    template<typename... Args>
     static size_t size(const StringSlice& str) {
         return sizeof(FixedString) + str.size() - 1;
     }
 };
-/*
+
 template <std::size_t N>
-template <typename... Args>
-struct StorageTraits<const char(&)[N], Args...> {
+struct StorageTraits<const char(&)[N]> {
     using StorageType = FixedString;
 
     static size_t size(const char(&)[N]) {
         return sizeof(FixedString) + N - 2; // subtract 2 because N includes the null terminator
     }
 };
-*/
+
 #endif // FIXED_STRING_H_

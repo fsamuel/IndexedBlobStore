@@ -403,7 +403,7 @@ public:
 
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T, Args...>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T, Args...>::StorageType>>::value, BlobStoreObject<typename StorageTraits<T, Args...>::StorageType>>::type
+	typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<typename StorageTraits<T>::StorageType>>::type
 		New(Args&&... args);
 
 	template <typename T>
@@ -411,13 +411,14 @@ public:
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
-	BlobStoreObject<T> GetMutable(size_t index) {
-		return BlobStoreObject<T>(this, index);
+	BlobStoreObject<typename StorageTraits<T>::StorageType> GetMutable(size_t index) {
+		using StorageType = typename StorageTraits<T>::StorageType;
+		return BlobStoreObject<StorageType>(this, index);
 	}
 
 	// Gets the object of type T at the specified index as a constant.
 	template<typename T>
-	BlobStoreObject<const T> Get(size_t index) const {
+	BlobStoreObject<const typename StorageTraits<T>::StorageType> Get(size_t index) const {
 		return const_cast<BlobStore*>(this)->GetMutable<const T>(index);
 	}
 
@@ -809,11 +810,11 @@ private:
 };
 
 template <typename T, typename... Args>
-typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T, Args...>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T, Args...>::StorageType>>::value, BlobStoreObject<typename StorageTraits<T, Args...>::StorageType>>::type
+typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<typename StorageTraits<T>::StorageType>>::type
 BlobStore::New(Args&&... args) {
-	using StorageType = typename StorageTraits<T, Args...>::StorageType;
+	using StorageType = typename StorageTraits<T>::StorageType;
 	size_t index = FindFreeSlot();
-	size_t size = StorageTraits<T, Args...>::size(std::forward<Args>(args)...);
+	size_t size = StorageTraits<T>::size(std::forward<Args>(args)...);
 	char* ptr = allocator_.Allocate(size);
 	allocator_.Construct(reinterpret_cast<StorageType*>(ptr), std::forward<Args>(args)...);
 	BlobMetadata& metadata = metadata_[index];

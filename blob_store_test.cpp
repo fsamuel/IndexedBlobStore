@@ -349,8 +349,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectDrop2) {
 // to std::string or StringSlice and verify that the contents are the same.
 TEST_F(BlobStoreTest, FixedString) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<FixedString> ptr = store.New<std::string>("Hello, world!");
-	BlobStoreObject<FixedString> ptr2 = store.New<std::string>("New World");
+	BlobStoreObject<const FixedString> ptr = std::move(store.New<std::string>("Hello, world!")).Downgrade();
+	BlobStoreObject<const FixedString> ptr2 = std::move(store.New<std::string>("New World")).Downgrade();
 	// 13 bytes for the string, 8 bytes for the size, 8 bytes for the hash.
 	EXPECT_EQ(ptr.GetSize(), 29);
 	EXPECT_EQ(ptr->size, 13);
@@ -361,4 +361,6 @@ TEST_F(BlobStoreTest, FixedString) {
 	std::cout << *ptr << std::endl;
 	std::cout << *ptr2 << std::endl;
 	EXPECT_NE(*ptr, *ptr2);
+	auto  ptr3 = store.Get<std::string>(ptr.Index());
+	EXPECT_EQ(*ptr, *ptr3);
 }
