@@ -472,11 +472,16 @@ public:
 
 	// Gets the number of elements stored in this blob if the type is an array.
 	size_t GetElementCount(size_t index) {
-		if (index == BlobStore::InvalidIndex || index >= metadata_.size() || metadata_[index].next_free_index != -1) {
+		if (index == BlobStore::InvalidIndex) {
 			return 0;
 		}
-		BlobMetadata& metadata_entry = metadata_[index];
-		return metadata_entry.count;
+
+		BlobMetadata* metadata = metadata_.at(index);
+		if (metadata == nullptr || metadata->is_deleted()) {
+			return false;
+		}
+
+		return metadata->count;
 	}
 
 	// Drops the object at the specified index, freeing the associated memory.
