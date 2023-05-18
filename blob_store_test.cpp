@@ -363,4 +363,12 @@ TEST_F(BlobStoreTest, FixedString) {
 	EXPECT_NE(*ptr, *ptr2);
 	auto  ptr3 = store.Get<std::string>(ptr.Index());
 	EXPECT_EQ(*ptr, *ptr3);
+	// As long as we're holding onto a BlobStoreObject, it's safe to hold onto
+	// StringSlices of the same blob.
+	slice = ptr->substring(0, 5);
+	EXPECT_EQ(slice.size(), 5);
+	std::cout << slice << std::endl;
+	slice = ptr->substring(7, 5);
+	EXPECT_EQ(slice.size(), 5);
+	std::cout << slice << std::endl;
 }

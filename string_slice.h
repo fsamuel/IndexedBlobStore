@@ -5,6 +5,11 @@
 #include <cstring>
 #include <ostream>
 
+#ifdef _WIN32
+#undef max
+#undef min
+#endif
+
 // The StringSlice class represents a slice of a string, i.e., a substring 
 // defined by an offset and a size within the original string.
 //
@@ -70,6 +75,44 @@ public:
     bool operator>(const StringSlice& other) const;
     bool operator<=(const StringSlice& other) const;
     bool operator>=(const StringSlice& other) const;
+
+    // Equality comparison with null-terminated char*
+    bool operator==(const char* str) const {
+        return size_ == std::strlen(str) && std::memcmp(data(), str, size_) == 0;
+    }
+
+    // Inequality comparison with null-terminated char*
+    bool operator!=(const char* str) const {
+        return !(*this == str);
+    }
+
+    // Less than comparison with null-terminated char*
+    bool operator<(const char* str) const {
+        int cmp = std::memcmp(data(), str, std::min(size_, std::strlen(str)));
+        return cmp < 0 || (cmp == 0 && size_ < std::strlen(str));
+    }
+
+    // Greater than comparison with null-terminated char*
+    bool operator>(const char* str) const {
+        return str < *this;
+    }
+
+    // Allow for comparison with null-terminated char* on the LHS
+    friend bool operator==(const char* str, const StringSlice& slice) {
+        return slice == str;
+    }
+
+    friend bool operator!=(const char* str, const StringSlice& slice) {
+        return slice != str;
+    }
+
+    friend bool operator<(const char* str, const StringSlice& slice) {
+        return slice > str;
+    }
+
+    friend bool operator>(const char* str, const StringSlice& slice) {
+        return slice < str;
+    }
 
 private:
     const char* str_;  // pointer to the original string

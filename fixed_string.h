@@ -37,6 +37,22 @@ public:
         std::memcpy(data, slice.data(), size);
     }
 
+    StringSlice substring(size_t start, size_t length) const {
+        // Check if start is out of bounds
+        if (start >= size) {
+            throw std::out_of_range("Start index out of bounds");
+        }
+
+        // Adjust length if it goes beyond the end of the string
+        if (start + length > size) {
+            length = size - start;
+        }
+
+        // Create a StringSlice representing the substring
+        return StringSlice(data + start, 0, length);
+    }
+
+
     // Equality comparison with other FixedString
     bool operator==(const FixedString& other) const {
         return hash == other.hash && size == other.size && std::memcmp(data, other.data, size) == 0;
