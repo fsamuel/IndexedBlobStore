@@ -45,6 +45,43 @@ public:
     bool operator!=(const FixedString& other) const {
         return !(*this == other);
     }
+    // Equality comparison with std::string
+    bool operator==(const std::string& str) const {
+        return size == str.size() && hash == std::hash<std::string>{}(str) && std::memcmp(data, str.data(), size) == 0;
+    }
+
+    // Inequality comparison with std::string
+    bool operator!=(const std::string& str) const {
+        return !(*this == str);
+    }
+
+    // Equality comparison with StringSlice
+    bool operator==(const StringSlice& slice) const {
+        return size == slice.size() && hash == std::hash<StringSlice>{}(slice) && std::memcmp(data, slice.data(), size) == 0;
+    }
+
+    // Inequality comparison with StringSlice
+    bool operator!=(const StringSlice& slice) const {
+        return !(*this == slice);
+    }
+
+    // Allow for comparison with std::string on the LHS
+    friend bool operator==(const std::string& str, const FixedString& fs) {
+        return fs == str;
+    }
+
+    friend bool operator!=(const std::string& str, const FixedString& fs) {
+        return fs != str;
+    }
+
+    // Allow for comparison with StringSlice on the LHS
+    friend bool operator==(const StringSlice& slice, const FixedString& fs) {
+        return fs == slice;
+    }
+
+    friend bool operator!=(const StringSlice& slice, const FixedString& fs) {
+        return fs != slice;
+    }
 
     // Less than and greater than comparisons
     bool operator<(const FixedString& other) const {
@@ -62,6 +99,46 @@ public:
 
     bool operator>=(const FixedString& other) const {
         return !(*this < other);
+    }
+
+    // Less than comparison with std::string
+    bool operator<(const std::string& str) const {
+        int cmp = std::memcmp(data, str.data(), std::min(size, str.size()));
+        return cmp < 0 || (cmp == 0 && size < str.size());
+    }
+
+    // Greater than comparison with std::string
+    bool operator>(const std::string& str) const {
+        return str < *this;
+    }
+
+    // Less than comparison with StringSlice
+    bool operator<(const StringSlice& slice) const {
+        int cmp = std::memcmp(data, slice.data(), std::min(size, slice.size()));
+        return cmp < 0 || (cmp == 0 && size < slice.size());
+    }
+
+    // Greater than comparison with StringSlice
+    bool operator>(const StringSlice& slice) const {
+        return slice < *this;
+    }
+
+    // Allow for comparison with std::string on the LHS
+    friend bool operator<(const std::string& str, const FixedString& fs) {
+        return fs > str;
+    }
+
+    friend bool operator>(const std::string& str, const FixedString& fs) {
+        return fs < str;
+    }
+
+    // Allow for comparison with StringSlice on the LHS
+    friend bool operator<(const StringSlice& slice, const FixedString& fs) {
+        return fs > slice;
+    }
+
+    friend bool operator>(const StringSlice& slice, const FixedString& fs) {
+        return fs < slice;
     }
 
     // Conversion to std::string

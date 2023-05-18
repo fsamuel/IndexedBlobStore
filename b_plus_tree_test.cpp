@@ -346,3 +346,30 @@ TEST_F(BPlusTreeTest, InsertTransactionAbort) {
 		EXPECT_EQ(value, i * 100);
 	}
 }
+
+// Inserts a bunch of strings as keys and ints as values into a B+ tree.
+// Verifies that all the elements are in the tree.
+TEST_F(BPlusTreeTest, StringInsertion) {
+	BPlusTree<std::string, std::string, 32> tree(*blob_store);
+	for (int i = 0; i < 100; i++) {
+		tree.Insert("K" + std::to_string(i), "V" + std::to_string(i * 100));
+	}
+	for (int i = 0; i < 100; i++) {
+		std::string key = "K" + std::to_string(i);
+		std::string value = "V" + std::to_string(i * 100);
+		auto it = tree.Search(key);
+		auto value_ptr = it.GetValue();
+		std::string value_output = value_ptr == nullptr ? std::string() : *value_ptr;
+		EXPECT_NE(value_ptr, nullptr);
+		EXPECT_EQ(value_output, value);
+	}
+	for (int i = 0; i < 100; i++) {
+		BlobStoreObject<const FixedString> deleted;
+		std::string key = "K" + std::to_string(i);
+		std::string value = "V" + std::to_string(i*100);
+
+		bool success = tree.Delete(key, &deleted);
+		EXPECT_TRUE(success);
+		EXPECT_EQ(*deleted, value);
+	}
+}
