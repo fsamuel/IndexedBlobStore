@@ -60,6 +60,8 @@ template <typename T>
 class BlobStoreObject {
 public:
 	using non_const_T = typename std::remove_const<T>::type;
+	using StorageType = typename StorageTraits<T>::StorageType;
+	using NonConstStorageType = typename StorageTraits<non_const_T>::StorageType;
 
 	BlobStoreObject() : control_block_(nullptr) {}
 
@@ -89,49 +91,49 @@ public:
 	}
 
 	// Arrow operator: Provides access to the object's methods.
-	T* operator->() {
+	StorageType* operator->() {
 		return control_block_->ptr_;
 	}
 
-	const T* operator->() const {
+	const StorageType* operator->() const {
 		return control_block_->ptr_;
 	}
 
 	// Dereference operator: Provides access to the object itself.
-	T& operator*() {
+	StorageType& operator*() {
 		return *control_block_->ptr_;
 	}
 
-	const T& operator*() const {
+	const StorageType& operator*() const {
 		return *control_block_->ptr_;
 	}
 
 	// Operator[] implementation for array types.
-	template<typename U = T>
+	template<typename U = StorageType>
 	typename std::enable_if<std::is_array<U>::value, typename std::remove_extent<U>::type&>::type
 		operator[](size_t i) {
 		return (*control_block_->ptr_)[i];
 	}
 
-	template<typename U = T>
+	template<typename U = StorageType>
 	typename std::enable_if<std::is_array<U>::value, const typename std::remove_extent<U>::type&>::type
 		operator[](size_t i) const {
 		return (*control_block_->ptr_)[i];
 	}
 
-	template<typename U = T>
+	template<typename U = StorageType>
 	typename std::enable_if<!std::is_array<U>::value, T&>::type
 		operator[](size_t i) {
 		return (*control_block_->ptr_)[i];
 	}
 
-	template<typename U = T>
+	template<typename U = StorageType>
 	typename std::enable_if<!std::is_array<U>::value, const T&>::type
 		operator[](size_t i) const {
 		return (*control_block_->ptr_)[i];
 	}
 
-	template <typename U = T>
+	template <typename U = StorageType>
 	typename std::enable_if<std::is_const<U>::value, BlobStoreObject<non_const_T>>::type
 		GetMutableOrClone() {
 		return Clone();
@@ -143,7 +145,7 @@ public:
 		return *this;
 	}
 
-	template <typename U = T>
+	template <typename U = StorageType>
 	BlobStoreObject< typename std::remove_const<U>::type> Clone() const {
 		return control_block_->store_->Clone<U>(control_block_->index_);// .To<std::remove_const<V>::type >();
 	}
@@ -260,7 +262,7 @@ public:
 		return !control_block_ || control_block_->store_ == nullptr || control_block_->index_ == BlobStore::InvalidIndex || control_block_->ptr_ == nullptr;
 	}
 
-	inline friend bool operator==(const BlobStoreObject& lhs, const T* rhs)
+	inline friend bool operator==(const BlobStoreObject& lhs, const StorageType* rhs)
 	{
 		if (lhs.control_block_ == nullptr) {
 			return rhs == nullptr;
@@ -276,7 +278,7 @@ public:
 		return lhs == rhs.control_block_->ptr_;
 	}
 
-	inline friend bool operator!=(const BlobStoreObject& lhs, const T* rhs)
+	inline friend bool operator!=(const BlobStoreObject& lhs, const StorageType* rhs)
 	{
 		if (lhs.control_block_ == nullptr) {
 			return rhs != nullptr;
@@ -348,7 +350,7 @@ private:
 		BlobStore* store_;				// Pointer to the BlobStore instance
 		size_t index_;					// Index of the object in the BlobStore
 		size_t offset_;                 // Offset of the object in the shared memory buffer.
-		T* ptr_;						// Pointer to the object
+		StorageType* ptr_;						// Pointer to the object
 		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
 
 	private:
@@ -356,7 +358,7 @@ private:
 		// UpdatePointer: Helper method to update the internal pointer to the object using
 		// the BlobStore's GetPointer method.
 		void UpdatePointer() {
-			ptr_ = store_->GetRaw<T>(index_, &offset_);
+			ptr_ = store_->GetRaw<StorageType>(index_, &offset_);
 		}
 
 		// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
@@ -403,7 +405,7 @@ public:
 
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<typename StorageTraits<T>::StorageType>>::type
+	typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<T>>::type
 		New(Args&&... args);
 
 	template <typename T>
@@ -411,14 +413,13 @@ public:
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
-	BlobStoreObject<typename StorageTraits<T>::StorageType> GetMutable(size_t index) {
-		using StorageType = typename StorageTraits<T>::StorageType;
-		return BlobStoreObject<StorageType>(this, index);
+	BlobStoreObject<T> GetMutable(size_t index) {
+		return BlobStoreObject<T>(this, index);
 	}
 
 	// Gets the object of type T at the specified index as a constant.
 	template<typename T>
-	BlobStoreObject<const typename StorageTraits<T>::StorageType> Get(size_t index) const {
+	BlobStoreObject<const T> Get(size_t index) const {
 		return const_cast<BlobStore*>(this)->GetMutable<const T>(index);
 	}
 
@@ -810,7 +811,7 @@ private:
 };
 
 template <typename T, typename... Args>
-typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<typename StorageTraits<T>::StorageType>>::type
+typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<T>>::type
 BlobStore::New(Args&&... args) {
 	using StorageType = typename StorageTraits<T>::StorageType;
 	size_t index = FindFreeSlot();
@@ -823,7 +824,7 @@ BlobStore::New(Args&&... args) {
 	metadata.offset = allocator_.ToOffset(ptr);
 	metadata.lock_state = 0;
 	metadata.next_free_index = -1;
-	return BlobStoreObject<StorageType>(this, index);
+	return BlobStoreObject<T>(this, index);
 }
 
 template <typename T>

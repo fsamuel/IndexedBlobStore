@@ -364,7 +364,7 @@ TEST_F(BPlusTreeTest, StringInsertion) {
 		EXPECT_EQ(value_output, value);
 	}
 	for (int i = 0; i < 100; i++) {
-		BlobStoreObject<const FixedString> deleted;
+		BlobStoreObject<const std::string> deleted;
 		std::string key = "K" + std::to_string(i);
 		std::string value = "V" + std::to_string(i*100);
 

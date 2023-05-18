@@ -34,9 +34,6 @@ struct InsertionBundle {
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
 private:
-	using StoredKeyType = typename StorageTraits<KeyType>::StorageType;
-	using StoredValueType = typename StorageTraits<ValueType>::StorageType;
-
 	struct BPlusTreeHeader {
 		// The version of the tree.
 		size_t version;
@@ -105,7 +102,7 @@ private:
 		void set_key(size_t index, size_t key) { keys[index] = key; }
 
 		// Returns the first key in the node that is greater than or equal to the given key and its index in the node.
-		BlobStoreObject<const StoredKeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
+		BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
 			auto it = std::lower_bound(keys.begin(), keys.begin() + num_keys(), key,
 				[store](size_t lhs, const KeyType& rhs) {
 					return *store->Get<KeyType>(lhs) < rhs;
@@ -115,7 +112,7 @@ private:
 			if (*index < num_keys()) {
 				return store->Get<KeyType>(*it);
 			}
-			return BlobStoreObject<const StoredKeyType>();
+			return BlobStoreObject<const KeyType>();
 		}
 	};
 
@@ -145,7 +142,7 @@ private:
 		void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
 		size_t get_key(size_t index) const { return base.get_key(index); }
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
-		BlobStoreObject<const StoredKeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
+		BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
 			return base.Search(store, key, index);
 		}
 	};
@@ -176,7 +173,7 @@ private:
 		void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
 		size_t get_key(size_t index) const { return base.get_key(index); }
 		void set_key(size_t index, size_t key) { base.set_key(index, key); }
-		BlobStoreObject<const StoredKeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
+		BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
 			return base.Search(store, key, index);
 		}
 	};
@@ -184,7 +181,7 @@ private:
 	static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
 	static_assert(std::is_standard_layout<LeafNode>::value, "LeafNode is standard layout");
 
-	using InsertionBundle = InsertionBundle<StoredKeyType, BaseNode>;
+	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
 
 public:
 	using offset_type = std::ptrdiff_t;
@@ -192,8 +189,8 @@ public:
 	// Iterator class for BPlusTree
 	class Iterator {
 	public:
-		using key_type = StoredKeyType;
-		using value_type = StoredValueType;
+		using key_type = KeyType;
+		using value_type = ValueType;
 		using difference_type = std::ptrdiff_t;
 		using pointer = value_type*;
 		using reference = value_type&;
@@ -228,18 +225,18 @@ public:
 			return !(*this == other);
 		}
 
-		BlobStoreObject<const StoredKeyType> GetKey() const {
+		BlobStoreObject<const KeyType> GetKey() const {
 			if (leaf_node_ != nullptr) {
-				return BlobStoreObject<const StoredKeyType>(store_, leaf_node_->get_key(key_index_));
+				return BlobStoreObject<const KeyType>(store_, leaf_node_->get_key(key_index_));
 			}
-			return BlobStoreObject<const StoredKeyType>();
+			return BlobStoreObject<const KeyType>();
 		}
 
-		BlobStoreObject<const StoredValueType> GetValue() const {
+		BlobStoreObject<const ValueType> GetValue() const {
 			if (leaf_node_ != nullptr) {
-				return BlobStoreObject<const StoredValueType>(store_, leaf_node_->values[key_index_]);
+				return BlobStoreObject<const ValueType>(store_, leaf_node_->values[key_index_]);
 			}
-			return BlobStoreObject<const StoredValueType>();
+			return BlobStoreObject<const ValueType>();
 		}
 
 	private:
@@ -296,14 +293,14 @@ public:
 		}
 
 		void Insert(const KeyType& key, const ValueType& value) {
-			BlobStoreObject<StoredKeyType> key_ptr = tree_->blob_store_.New<KeyType>(key);
-			BlobStoreObject<StoredValueType> value_ptr = tree_->blob_store_.New<ValueType>(value);
+			BlobStoreObject<KeyType> key_ptr = tree_->blob_store_.New<KeyType>(key);
+			BlobStoreObject<ValueType> value_ptr = tree_->blob_store_.New<ValueType>(value);
 			new_objects_.insert(key_ptr.Index());
 			new_objects_.insert(value_ptr.Index());
 			Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
 		}
 
-		void Insert(BlobStoreObject<const StoredKeyType> key, BlobStoreObject<const StoredValueType> value) {
+		void Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
 			tree_->Insert(new_header_, std::move(key), std::move(value), &new_objects_);
 		}
 
@@ -311,7 +308,7 @@ public:
 			return tree_->Search(new_header_, key);
 		}
 
-		BlobStoreObject<const StoredValueType> Delete(const KeyType& key) {
+		BlobStoreObject<const ValueType> Delete(const KeyType& key) {
 			return tree_->Delete(new_header_, key);
 		}
 
@@ -353,13 +350,13 @@ public:
 	// Inserts a key-value pair into the tree. Returns true if the key-value pair was inserted, false if the key already existed in the tree
 	// or there was a conflicting operation in progress.
 	bool Insert(const KeyType& key, const ValueType& value);
-	bool Insert(BlobStoreObject<const StoredKeyType> key, BlobStoreObject<const StoredValueType> value);
-	void Insert(BlobStoreObject<BPlusTreeHeader> header, BlobStoreObject<const StoredKeyType> key, BlobStoreObject<const StoredValueType> value, std::unordered_set<size_t>* new_objects);
+	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
+	void Insert(BlobStoreObject<BPlusTreeHeader> header, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value, std::unordered_set<size_t>* new_objects);
 
 	// Deletes a key-value pair from the tree. Returns true if the operation was successful, false if there was a conflicting operation in progress.
 	// If deleted_value is not null, the deleted value is stored in deleted_value.
-	bool Delete(const KeyType& key, BlobStoreObject<const StoredValueType>* deleted_value);
-	BlobStoreObject<const StoredValueType> Delete(BlobStoreObject<BPlusTreeHeader> header, const KeyType& key);
+	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
+	BlobStoreObject<const ValueType> Delete(BlobStoreObject<BPlusTreeHeader> header, const KeyType& key);
 
 	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
 	void PrintNode(BlobStoreObject<const InternalNode> node) {
@@ -460,7 +457,7 @@ public:
 				BlobStoreObject<InternalNode> internal_node = node_with_level.node.To<InternalNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Internal node (n = " << internal_node->num_keys() << ") ";
 				for (size_t i = 0; i < internal_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<const StoredKeyType>(&blob_store_, internal_node->keys[i]) << " ";
+					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, internal_node->keys[i]) << " ";
 				}
 				for (int i = internal_node->num_keys(); i >= 0; --i) {
 					v.push_back({ BlobStoreObject<const BaseNode>(&blob_store_, internal_node->children[i]), node_with_level.level + 1 });
@@ -471,7 +468,7 @@ public:
 				BlobStoreObject<LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
 				std::cout << std::string(node_with_level.level, ' ') << "Leaf node (n = " << leaf_node->num_keys() << ") ";
 				for (size_t i = 0; i < leaf_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<const StoredKeyType>(&blob_store_, leaf_node->keys[i]) << " ";
+					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, leaf_node->keys[i]) << " ";
 				}
 				std::cout << std::endl;
 			}
@@ -529,11 +526,11 @@ private:
 		std::is_same<typename std::remove_const<U>::type, InternalNode>::value ||
 		std::is_same<typename std::remove_const<U>::type, LeafNode>::value
 	>::type* = nullptr>
-	BlobStoreObject<const StoredKeyType> GetKey(const BlobStoreObject<U>&node, size_t key_index) {
+	BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<U>&node, size_t key_index) {
 		if (node == nullptr || key_index > node->num_keys() - 1) {
-			return BlobStoreObject<const StoredKeyType>();
+			return BlobStoreObject<const KeyType>();
 		}
-		return BlobStoreObject<const StoredKeyType>(&blob_store_, node->get_key(key_index));
+		return BlobStoreObject<const KeyType>(&blob_store_, node->get_key(key_index));
 	}
 
 	// Returns the value stored at position value_index in node. 
@@ -541,11 +538,11 @@ private:
 	template<typename U, typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, LeafNode>::value
 	>::type* = nullptr>
-	BlobStoreObject<const StoredValueType> GetValue(const BlobStoreObject<U>& node, size_t value_index) {
+	BlobStoreObject<const ValueType> GetValue(const BlobStoreObject<U>& node, size_t value_index) {
 		if (node == nullptr || value_index > node->num_keys() - 1) {
-			return BlobStoreObject<const StoredValueType>();
+			return BlobStoreObject<const ValueType>();
 		}
-		return BlobStoreObject<const StoredValueType>(&blob_store_, node->values[value_index]);
+		return BlobStoreObject<const ValueType>(&blob_store_, node->values[value_index]);
 	}
 
 	// Searches for the provided key in the provided subtree rooted at node. Returns an iterator starting at the
@@ -570,23 +567,23 @@ private:
 		InsertionBundle>::type InsertIntoLeaf(
 			size_t version,
 			BlobStoreObject<U> node,
-			BlobStoreObject<const StoredKeyType> key,
-			BlobStoreObject<const StoredValueType> value,
+			BlobStoreObject<const KeyType> key,
+			BlobStoreObject<const ValueType> value,
 			std::unordered_set<size_t>* new_objects);
 
 	// Insert new_key and new_child into node with the assumption that node is not full.
 	void InsertKeyChildIntoInternalNode(BlobStoreObject<InternalNode> node,
-		BlobStoreObject<const StoredKeyType> new_key,
+		BlobStoreObject<const KeyType> new_key,
 		BlobStoreObject<BaseNode> new_child);
 
 	template<typename U>
 	typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::BaseNode>::value,
-		InsertionBundle>::type Insert(size_t version, BlobStoreObject<U> node, BlobStoreObject<const StoredKeyType> key, BlobStoreObject<const StoredValueType> value, std::unordered_set<size_t>* new_objects);
+		InsertionBundle>::type Insert(size_t version, BlobStoreObject<U> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value, std::unordered_set<size_t>* new_objects);
 
-	BlobStoreObject<const StoredValueType> Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
-	BlobStoreObject<const StoredValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
-	BlobStoreObject<const StoredValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
+	BlobStoreObject<const ValueType> Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
+	BlobStoreObject<const ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
+	BlobStoreObject<const ValueType> DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key);
 
 	// Borrow a key from the left sibling of node and return the new right sibling.
 	bool BorrowFromLeftSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling);
@@ -594,7 +591,7 @@ private:
 	bool BorrowFromRightSibling(size_t version, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling);
 
 	// Returns the key of the successor of node.
-	BlobStoreObject<const StoredKeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
+	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
 
 	// Merges the right child into the left child. The parent key separating the two children is merged into the left child.
 	void MergeInternalNodes(BlobStoreObject<InternalNode> left_child,
@@ -623,21 +620,21 @@ private:
 
 template<typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const ValueType& value) {
-	BlobStoreObject<StoredKeyType> key_ptr = blob_store_.New<KeyType>(key);
-	BlobStoreObject<StoredValueType> value_ptr = blob_store_.New<ValueType>(value);
+	BlobStoreObject<KeyType> key_ptr = blob_store_.New<KeyType>(key);
+	BlobStoreObject<ValueType> value_ptr = blob_store_.New<ValueType>(value);
 
 	return Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const StoredKeyType> key, BlobStoreObject<const StoredValueType> value) {
+bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
 	Transaction txn(CreateTransaction());
 	txn.Insert(std::move(key), std::move(value));
 	return std::move(txn).Commit();
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<BPlusTreeHeader> new_header, BlobStoreObject<const StoredKeyType> key, BlobStoreObject<const StoredValueType> value, std::unordered_set<size_t>* new_objects) {
+void BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<BPlusTreeHeader> new_header, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value, std::unordered_set<size_t>* new_objects) {
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	InsertionBundle bundle; 
 	if (root->version != new_header->version) {
@@ -690,7 +687,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root) {
 	path_to_root.push_back(node.Index());
 	size_t key_index = 0;
-	BlobStoreObject<const StoredKeyType> key_found = node->Search(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
 	if (node->is_leaf()) {
 		return Iterator(&blob_store_, std::move(path_to_root), key_index);
@@ -711,7 +708,7 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	new_right_node->set_version(left_node->get_version());
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
-	BlobStoreObject<const StoredKeyType> middle_key = GetKey(left_node, middle_key_index);
+	BlobStoreObject<const KeyType> middle_key = GetKey(left_node, middle_key_index);
 
 	new_right_node->set_num_keys(left_node->num_keys() - middle_key_index);
 	for (int i = 0; i < new_right_node->num_keys(); ++i) {
@@ -740,7 +737,7 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	new_right_node->set_version(left_node->get_version());
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
-	BlobStoreObject<const StoredKeyType> middle_key = GetKey(left_node, middle_key_index);
+	BlobStoreObject<const KeyType> middle_key = GetKey(left_node, middle_key_index);
 
 	new_right_node->set_num_keys(left_node->num_keys() - middle_key_index - 1);
 	for (int i = 0; i < new_right_node->num_keys(); ++i) {
@@ -765,7 +762,7 @@ template<typename U>
 typename std::enable_if<
 	std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::LeafNode>::value,
 	typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle>::type
-	BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(size_t version, BlobStoreObject<U> node, BlobStoreObject<const StoredKeyType> key, BlobStoreObject <const StoredValueType> value, std::unordered_set<size_t>* new_objects) {
+	BPlusTree<KeyType, ValueType, Order>::InsertIntoLeaf(size_t version, BlobStoreObject<U> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value, std::unordered_set<size_t>* new_objects) {
 	BlobStoreObject<LeafNode> new_left_node = node.GetMutableOrClone();
 	if (new_objects != nullptr && new_left_node.Index() != node.Index()) {
 		new_objects->insert(new_left_node.Index());
@@ -785,7 +782,7 @@ typename std::enable_if<
 	// Shift the keys and values right.
 	int i = new_left_node->num_keys() - 1;
 	while (i >= 0) {
-		BlobStoreObject<const StoredKeyType> key_ptr = GetKey(new_left_node, i);
+		BlobStoreObject<const KeyType> key_ptr = GetKey(new_left_node, i);
 		if (*key >= *key_ptr) {
 			break;
 		}
@@ -796,17 +793,17 @@ typename std::enable_if<
 	new_left_node->set_key(i + 1, key.Index());
 	new_left_node->values[i + 1] = value.Index();
 	new_left_node->increment_num_keys();
-	return InsertionBundle(new_left_node.To<BaseNode>(), BlobStoreObject<const StoredKeyType>(), BlobStoreObject<BaseNode>());
+	return InsertionBundle(new_left_node.To<BaseNode>(), BlobStoreObject<const KeyType>(), BlobStoreObject<BaseNode>());
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 	BlobStoreObject<InternalNode> node,
-	BlobStoreObject<const StoredKeyType> new_key,
+	BlobStoreObject<const KeyType> new_key,
 	BlobStoreObject<BaseNode> new_child) {
 	int i = node->num_keys() - 1;
 	while (i >= 0) {
-		BlobStoreObject<const StoredKeyType> key_ptr = GetKey(node, i);
+		BlobStoreObject<const KeyType> key_ptr = GetKey(node, i);
 		if (*new_key >= *key_ptr) {
 			break;
 		}
@@ -824,7 +821,7 @@ template<typename U>
 typename std::enable_if<
 	std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::BaseNode>::value,
 	typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle>::type
-	BPlusTree<KeyType, ValueType, Order>::Insert(size_t version, BlobStoreObject<U> node, BlobStoreObject<const StoredKeyType> key, BlobStoreObject <const StoredValueType> value, std::unordered_set<size_t>* new_objects) {
+	BPlusTree<KeyType, ValueType, Order>::Insert(size_t version, BlobStoreObject<U> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value, std::unordered_set<size_t>* new_objects) {
 	if (node->is_leaf()) {
 		return InsertIntoLeaf(version, node.To<LeafNode>(), std::move(key), std::move(value), new_objects);
 	}
@@ -833,7 +830,7 @@ typename std::enable_if<
 	auto internal_node = node.To<InternalNode>();
 
 	size_t key_index = 0;
-	BlobStoreObject<const StoredKeyType> key_found = internal_node->Search(&blob_store_, *key, &key_index);
+	BlobStoreObject<const KeyType> key_found = internal_node->Search(&blob_store_, *key, &key_index);
 
 	auto child_node = GetChild(internal_node, key_index);
 	InsertionBundle child_node_bundle = Insert(version, child_node, key, value, new_objects);
@@ -886,23 +883,23 @@ typename std::enable_if<
 		new_internal_node->increment_num_keys();
 	}
 	// No split occurred so nothing to return.
-	return InsertionBundle(new_internal_node.To<BaseNode>(), BlobStoreObject<const StoredKeyType>(), BlobStoreObject<BaseNode>());
+	return InsertionBundle(new_internal_node.To<BaseNode>(), BlobStoreObject<const KeyType>(), BlobStoreObject<BaseNode>());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreObject<const StoredValueType>* deleted_value) {
+bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value) {
 	Transaction txn(CreateTransaction());
-	BlobStoreObject<const StoredValueType> deleted = txn.Delete(key);
+	BlobStoreObject<const ValueType> deleted = txn.Delete(key);
 	if (std::move(txn).Commit()) {
 		*deleted_value = deleted;
 		return true;
 	}
-	*deleted_value = BlobStoreObject<const StoredValueType>();
+	*deleted_value = BlobStoreObject<const ValueType>();
 	return false;
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValueType> BPlusTree<KeyType, ValueType, Order>::Delete(BlobStoreObject<BPlusTreeHeader> new_header, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(BlobStoreObject<BPlusTreeHeader> new_header, const KeyType& key) {
 	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_header->root_index);
 	BlobStoreObject<BaseNode> new_root;
 	if (root->get_version() == new_header->version) {
@@ -921,9 +918,9 @@ BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValue
 
 	// Find the child node where the key should be deleted.
 	size_t key_index = 0;
-	BlobStoreObject<const StoredKeyType> key_found = new_root->Search(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found = new_root->Search(&blob_store_, key, &key_index);
 
-	BlobStoreObject<const StoredValueType> deleted;
+	BlobStoreObject<const ValueType> deleted;
 	// As part of the Delete operation, the root node may have been deleted and replaced with a new root node.
 	if (key_index < new_root->num_keys() && key == *key_found) {
 		deleted = Delete(new_header->version, &new_root, key_index + 1, key);
@@ -936,12 +933,12 @@ BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValue
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
 	size_t key_index = 0;
-	BlobStoreObject<const StoredKeyType> key_found = node->Search(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
 	if (!key_found) {
-		return BlobStoreObject<const StoredValueType>();
+		return BlobStoreObject<const ValueType>();
 	}
 
 	auto deleted_value = GetValue(node, key_index);
@@ -957,9 +954,9 @@ BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValue
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(BlobStoreObject<InternalNode> node, const KeyType& key) {
 	size_t key_index = 0;
-	BlobStoreObject<const StoredKeyType> key_found = node->Search(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
 	BlobStoreObject<BaseNode> internal_node_base = node.To<BaseNode>();
 
@@ -972,7 +969,7 @@ BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValue
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
 		size_t key_index = 0;
-		BlobStoreObject<const StoredKeyType> key_found = node->Search(&blob_store_, key, &key_index);
+		BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 
 		if (key_index < node->num_keys() && key == *key_found) {
 			// Can there ever be a null successor? That means there is no successor at all.
@@ -1114,7 +1111,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(size_t version
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValueType> BPlusTree<KeyType, ValueType, Order>::Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(size_t version, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
 	BlobStoreObject<InternalNode> parent_internal_node = parent_node->To<InternalNode>();
 	BlobStoreObject<const BaseNode> const_child = GetChildConst(parent_internal_node, child_index);
 	BlobStoreObject<BaseNode> child;
@@ -1157,10 +1154,10 @@ BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredValue
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredKeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
+BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
 	if (node->is_leaf()) {
 		size_t key_index = 0;
-		BlobStoreObject<const StoredKeyType> key_found = node->Search(&blob_store_, key, &key_index);
+		BlobStoreObject<const KeyType> key_found = node->Search(&blob_store_, key, &key_index);
 		return key_found;
 	}
 	for (int i = 0; i <= node->num_keys(); ++i) {
@@ -1171,7 +1168,7 @@ BlobStoreObject<const typename BPlusTree<KeyType, ValueType, Order>::StoredKeyTy
 			return key_ptr;
 	}
 	// We should never get here unless the tree has a problem.
-	return BlobStoreObject<const StoredKeyType>();
+	return BlobStoreObject<const KeyType>();
 
 }
 
