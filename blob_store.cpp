@@ -14,26 +14,6 @@ BlobStore::~BlobStore() {
     allocator_.RemoveObserver(this);
 }
 
-BlobStoreObject<StringSlice> BlobStore::New(const StringSlice& slice) {
-    size_t index = FindFreeSlot();
-
-    // Allocate space for the string data.
-    char* ptr = allocator_.Allocate(slice.size());
-
-    // Copy the string data into the allocated space.
-    std::memcpy(ptr, slice.data(), slice.size());
-
-    BlobMetadata& metadata = metadata_[index];
-    metadata.size = slice.size();
-    metadata.count = 1;
-    metadata.offset = allocator_.ToOffset(ptr);
-    metadata.lock_state = 0;
-    metadata.next_free_index = -1;
-
-    // Construct a StringSlice from the copied string data.
-    return BlobStoreObject<StringSlice>(this, index);
-}
-
 void BlobStore::Drop(size_t index) {
     if (index == BlobStore::InvalidIndex) {
 		return;

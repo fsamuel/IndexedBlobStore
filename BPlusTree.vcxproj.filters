@@ -39,7 +39,7 @@
     <ClInclude Include="fixed_string.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="size_traits.h">
+    <ClInclude Include="storage_traits.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

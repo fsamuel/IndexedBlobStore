@@ -5,7 +5,7 @@
 #include <string>
 #include <algorithm>
 #include <functional>
-#include "size_traits.h"
+#include "storage_traits.h"
 #include "string_slice.h"
 
 #ifdef _WIN32
@@ -87,20 +87,31 @@ __attribute__((packed))
 #endif
 
 template <typename... Args>
-struct SizeTraits<FixedString, Args...> {
+struct StorageTraits<std::string, Args...> {
+    using StorageType = FixedString;
+
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
     }
+};
 
-    /*
-    static size_t size(const StringSlice& slice) {
-        return sizeof(FixedString) + slice.size() - 1;
-    }*/
+template <typename... Args>
+struct StorageTraits<StringSlice, Args...> {
+    using StorageType = FixedString;
 
-    template <std::size_t N>
+    static size_t size(const StringSlice& str) {
+        return sizeof(FixedString) + str.size() - 1;
+    }
+};
+/*
+template <std::size_t N>
+template <typename... Args>
+struct StorageTraits<const char(&)[N], Args...> {
+    using StorageType = FixedString;
+
     static size_t size(const char(&)[N]) {
         return sizeof(FixedString) + N - 2; // subtract 2 because N includes the null terminator
     }
 };
-
+*/
 #endif // FIXED_STRING_H_

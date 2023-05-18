@@ -4,7 +4,7 @@
 
 // Helper function to create a unique_ptr to a FixedString from a std::string
 std::unique_ptr<FixedString> MakeFixedString(const std::string& str) {
-    size_t size = SizeTraits<FixedString>::size(str);
+    size_t size = StorageTraits<std::string>::size(str);
     void* buffer = ::operator new(size);
     return std::unique_ptr<FixedString>(new (buffer) FixedString(str));
 }
