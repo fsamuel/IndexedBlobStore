@@ -186,7 +186,7 @@ public:
 
 	// Casts BlobStoreObject<T> to a const-preserving BlobStoreObject<U>.
 	template <typename U>
-	auto To() -> typename std::conditional <
+	auto To() & -> typename std::conditional <
 		std::is_const<T>::value,
 		BlobStoreObject< typename std::add_const<U>::type >,
 		BlobStoreObject<U>
@@ -197,6 +197,25 @@ public:
 			U
 		>::type;
 		return BlobStoreObject<const_preserving_U>(reinterpret_cast<BlobStoreObject<const_preserving_U>::ControlBlock*>(control_block_));
+	}
+
+	// Casts BlobStoreObject<T> to a const-preserving BlobStoreObject<U>.
+	template <typename U>
+	auto To() && -> typename std::conditional <
+		std::is_const<T>::value,
+		BlobStoreObject< typename std::add_const<U>::type >,
+		BlobStoreObject<U>
+	>::type {
+		using const_preserving_U = typename std::conditional<
+			std::is_const<T>::value,
+			typename std::add_const<U>::type,
+			U
+		>::type;
+		ControlBlock* control_block = control_block_;
+		control_block_ = nullptr;
+	    BlobStoreObject<const_preserving_U> new_ptr(reinterpret_cast<BlobStoreObject<const_preserving_U>::ControlBlock*>(control_block));
+		control_block->DecrementRefCount();
+		return new_ptr;
 	}
 
 	BlobStoreObject<const T> Downgrade()&& {
@@ -796,7 +815,10 @@ private:
 		if (metadata == nullptr || metadata->is_deleted()) {
 			return;
 		}
-		
+		// We're already holding a write lock.
+		if (metadata->lock_state == WRITE_LOCK_FLAG) {
+			return;
+		}
 		std::int32_t expected;
 		while (true) {
 			std::int32_t expected = 1;
