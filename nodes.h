@@ -15,6 +15,8 @@ struct Node {
 	NodeType type;
 	// The version of this node.
 	std::size_t version;
+	
+	Node(): type(NodeType::HEAD), version(0) {}
 
 	Node(NodeType type, std::size_t version) : type(type), version(version) {}
 
@@ -38,6 +40,9 @@ struct Node {
 	}
 };
 
+static_assert(std::is_trivially_copyable<Node>::value, "Node is trivially copyable");
+static_assert(std::is_standard_layout<Node>::value, "Node is standard layout");
+
 struct HeadNode {
 	Node node;
 	// The index of the root node.
@@ -56,7 +61,11 @@ struct HeadNode {
 	void set_version(size_t new_version) { node.set_version(new_version); }
 };
 
-template<std::size_t Order>
+static_assert(std::is_trivially_copyable<HeadNode>::value, "HeadNode is trivially copyable");
+static_assert(std::is_standard_layout<HeadNode>::value, "HeadNode is standard layout");
+
+
+template<std::size_t Order = 4>
 struct BaseNode {
 	Node node;
 	// The number of keys in the node.
@@ -115,14 +124,12 @@ struct BaseNode {
 		}
 		return BlobStoreObject<const KeyType>();
 	}
-
-	//static_assert(std::is_trivially_copyable<BaseNode<Order>>::value, "BaseNode is trivially copyable");
-	//static_assert(std::is_standard_layout<BaseNode<Order>>::value, "BaseNode is standard layout");
-
 };
 
+static_assert(std::is_trivially_copyable<BaseNode<>>::value, "BaseNode is trivially copyable");
+static_assert(std::is_standard_layout<BaseNode<>>::value, "BaseNode is standard layout");
 
-template<std::size_t Order>
+template<std::size_t Order = 4>
 struct InternalNode {
 	BaseNode<Order> base;
 	std::array<BlobStore::index_type, Order> children;
@@ -150,12 +157,12 @@ struct InternalNode {
 	BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
 		return base.Search(store, key, index);
 	}
-
-	//static_assert(std::is_trivially_copyable<InternalNode<Order>>::value, "InternalNode is trivially copyable");
-	//static_assert(std::is_standard_layout<InternalNode<Order>>::value, "InternalNode is standard layout");
 };
 
-template<std::size_t Order>
+static_assert(std::is_trivially_copyable<InternalNode<>>::value, "InternalNode is trivially copyable");
+static_assert(std::is_standard_layout<InternalNode<>>::value, "InternalNode is standard layout");
+
+template<std::size_t Order = 4>
 struct LeafNode {
 	BaseNode<Order> base;
 	std::array<BlobStore::index_type, Order - 1> values;
@@ -184,11 +191,9 @@ struct LeafNode {
 	BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
 		return base.Search(store, key, index);
 	}
-	//static_assert(std::is_trivially_copyable<LeafNode<Order>>::value, "LeafNode is trivially copyable");
-	//static_assert(std::is_standard_layout<LeafNode<Order>>::value, "LeafNode is standard layout");
-
 };
 
-
+static_assert(std::is_trivially_copyable<LeafNode<>>::value, "LeafNode is trivially copyable");
+static_assert(std::is_standard_layout<LeafNode<>>::value, "LeafNode is standard layout");
 
 #endif // NODES_H_

@@ -137,6 +137,7 @@
     <ClInclude Include="Main.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
+    <ClInclude Include="tree_iterator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="blob_store.cpp" />

@@ -137,7 +137,6 @@ TEST_F(BPlusTreeTest, BPlusTreeIteration) {
 		ASSERT_EQ(value, key * 100);
 		ASSERT_EQ(key, last_key+1);
 		last_key = key;
-		std::cout << "Key: " << *it.GetKey() << ", Value: " << *it.GetValue() << std::endl;
 		++it;
 	}
 }
@@ -157,10 +156,6 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
 		tree.Insert(val, val * 100);
 		inserted.insert(val);
 	}
-	std::cout << std::endl << std::endl << "Tree Version 100" << std::endl;
-	tree.PrintTree(100);
-	std::cout << std::endl << std::endl << "Tree Version 50" << std::endl;
-	tree.PrintTree(50);
 	for (int i = 0; i < 100; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
@@ -273,7 +268,6 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 	for (int i = 50; i < 100; i++) {
 		txn.Insert(i, i * 100);
 	}
-	tree.PrintTree(1000);
 	// Search for 75 inside the transaction to find it, see it's the correct value and outside to
 	// verify that it's not there.
 	auto it = txn.Search(75);
@@ -285,7 +279,6 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 	EXPECT_EQ(it.GetValue(), nullptr);
 	// Commit the transaction and verify that all 100 elements are in the tree.
 	std::move(txn).Commit();
-	tree.PrintTree(1000);
 	for (int i = 0; i < 100; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
