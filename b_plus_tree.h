@@ -4,16 +4,15 @@
 #include <assert.h>
 #include <algorithm>
 #include <array>
-#include "blob_store.h"
-#include "fixed_string.h"
 #include <queue>
 #include <unordered_set>
 
-class BaseNode;
+#include "blob_store.h"
+#include "fixed_string.h"
+#include "nodes.h"
 
 template <typename KeyType, typename ValueType>
 using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>>;
-
 
 // InsertionBundle represents output of an insertion operation.
 // It is either empty or contains a BlobStoreObject of the newly cloned node,
@@ -34,6 +33,10 @@ struct InsertionBundle {
 template <typename KeyType, typename ValueType, std::size_t Order>
 class BPlusTree {
 private:
+	using BaseNode = BaseNode<Order>;
+	using InternalNode = InternalNode<Order>;
+	using LeafNode = LeafNode<Order>;
+	/*
 	enum class NodeType : uint8_t { HEAD, INTERNAL, LEAF };
 
 	struct Node {
@@ -68,12 +71,12 @@ private:
 		Node node;
 		// The index of the root node.
 		BlobStore::index_type root_index;
-		// The index of the previous header.
-		BlobStore::index_type previous_header;
+		// The index of the previous head.
+		BlobStore::index_type previous;
 
-		HeadNode(std::size_t version) : node(NodeType::HEAD, version), previous_header(BlobStore::InvalidIndex) {}
+		HeadNode(std::size_t version) : node(NodeType::HEAD, version), previous(BlobStore::InvalidIndex) {}
 		
-		HeadNode(): node(NodeType::HEAD, 0), previous_header(BlobStore::InvalidIndex) {}
+		HeadNode(): node(NodeType::HEAD, 0), previous(BlobStore::InvalidIndex) {}
 
 		bool is_head() const { return node.is_head(); }
 		bool is_leaf() const { return node.is_leaf(); }
@@ -205,7 +208,7 @@ private:
 
 	static_assert(std::is_trivially_copyable<LeafNode>::value, "LeafNode is trivially copyable");
 	static_assert(std::is_standard_layout<LeafNode>::value, "LeafNode is standard layout");
-
+	*/
 	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
 
 public:
@@ -442,7 +445,7 @@ public:
 			old_head_ = tree_->blob_store_.Get<HeadNode>(1);
 			new_head_ = old_head_.Clone();
 			new_head_->set_version(new_head_->get_version() + 1);
-			new_head_->previous_header = new_head_.Index();
+			new_head_->previous = new_head_.Index();
 			new_objects_.insert({ new_head_.Index(), ObjectType::HeadNode });
 		}
 
@@ -513,8 +516,7 @@ public:
 		BlobStoreObject<HeadNode> new_head_;
 		std::unordered_set<ObjectInfo, ObjectInfoHash, ObjectInfoEqual> new_objects_;
 		std::unordered_set<size_t> discarded_objects_;
-		template <typename KeyType, typename ValueType, std::size_t Order>
-		friend class BPlusTree;
+		template <typename KeyType, typename ValueType, std::size_t Order> friend class BPlusTree;
 	};
 
 	BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
@@ -598,10 +600,10 @@ public:
 
 	void PrintNode(BlobStoreObject<const HeadNode> node) {
 		if (node == nullptr) {
-			std::cout << "NULL Header" << std::endl;
+			std::cout << "NULL head" << std::endl;
 			return;
 		}
-		std::cout << "Header (Index = " << node.Index()
+		std::cout << "head (Index = " << node.Index()
 			      << ", root = "
 			      << node->root_index
 			      << ", version = "
@@ -617,13 +619,13 @@ public:
 			size_t level;
 		};
 		std::queue<NodeWithLevel> queue;
-		BlobStoreObject<const HeadNode> header = blob_store_.Get<HeadNode>(1);
-		// Find the header with the given version
-		while (header->previous_header != BlobStore::InvalidIndex && header->get_version() > version) {
-			header = blob_store_.Get<HeadNode>(header->previous_header);
+		BlobStoreObject<const HeadNode> head = blob_store_.Get<HeadNode>(1);
+		// Find the head with the given version
+		while (head->previous != BlobStore::InvalidIndex && head->get_version() > version) {
+			head = blob_store_.Get<HeadNode>(head->previous);
 		}
-		PrintNode(header);
-		queue.push({ blob_store_.Get<BaseNode>(header->root_index), 1 });
+		PrintNode(head);
+		queue.push({ blob_store_.Get<BaseNode>(head->root_index), 1 });
 		while (!queue.empty()) {
 			NodeWithLevel node_with_level = queue.front();
 			queue.pop();
@@ -682,11 +684,11 @@ private:
 	BlobStore& blob_store_;
 
 	void CreateRoot() {
-		auto header = blob_store_.New<HeadNode>();
+		auto head = blob_store_.New<HeadNode>();
 		auto root = blob_store_.New<LeafNode>();
-		header->set_version(0);
-		header->root_index = root.Index();
-		header->previous_header = BlobStore::InvalidIndex;
+		head->set_version(0);
+		head->root_index = root.Index();
+		head->previous = BlobStore::InvalidIndex;
 	}
 
 	// Returns the child at the given index of the given node preserving constness.
@@ -777,10 +779,7 @@ private:
 		BlobStoreObject<const KeyType> new_key,
 		BlobStoreObject<BaseNode> new_child);
 
-	template<typename U>
-	typename std::enable_if<
-		std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::BaseNode>::value,
-		InsertionBundle>::type Insert(Transaction* transaction, BlobStoreObject<U> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
+	InsertionBundle Insert(Transaction* transaction, BlobStoreObject<const BaseNode> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
 
 	BlobStoreObject<const ValueType> Delete(Transaction* transaction, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
 	BlobStoreObject<const ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
@@ -853,11 +852,11 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, Blob
 
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
-	BlobStoreObject<const HeadNode> header = blob_store_.Get<HeadNode>(1);
-	if (header->root_index == BlobStore::InvalidIndex) {
+	BlobStoreObject<const HeadNode> head = blob_store_.Get<HeadNode>(1);
+	if (head->root_index == BlobStore::InvalidIndex) {
 		return Iterator(&blob_store_, std::vector<size_t>(), 0);
 	}
-	return Search(blob_store_.Get<BaseNode>(header->root_index), key, std::vector<size_t>());
+	return Search(blob_store_.Get<BaseNode>(head->root_index), key, std::vector<size_t>());
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
@@ -992,11 +991,8 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
-template<typename U>
-typename std::enable_if<
-	std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::BaseNode>::value,
-	typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle>::type
-	BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, BlobStoreObject<U> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
+typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle
+BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, BlobStoreObject<const BaseNode> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
 	if (node->is_leaf()) {
 		return InsertIntoLeaf(transaction, std::move(node).To<LeafNode>(), std::move(key), std::move(value));
 	}
@@ -1005,7 +1001,8 @@ typename std::enable_if<
 	auto internal_node = std::move(node).To<InternalNode>();
 
 	size_t key_index = 0;
-	BlobStoreObject<const KeyType> key_found = internal_node->Search(&blob_store_, *key, &key_index);
+	// TODO(fsamuel): This is constructing a string just to search it. This is inefficient.
+	BlobStoreObject<const KeyType> key_found = internal_node->Search<KeyType>(&blob_store_, *key, &key_index);
 
 	// Don't hold onto the child node longer than necessary to avoid failing to upgrade its lock.
 	InsertionBundle child_node_bundle = Insert(transaction, GetChildConst(internal_node, key_index), key, value);

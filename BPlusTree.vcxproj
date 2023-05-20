@@ -131,6 +131,7 @@
     <ClInclude Include="b_plus_tree.h" />
     <ClInclude Include="chunked_vector.h" />
     <ClInclude Include="fixed_string.h" />
+    <ClInclude Include="nodes.h" />
     <ClInclude Include="storage_traits.h" />
     <ClInclude Include="string_slice.h" />
     <ClInclude Include="Main.h" />
