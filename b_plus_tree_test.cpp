@@ -7,7 +7,7 @@ protected:
         std::remove("metadataBuffer");
         std::remove("dataBuffer");
         SharedMemoryBuffer metadataBuffer("metadataBuffer", 8192);
-        SharedMemoryBuffer dataBuffer("dataBuffer", 8192);
+        SharedMemoryBuffer dataBuffer("dataBuffer", 32768);
         blob_store = new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
     }
 
@@ -231,6 +231,32 @@ TEST_F(BPlusTreeTest, SearchNonExistentKey) {
 			int value = *it.GetValue();
 			EXPECT_EQ(key, i + 1);
 			EXPECT_EQ(value, (i + 1) * 100);
+		}
+	}
+}
+
+// Similar to SearchNonExistentKey but with strings.
+TEST_F(BPlusTreeTest, SearchNonExistentStringKey) {
+	BPlusTree<std::string, std::string, 4> tree(*blob_store);
+	// Insert 100 elements with even keys.
+	for (int i = 0; i < 100; i++) {
+		std::string key = std::to_string(2 * i);
+		std::string value = std::to_string(i * 200);
+		tree.Insert(key, value);
+	}
+	auto it = tree.Search("1000");
+	// Verify that the key doesn't exist by verifying that the key doesn't
+	// match what we looked up.
+	EXPECT_NE(*it.GetKey(), "1000");
+
+	// Search or all the odd keys from 1 to 199. Verify that the iterator
+	// doesn't return the key we searched for.
+	for (int i = 1; i < 200; i += 2) {
+		std::string key = std::to_string(i);
+		auto it = tree.Search(key);
+		if (it.GetKey() != nullptr) {
+			std::string key = *it.GetKey();
+			EXPECT_NE(key, std::to_string(i));
 		}
 	}
 }
