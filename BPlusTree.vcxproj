@@ -129,6 +129,7 @@
   <ItemGroup>
     <ClInclude Include="blob_store.h" />
     <ClInclude Include="b_plus_tree.h" />
+    <ClInclude Include="b_plus_tree_base.h" />
     <ClInclude Include="chunked_vector.h" />
     <ClInclude Include="fixed_string.h" />
     <ClInclude Include="nodes.h" />
@@ -137,6 +138,7 @@
     <ClInclude Include="Main.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
+    <ClInclude Include="transaction.h" />
     <ClInclude Include="tree_iterator.h" />
   </ItemGroup>
   <ItemGroup>

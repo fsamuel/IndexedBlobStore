@@ -8,8 +8,10 @@
 #include <unordered_set>
 
 #include "blob_store.h"
+#include "b_plus_tree_base.h"
 #include "fixed_string.h"
 #include "nodes.h"
+#include "transaction.h"
 #include "tree_iterator.h"
 
 template <typename KeyType, typename ValueType>
@@ -32,240 +34,17 @@ struct InsertionBundle {
 };
 
 template <typename KeyType, typename ValueType, std::size_t Order>
-class BPlusTree {
+class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
 private:
 	using BaseNode = BaseNode<Order>;
 	using InternalNode = InternalNode<Order>;
 	using LeafNode = LeafNode<Order>;
+	using Transaction = BPlusTreeBase::Transaction;
 
 	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
 	using Iterator = TreeIterator<KeyType, ValueType, Order>;
 
 public:
-	class Transaction;
-	friend class Transaction;
-
-	enum class ObjectType {
-		LeafNode,
-		InternalNode,
-		HeadNode,
-		KeyValue,
-		DontCare
-	};
-
-	struct ObjectInfo {
-		size_t index;
-		ObjectType type;
-	};
-
-	struct ObjectInfoEqual {
-		bool operator() (const ObjectInfo& lhs, const ObjectInfo& rhs) const {
-			return lhs.index == rhs.index;
-		}
-	};
-
-	struct ObjectInfoHash {
-		std::size_t operator() (const ObjectInfo& object_info) const {
-			return std::hash<size_t>()(object_info.index);
-		}
-	};
-
-	template<typename T>
-	struct TransactionHelper {
-		using non_const_T = typename std::remove_const<T>::type;
-
-		template<typename... Args>
-		static BlobStoreObject<T> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<T> object = txn->blob_store_->New<T>(std::forward<Args>(args)...);
-			txn->new_objects_.insert({ object.Index(), ObjectType::KeyValue });
-			return object;
-		}
-
-		static BlobStoreObject<typename std::remove_const<T>::type> GetMutable(Transaction* txn, BlobStoreObject<typename std::add_const<T>::type> object) {
-			if (txn->new_objects_.count(object.Index()) > 0) {
-				return std::move(object).Upgrade();
-			}
-			auto new_object = object.Clone();
-			txn->discarded_objects_.insert(object.Index());
-			txn->new_objects_.insert({ new_object.Index(), ObjectType::KeyValue= });
-			return new_object;
-		}
-	};
-
-	template<>
-	struct TransactionHelper<HeadNode> {
-		template<typename... Args>
-		static BlobStoreObject<HeadNode> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<HeadNode> node = txn->blob_store_->New<HeadNode>(std::forward<Args>(args)...);
-			txn->new_objects_.insert({ node.Index(), ObjectType::HeadNode });
-			return node;
-		}
-
-		static BlobStoreObject<HeadNode> GetMutable(Transaction* txn, BlobStoreObject<const HeadNode> node) {
-			if (node->get_version() == txn->GetVersion()) {
-				return std::move(node).Upgrade();
-			}
-			auto new_node = node.Clone();
-			new_node->set_version(txn->GetVersion());
-			txn->new_objects_.insert({ new_node.Index(), ObjectType::HeadNode });
-			txn->discarded_objects_.insert(node.Index());
-			return new_node;
-		}
-	};
-
-	template<>
-	struct TransactionHelper<BaseNode> {
-		template<typename... Args>
-		static BlobStoreObject<BaseNode> New(Transaction* txn, Args&&... args) {
-			// We should never be creating a new BaseNode. This is just a placeholder to make the compiler happy.
-			return BlobStoreObject<BaseNode>();
-		}
-
-		static BlobStoreObject<BaseNode> GetMutable(Transaction* txn, BlobStoreObject<const BaseNode> node) {
-			if (node->is_leaf()) {
-				return TransactionHelper<LeafNode>::GetMutable(txn, std::move(node).To<LeafNode>()).To<BaseNode>();
-			}
-			return TransactionHelper<InternalNode>::GetMutable(txn, std::move(node).To<InternalNode>()).To<BaseNode>();
-		}
-	};
-
-	template<>
-	struct TransactionHelper<LeafNode> {
-		template<typename... Args>
-		static BlobStoreObject<LeafNode> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<LeafNode> node = txn->blob_store_->New<LeafNode>(std::forward<Args>(args)...);
-			node->set_version(txn->GetVersion());
-			txn->new_objects_.insert({ node.Index(), ObjectType::LeafNode });
-			return node;
-		}
-
-		static BlobStoreObject<LeafNode> GetMutable(Transaction* txn, BlobStoreObject<const LeafNode> node) {
-			if (node->get_version() == txn->GetVersion()) {
-				return std::move(node).Upgrade();
-			}
-			auto new_node = node.Clone();
-			new_node->set_version(txn->GetVersion());
-			txn->new_objects_.insert({ new_node.Index(), ObjectType::LeafNode });
-			txn->discarded_objects_.insert(node.Index());
-			return new_node;
-		}
-	};
-
-	template<>
-	struct TransactionHelper<InternalNode> {
-		template<typename... Args>
-		static BlobStoreObject<InternalNode> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<InternalNode> node = txn->tree_->blob_store_.New<InternalNode>(std::forward<Args>(args)...);
-			txn->new_objects_.insert({ node.Index(), ObjectType::InternalNode });
-			node->set_version(txn->GetVersion());
-			return node;
-		}
-
-		static BlobStoreObject<InternalNode> GetMutable(Transaction* txn, BlobStoreObject<const InternalNode> node) {
-			if (node->get_version() == txn->GetVersion()) {
-				return std::move(node).Upgrade();
-			}
-			auto new_node = node.Clone();
-			new_node->set_version(txn->GetVersion());
-			txn->new_objects_.insert({ new_node.Index(), ObjectType::InternalNode });
-			txn->discarded_objects_.insert(node.Index());
-			return new_node;
-		}
-	};
-
-	class Transaction {
-	public:
-		Transaction(BPlusTree* tree, BlobStore* blob_store) :
-			tree_(tree),
-			blob_store_(blob_store) {
-			old_head_ = blob_store_->Get<HeadNode>(1);
-			new_head_ = old_head_.Clone();
-			new_head_->set_version(new_head_->get_version() + 1);
-			new_head_->previous = new_head_.Index();
-			new_objects_.insert({ new_head_.Index(), ObjectType::HeadNode });
-		}
-
-		void Insert(const KeyType& key, const ValueType& value) {
-			BlobStoreObject<KeyType> key_ptr = New<KeyType>(key);
-			BlobStoreObject<ValueType> value_ptr = New<ValueType>(value);
-			Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
-		}
-
-		void Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
-			tree_->Insert(this, std::move(key), std::move(value));
-		}
-
-		Iterator Search(const KeyType& key) {
-			return tree_->Search(new_head_, key);
-		}
-
-		BlobStoreObject<const ValueType> Delete(const KeyType& key) {
-			return tree_->Delete(this, key);
-		}
-
-		void Abort()&& {
-			for (auto object_info : new_objects_) {
-				blob_store_->Drop(object_info.index);
-			}
-		}
-
-		bool Commit() && {
-			if (!old_head_.CompareAndSwap(new_head_)) {
-				std::move(*this).Abort();
-				return false;
-			}
-			return true;
-		}
-	
-		size_t GetVersion() const {
-			return new_head_->get_version();
-		}
-
-		BlobStoreObject<const BaseNode> GetNewRoot() const {
-			return blob_store_->Get<BaseNode>(new_head_->root_index);
-		}
-
-		// Sets the new_head's root to the provided index.
-		void SetNewRoot(size_t index) {
-			new_head_->root_index = index;
-		}
-
-		template <typename T, typename... Args>
-		BlobStoreObject<T> New(Args&&... args) {
-			return TransactionHelper<T>::New(this, std::forward<Args>(args)...);
-		}
-
-		template<typename T>
-		BlobStoreObject<typename std::remove_const<T>::type> GetMutable(BlobStoreObject<typename std::add_const<T>::type> node) {
-			return TransactionHelper<typename std::remove_const<T>::type>::GetMutable(this, std::move(node));
-		}
-
-		template<typename T>
-		BlobStoreObject<typename std::remove_const<T>::type> GetMutable(BlobStoreObject<typename std::remove_const<T>::type> node) {
-			return node;
-		}
-
-		template<typename T>
-		void Drop(BlobStoreObject<T> obj) {
-			// The object type doesn't matter when looking up the object in the new objects set.
-			if (new_objects_.count({ obj.Index(), ObjectType::DontCare }) > 0) {
-				new_objects_.erase({ obj.Index(), ObjectType::DontCare });
-			}
-			discarded_objects_.insert(obj.Index());
-		}
-
-	private:
-
-		BPlusTree* tree_;
-		BlobStore* blob_store_;
-		// Holding onto the old head ensures we retain a snapshot of the tree.
-		BlobStoreObject<const HeadNode> old_head_;
-		BlobStoreObject<HeadNode> new_head_;
-		std::unordered_set<ObjectInfo, ObjectInfoHash, ObjectInfoEqual> new_objects_;
-		std::unordered_set<size_t> discarded_objects_;
-		template<typename T> friend struct TransactionHelper;
-	};
-
 	BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
 		if (blob_store_.IsEmpty()) {
 			CreateRoot();
@@ -276,20 +55,24 @@ public:
 		return Transaction(this, &blob_store_);
 	}
 
+	// BPlusTreeBase implementation.
+	void Insert(Transaction* transaction, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) override;
+	Iterator Search(BlobStoreObject<HeadNode> head, const KeyType& key) override;
+	BlobStoreObject<const ValueType> Delete(Transaction* transaction, const KeyType& key) override;
+
+
 	// Returns an iterator to the first element greater than or equal to key.
 	Iterator Search(const KeyType& key);
-	Iterator Search(BlobStoreObject<HeadNode> new_head, const KeyType& key);
 
 	// Inserts a key-value pair into the tree. Returns true if the key-value pair was inserted, false if the key already existed in the tree
 	// or there was a conflicting operation in progress.
 	bool Insert(const KeyType& key, const ValueType& value);
 	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
-	void Insert(Transaction* transaction, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
+
 
 	// Deletes a key-value pair from the tree. Returns true if the operation was successful, false if there was a conflicting operation in progress.
 	// If deleted_value is not null, the deleted value is stored in deleted_value.
 	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
-	BlobStoreObject<const ValueType> Delete(Transaction* transaction, const KeyType& key);
 
 	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
 	void PrintNode(BlobStoreObject<const InternalNode> node) {
@@ -607,9 +390,9 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<HeadNode> new_head, const KeyType& key) {
-	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(new_head->root_index);
-	if (new_head->root_index == BlobStore::InvalidIndex) {
+typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<HeadNode> head, const KeyType& key) {
+	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(head->root_index);
+	if (head->root_index == BlobStore::InvalidIndex) {
 		return Iterator(&blob_store_, std::vector<size_t>(), 0);
 	}
 	return Search(std::move(root), key, std::vector<size_t>());
