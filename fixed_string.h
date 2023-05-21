@@ -188,39 +188,59 @@ __attribute__((packed))
 template <>
 struct StorageTraits<std::string> {
     using StorageType = FixedString;
+    using SearchType = const char*;
 
     template <typename... Args>
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
+    }
+
+    static SearchType data(const std::string& str) {
+        return str.data();
     }
 };
 
 template <>
 struct StorageTraits<const std::string> {
     using StorageType = const FixedString;
+    using SearchType = const char*;
 
     template <typename... Args>
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
+    }
+
+    static SearchType data(const std::string& str) {
+        return str.data();
     }
 };
 
 template <>
 struct StorageTraits<StringSlice> {
     using StorageType = FixedString;
+    using SearchType = const char*;
 
     template<typename... Args>
     static size_t size(const StringSlice& str) {
         return sizeof(FixedString) + str.size() - 1;
+    }
+
+    static SearchType data(const StringSlice& str) {
+        return str.data();
     }
 };
 
 template <std::size_t N>
 struct StorageTraits<const char(&)[N]> {
     using StorageType = FixedString;
+    using SearchType = const char*;
 
     static size_t size(const char(&)[N]) {
         return sizeof(FixedString) + N - 2; // subtract 2 because N includes the null terminator
+    }
+
+    static SearchType data(const char(&str)[N]) {
+        return str;
     }
 };
 

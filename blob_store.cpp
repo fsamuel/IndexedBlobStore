@@ -65,8 +65,8 @@ void BlobStore::Compact() {
         }
 
         // Allocate memory in the new allocator and copy the data
-        char* new_ptr = new_allocator.Allocate(metadata_entry.size * metadata_entry.count);
-        std::memcpy(new_ptr, allocator_.ToPtr<char>(metadata_entry.offset), metadata_entry.size * metadata_entry.count);
+        char* new_ptr = new_allocator.Allocate(metadata_entry.size);
+        std::memcpy(new_ptr, allocator_.ToPtr<char>(metadata_entry.offset), metadata_entry.size);
 
         // Update metadata with the new pointer
         metadata_entry.offset = new_allocator.ToOffset(new_ptr);;

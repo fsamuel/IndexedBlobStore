@@ -176,14 +176,6 @@ public:
 		return control_block_->store_->GetSize(control_block_->index_);
 	}
 
-	// Returns the number of elements this object is composed of if it's an array.
-	size_t GetElementCount() const {
-		if (control_block_ == nullptr || control_block_->store_ == nullptr) {
-			return 0;
-		}
-		return control_block_->store_->GetElementCount(control_block_->index_);
-	}
-
 	// Casts BlobStoreObject<T> to a const-preserving BlobStoreObject<U>.
 	template <typename U>
 	auto To() & -> typename std::conditional <
@@ -427,9 +419,6 @@ public:
 	typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<T>>::type
 		New(Args&&... args);
 
-	template <typename T>
-	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T[]>>::type NewArray(size_t count);
-
 	// Gets the object of type T at the specified index.
 	template<typename T>
 	BlobStoreObject<T> GetMutable(size_t index) {
@@ -448,14 +437,13 @@ public:
 		// This is only safe if the calling object is holding a read or write lock.
 		BlobMetadata& metadata = metadata_[index];
 		size_t clone_index = FindFreeSlot();
-		char* ptr = allocator_.Allocate(metadata.size * metadata.count);
+		char* ptr = allocator_.Allocate(metadata.size);
 		size_t offset;
 		const T* obj = GetRaw<T>(index, &offset);
 		// Blobs are trivially copyable and standard layout so memcpy should be safe.
-		memcpy(ptr, obj, metadata.size * metadata.count);
+		memcpy(ptr, obj, metadata.size);
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
-		clone_metadata.count = metadata.count;
 		clone_metadata.offset = allocator_.ToOffset(ptr);
 		clone_metadata.lock_state = 0;
 		clone_metadata.next_free_index = -1;
@@ -486,21 +474,7 @@ public:
 			return false;
 		}
 		
-		return metadata->size * metadata->count;
-	}
-
-	// Gets the number of elements stored in this blob if the type is an array.
-	size_t GetElementCount(size_t index) {
-		if (index == BlobStore::InvalidIndex) {
-			return 0;
-		}
-
-		BlobMetadata* metadata = metadata_.at(index);
-		if (metadata == nullptr || metadata->is_deleted()) {
-			return false;
-		}
-
-		return metadata->count;
+		return metadata->size;
 	}
 
 	// Drops the object at the specified index, freeing the associated memory.
@@ -640,9 +614,6 @@ private:
 		// The size of the type stored.
 		// TODO(fsamuel): Can we get this from the allocator?
 		size_t size;
-		// The number of elements of type stored.
-		// TODO(fsamuel): Is this really necessary?
-		size_t count;
 		// The offset of the blob in the shared memory buffer.
 		std::atomic<offset_type> offset;
 		// The lock state of the blob.
@@ -655,11 +626,11 @@ private:
 		// This can happen if there is a pending read or write operation on the blob.
 		std::atomic<ssize_t> next_free_index;          
 
-		BlobMetadata() : size(0), count(0), offset(0), lock_state(0), next_free_index(0) {}
+		BlobMetadata() : size(0), offset(0), lock_state(0), next_free_index(0) {}
 
-		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), count(count), offset(offset), lock_state(0), next_free_index(-1) {}
+		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), offset(offset), lock_state(0), next_free_index(-1) {}
 
-		BlobMetadata(const BlobMetadata& other) : size(other.size), count(other.count), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index.load()) {}
+		BlobMetadata(const BlobMetadata& other) : size(other.size), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index.load()) {}
 
 		bool is_deleted() const {
 			return next_free_index != -1;
@@ -703,8 +674,7 @@ private:
 		BlobMetadata* metadata = metadata_.at(index);
 		if (metadata == nullptr ||
 			metadata->is_deleted() ||
-			metadata->size == 0 || 
-			metadata->count == 0) {
+			metadata->size == 0) {
 			return nullptr;
 		}
 		
@@ -847,27 +817,10 @@ BlobStore::New(Args&&... args) {
 	allocator_.Construct(reinterpret_cast<StorageType*>(ptr), std::forward<Args>(args)...);
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
-	metadata.count = 1;
 	metadata.offset = allocator_.ToOffset(ptr);
 	metadata.lock_state = 0;
 	metadata.next_free_index = -1;
 	return BlobStoreObject<T>(this, index);
-}
-
-template <typename T>
-typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<T[]>>::type BlobStore::NewArray(size_t count) {
-	size_t index = FindFreeSlot();
-	T* ptr = reinterpret_cast<T*>(allocator_.Allocate(sizeof(T) * count));
-	for (size_t i = 0; i < count; ++i) {
-		new (&ptr[i]) T();
-	}
-	BlobMetadata& metadata = metadata_[index];
-	metadata.size = sizeof(T);
-	metadata.count = count;
-	metadata.offset = allocator_.ToOffset(ptr);
-	metadata.lock_state = 0;
-	metadata.next_free_index = -1;
-	return BlobStoreObject<T[]>(this, index);
 }
 
 template<typename T>
