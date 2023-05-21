@@ -37,6 +37,12 @@ public:
         std::memcpy(data, slice.data(), size);
     }
 
+    // Constructor from a C string
+    // This isn't safe unless memory was preallocated for the FixedString.
+    explicit FixedString(const char* str) : size(std::strlen(str)), hash(std::hash<std::string>{}(str)) {
+		std::memcpy(data, str, size);
+	}
+
     StringSlice substring(size_t start, size_t length) const {
         // Check if start is out of bounds
         if (start >= size) {

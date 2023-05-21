@@ -112,6 +112,7 @@ struct BaseNode {
 	void set_key(size_t index, size_t key) { keys[index] = key; }
 
 	// Returns the first key in the node that is greater than or equal to the given key and its index in the node.
+	// This is potentially more expensive than necessary with strings as a temporary string is created.
 	template<typename KeyType>
 	BlobStoreObject<const KeyType> Search(BlobStore* store, const KeyType& key, size_t* index) const {
 		auto it = std::lower_bound(keys.begin(), keys.begin() + num_keys(), key,
