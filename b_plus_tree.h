@@ -76,7 +76,7 @@ public:
 
 		template<typename... Args>
 		static BlobStoreObject<T> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<T> object = txn->tree_->blob_store_.New<T>(std::forward<Args>(args)...);
+			BlobStoreObject<T> object = txn->blob_store_->New<T>(std::forward<Args>(args)...);
 			txn->new_objects_.insert({ object.Index(), ObjectType::KeyValue });
 			return object;
 		}
@@ -96,7 +96,7 @@ public:
 	struct TransactionHelper<HeadNode> {
 		template<typename... Args>
 		static BlobStoreObject<HeadNode> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<HeadNode> node = txn->tree_->blob_store_.New<HeadNode>(std::forward<Args>(args)...);
+			BlobStoreObject<HeadNode> node = txn->blob_store_->New<HeadNode>(std::forward<Args>(args)...);
 			txn->new_objects_.insert({ node.Index(), ObjectType::HeadNode });
 			return node;
 		}
@@ -133,7 +133,7 @@ public:
 	struct TransactionHelper<LeafNode> {
 		template<typename... Args>
 		static BlobStoreObject<LeafNode> New(Transaction* txn, Args&&... args) {
-			BlobStoreObject<LeafNode> node = txn->tree_->blob_store_.New<LeafNode>(std::forward<Args>(args)...);
+			BlobStoreObject<LeafNode> node = txn->blob_store_->New<LeafNode>(std::forward<Args>(args)...);
 			node->set_version(txn->GetVersion());
 			txn->new_objects_.insert({ node.Index(), ObjectType::LeafNode });
 			return node;
@@ -175,9 +175,10 @@ public:
 
 	class Transaction {
 	public:
-		explicit Transaction(BPlusTree* tree) :
-			tree_(tree) {
-			old_head_ = tree_->blob_store_.Get<HeadNode>(1);
+		Transaction(BPlusTree* tree, BlobStore* blob_store) :
+			tree_(tree),
+			blob_store_(blob_store) {
+			old_head_ = blob_store_->Get<HeadNode>(1);
 			new_head_ = old_head_.Clone();
 			new_head_->set_version(new_head_->get_version() + 1);
 			new_head_->previous = new_head_.Index();
@@ -204,7 +205,7 @@ public:
 
 		void Abort()&& {
 			for (auto object_info : new_objects_) {
-				tree_->blob_store_.Drop(object_info.index);
+				blob_store_->Drop(object_info.index);
 			}
 		}
 
@@ -220,7 +221,15 @@ public:
 			return new_head_->get_version();
 		}
 
-	private:
+		BlobStoreObject<const BaseNode> GetNewRoot() const {
+			return blob_store_->Get<BaseNode>(new_head_->root_index);
+		}
+
+		// Sets the new_head's root to the provided index.
+		void SetNewRoot(size_t index) {
+			new_head_->root_index = index;
+		}
+
 		template <typename T, typename... Args>
 		BlobStoreObject<T> New(Args&&... args) {
 			return TransactionHelper<T>::New(this, std::forward<Args>(args)...);
@@ -245,13 +254,16 @@ public:
 			discarded_objects_.insert(obj.Index());
 		}
 
+	private:
+
 		BPlusTree* tree_;
+		BlobStore* blob_store_;
 		// Holding onto the old head ensures we retain a snapshot of the tree.
 		BlobStoreObject<const HeadNode> old_head_;
 		BlobStoreObject<HeadNode> new_head_;
 		std::unordered_set<ObjectInfo, ObjectInfoHash, ObjectInfoEqual> new_objects_;
 		std::unordered_set<size_t> discarded_objects_;
-		template <typename KeyType, typename ValueType, std::size_t Order> friend class BPlusTree;
+		template<typename T> friend struct TransactionHelper;
 	};
 
 	BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
@@ -261,7 +273,7 @@ public:
 	}
 
 	Transaction CreateTransaction() {
-		return Transaction(this);
+		return Transaction(this, &blob_store_);
 	}
 
 	// Returns an iterator to the first element greater than or equal to key.
@@ -570,7 +582,7 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(BlobStoreObject<const KeyType>
 
 template<typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) {
-	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(transaction->new_head_->root_index);
+	BlobStoreObject<const BaseNode> root = transaction->GetNewRoot();
 	InsertionBundle bundle = Insert(transaction, std::move(root), key, value);
 	if (bundle.new_right_node != nullptr) {
 		BlobStoreObject<InternalNode> new_root = transaction->New<InternalNode>(1);
@@ -578,10 +590,10 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, Blob
 		new_root->children[1] = bundle.new_right_node.Index();
 		new_root->set_num_keys(1);
 		new_root->set_key(0, bundle.new_key.Index());
-		transaction->new_head_->root_index = new_root.Index();
+		transaction->SetNewRoot(new_root.Index());
 	}
 	else {
-		transaction->new_head_->root_index = bundle.new_left_node.Index();
+		transaction->SetNewRoot(bundle.new_left_node.Index());
 	}
 }
 
@@ -798,12 +810,12 @@ bool BPlusTree<KeyType, ValueType, Order>::Delete(const KeyType& key, BlobStoreO
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Transaction* transaction, const KeyType& key) {
-	BlobStoreObject<const BaseNode> root = blob_store_.Get<BaseNode>(transaction->new_head_->root_index);
+	BlobStoreObject<const BaseNode> root = transaction->GetNewRoot();
 	BlobStoreObject<BaseNode> new_root = transaction->GetMutable<BaseNode>(std::move(root));
 
 	if (new_root->is_leaf()) {
 		// If the root is a leaf node, then we can just delete the key from the leaf node.
-		transaction->new_head_->root_index = new_root.Index();
+		transaction->SetNewRoot(new_root.Index());
 		return DeleteFromLeafNode(new_root.To<LeafNode>(), key);
 	}
 
@@ -819,7 +831,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Tr
 	else {
 		deleted = Delete(transaction, &new_root, key_index, key);
 	}
-	transaction->new_head_->root_index = new_root.Index();
+	transaction->SetNewRoot(new_root.Index());
 	return deleted;
 }
 
