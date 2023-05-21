@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include "fixed_string.h"
+#include "nodes.h"
 
 class BlobStoreTest : public ::testing::Test {
 protected:
@@ -371,4 +372,29 @@ TEST_F(BlobStoreTest, FixedString) {
 	slice = ptr->substring(7, 5);
 	EXPECT_EQ(slice.size(), 5);
 	std::cout << slice << std::endl;
+}
+
+// Create a bunch of blobs of std::string. Create a blob of LeafNode.
+// Populate the keys of Leaf node with the blobs. Test the search function
+// of LeafNode.
+TEST_F(BlobStoreTest, LeafNode) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<const std::string> ptr =
+		std::move(store.New<std::string>("S1")).Downgrade();
+	BlobStoreObject<const std::string> ptr2 =
+		std::move(store.New<std::string>("S2")).Downgrade();
+   BlobStoreObject<const std::string> ptr3 =
+        std::move(store.New<std::string>("S3")).Downgrade();
+   // Create a LeafNode Blob and populate it with the keys above.
+	BlobStoreObject<LeafNode<4>> leaf_node =  store.New<LeafNode<4>>();
+	leaf_node->set_key(0, ptr.Index());
+	leaf_node->set_key(1, ptr2.Index());
+	leaf_node->set_key(2, ptr3.Index());
+	leaf_node->set_num_keys(3);
+	// Search for the key.
+	size_t index = 0;
+	BlobStoreObject<const std::string> key =
+		leaf_node->Search(&store, std::string("S2"), &index);
+	EXPECT_EQ(index, 1);
+	EXPECT_EQ(*key, "S2");
 }

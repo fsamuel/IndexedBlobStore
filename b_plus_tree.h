@@ -64,7 +64,8 @@ public:
 	// Returns an iterator to the first element greater than or equal to key.
 	Iterator Search(const KeyType& key);
 
-	// Inserts a key-value pair into the tree. Returns true if the key-value pair was inserted, false if the key already existed in the tree
+	// Inserts a key-value pair into the tree. Returns true if the key-value pair was inserted,
+	// false if the key already existed in the tree
 	// or there was a conflicting operation in progress.
 	bool Insert(const KeyType& key, const ValueType& value);
 	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);

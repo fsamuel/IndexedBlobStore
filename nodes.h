@@ -1,6 +1,7 @@
 #ifndef NODES_H_
 #define NODES_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
