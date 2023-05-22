@@ -605,7 +605,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Tr
 
 	// Find the child node where the key should be deleted.
 	size_t key_index = 0;
-	BlobStoreObject<const KeyType> key_found = new_root->Search(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found = new_root->Search<KeyType>(&blob_store_, key, &key_index);
 
 	BlobStoreObject<const ValueType> deleted;
 	// As part of the Delete operation, the root node may have been deleted and replaced with a new root node.

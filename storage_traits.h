@@ -5,7 +5,7 @@
 template <typename T>
 struct StorageTraits {
     using StorageType = T;
-    using SearchType = typename std::remove_extent<T>::type;
+    using SearchType = typename std::decay<T>::type;
 
     template<typename... Args>
     static size_t size(Args&&... args) {
