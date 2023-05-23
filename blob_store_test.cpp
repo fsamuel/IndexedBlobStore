@@ -84,23 +84,21 @@ TEST_F(BlobStoreTest, BlobIteration) {
 TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
 
-	BlobStoreObject<const char[64]> ptr1; 
+	BlobStoreObject<const std::string> ptr1; 
 	{
-		BlobStoreObject<char[64]> newPtr = store.New<char[64]>();
-		strcpy(&newPtr[0], "This is a test.");
+		BlobStoreObject<std::string> newPtr = store.New<std::string>("This is a test.");
 		ptr1 = std::move(newPtr).Downgrade();
 	}
 
-	EXPECT_EQ(&*store.Get<char[64]>(ptr1.Index()), &*ptr1);
+	EXPECT_EQ(&*store.Get<std::string>(ptr1.Index()), &*ptr1);
 
-	BlobStoreObject<const char[64]> ptr2;
+	BlobStoreObject<const std::string> ptr2;
 	{
-		BlobStoreObject<char[64]> newPtr = store.New<char[64]>();
-		strcpy(&newPtr[0], "Hello World!");
+		BlobStoreObject<std::string> newPtr = store.New<std::string>("Hello World!");
 		ptr2 = std::move(newPtr).Downgrade();
 	}
 
-	EXPECT_EQ(&*store.Get<char[64]>(ptr2.Index()), &*ptr2);
+	EXPECT_EQ(&*store.Get<const std::string>(ptr2.Index()), &*ptr2);
 
 	EXPECT_EQ(store.GetSize(), 2);
 
@@ -108,7 +106,7 @@ TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 	EXPECT_EQ(store.GetSize(), 1);
 
 	EXPECT_EQ(&*store.Get<char[64]>(ptr1.Index()), &*ptr1);
-	EXPECT_EQ(ptr1.GetSize(), 64);
+	EXPECT_EQ(ptr1->size, 15);
 	// Fixed-size arrays are treated as one element.
 	EXPECT_EQ(ptr2, nullptr);
 }
@@ -245,4 +243,34 @@ TEST_F(BlobStoreTest, LeafNode) {
 		
 	EXPECT_EQ(index, 1);
 	EXPECT_EQ(*key, "S2");
+}
+
+// Create a blob that's a char array with a string in it. Verify that the string is
+// the same as the original string.
+TEST_F(BlobStoreTest, CharArray) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<const char[14]> ptr = std::move(store.New<const char[14]>("Hello, world!")).Downgrade();
+	EXPECT_EQ(ptr->size, 13);
+	EXPECT_EQ(*ptr, "Hello, world!");
+}
+
+// Create a blob that's an int array, and populate it with some values. Verify that the values
+// are the same as the original values.
+TEST_F(BlobStoreTest, IntArray) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+
+	std::array<int, 4> arr = { 1, 2, 3, 4 };
+	BlobStoreObject<int[4]> ptr = store.New<int[4]>(arr);
+	EXPECT_EQ(ptr->size(), 4);
+	EXPECT_EQ(ptr[0], 1);
+	EXPECT_EQ(ptr[1], 2);
+	EXPECT_EQ(ptr[2], 3);
+	EXPECT_EQ(ptr[3], 4);
+
+	BlobStoreObject<int[4]> ptr2 = store.New<int[4]>({1, 2, 3, 4});
+	EXPECT_EQ(ptr2->size(), 4);
+	EXPECT_EQ(ptr2[0], 1);
+	EXPECT_EQ(ptr2[1], 2);
+	EXPECT_EQ(ptr2[2], 3);
+	EXPECT_EQ(ptr2[3], 4);
 }

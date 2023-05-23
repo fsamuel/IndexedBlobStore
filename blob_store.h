@@ -31,6 +31,14 @@ namespace {
 	}
 }
 
+// Base template for non-std::array types
+template <typename T>
+struct IsStdArray : std::false_type {};
+
+// Specialization for std::array types
+template <typename T, std::size_t N>
+struct IsStdArray<std::array<T, N>> : std::true_type {};
+
 class BlobStore;
 
 class BlobStoreObserver {
@@ -61,6 +69,7 @@ class BlobStoreObject {
 public:
 	using non_const_T = typename std::remove_const<T>::type;
 	using StorageType = typename StorageTraits<T>::StorageType;
+	using ElementType = typename StorageTraits<T>::ElementType;
 	using NonConstStorageType = typename StorageTraits<non_const_T>::StorageType;
 
 	BlobStoreObject() : control_block_(nullptr) {}
@@ -108,28 +117,12 @@ public:
 		return *control_block_->ptr_;
 	}
 
-	// Operator[] implementation for array types.
-	template<typename U = StorageType>
-	typename std::enable_if<std::is_array<U>::value, typename std::remove_extent<U>::type&>::type
-		operator[](size_t i) {
+	ElementType& operator[](size_t i) {
 		return (*control_block_->ptr_)[i];
 	}
 
-	template<typename U = StorageType>
-	typename std::enable_if<std::is_array<U>::value, const typename std::remove_extent<U>::type&>::type
-		operator[](size_t i) const {
-		return (*control_block_->ptr_)[i];
-	}
-
-	template<typename U = StorageType>
-	typename std::enable_if<!std::is_array<U>::value, T&>::type
-		operator[](size_t i) {
-		return (*control_block_->ptr_)[i];
-	}
-
-	template<typename U = StorageType>
-	typename std::enable_if<!std::is_array<U>::value, const T&>::type
-		operator[](size_t i) const {
+	
+	const ElementType& operator[](size_t i) const {
 		return (*control_block_->ptr_)[i];
 	}
 
@@ -416,8 +409,29 @@ public:
 
 	// Creates a new object of type T with the provided arguments into the BlobStore and returns a BlobStoreObject.
 	template <typename T, typename... Args>
-	typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<T>>::type
-		New(Args&&... args);
+	typename std::enable_if<
+		std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+		std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,
+		BlobStoreObject<T>
+	>::type New(Args&&... args);
+
+	template <typename T>
+	typename std::enable_if<
+        std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+		std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,		BlobStoreObject<T>
+	>::type New(std::initializer_list<typename StorageTraits<T>::ElementType> initList);
+
+	template <typename T, typename... Args>
+	typename std::enable_if<
+		std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
+		std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,		BlobStoreObject<T>
+	>::type NewImpl(Args&&... args);
+
+	template <typename T>
+	typename std::enable_if<
+		std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
+		std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,		BlobStoreObject<T>
+	>::type NewImpl(std::initializer_list<typename StorageTraits<T>::ElementType> initList);
 
 	// Gets the object of type T at the specified index.
 	template<typename T>
@@ -765,7 +779,10 @@ private:
 			return;
 		}
 
-		std::int32_t expected;
+		if (metadata->lock_state > 0) {
+			return;
+		}
+
 		while (true) {
 			std::int32_t expected = metadata->lock_state.load() & WRITE_LOCK_FLAG;
 			if (metadata->lock_state.compare_exchange_weak(expected, 1)) {
@@ -808,13 +825,54 @@ private:
 };
 
 template <typename T, typename... Args>
-typename std::enable_if<std::conjunction<std::is_standard_layout<typename StorageTraits<T>::StorageType>, std::is_trivially_copyable<typename StorageTraits<T>::StorageType>>::value, BlobStoreObject<T>>::type
-BlobStore::New(Args&&... args) {
+typename std::enable_if<
+	std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+	std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,
+	BlobStoreObject<T>
+>::type BlobStore::New(Args&&... args) {
+	return NewImpl<T>(std::forward<Args>(args)...);
+}
+
+template <typename T>
+typename std::enable_if<
+	std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+	std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,
+	BlobStoreObject<T>
+>::type BlobStore::New(std::initializer_list<typename StorageTraits<T>::ElementType> initList) {
+	return NewImpl<T>(initList);
+}
+
+template <typename T, typename... Args>
+typename std::enable_if<
+	std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
+	std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,
+	BlobStoreObject<T>
+>::type BlobStore::NewImpl(Args&&... args) {
 	using StorageType = typename StorageTraits<T>::StorageType;
 	size_t index = FindFreeSlot();
 	size_t size = StorageTraits<T>::size(std::forward<Args>(args)...);
 	char* ptr = allocator_.Allocate(size);
 	allocator_.Construct(reinterpret_cast<StorageType*>(ptr), std::forward<Args>(args)...);
+	BlobMetadata& metadata = metadata_[index];
+	metadata.size = size;
+	metadata.offset = allocator_.ToOffset(ptr);
+	metadata.lock_state = 0;
+	metadata.next_free_index = -1;
+	return BlobStoreObject<T>(this, index);
+}
+
+template <typename T>
+typename std::enable_if<
+	std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
+	std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,
+	BlobStoreObject<T>
+>::type BlobStore::NewImpl(std::initializer_list<typename StorageTraits<T>::ElementType> initList) {
+	using StorageType = typename StorageTraits<T>::StorageType;
+	using ElementType = typename StorageTraits<T>::ElementType;
+	size_t index = FindFreeSlot();
+	size_t size = initList.size() * sizeof(ElementType);
+	char* ptr = allocator_.Allocate(size);
+	std::uninitialized_copy(initList.begin(), initList.end(), reinterpret_cast<ElementType*>(ptr));
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
 	metadata.offset = allocator_.ToOffset(ptr);

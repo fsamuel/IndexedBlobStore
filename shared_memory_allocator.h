@@ -195,6 +195,12 @@ public:
 		new (p) U(std::forward<Args>(args)...);
 	}
 
+	template<typename T, std::size_t N>
+	void Construct(std::array<T, N>* p, std::initializer_list<T> ilist)
+	{
+		*p = ilist;
+	}
+
 	template<typename U>
 	void Destroy(U* p)
 	{

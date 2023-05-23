@@ -43,6 +43,14 @@ public:
 		std::memcpy(data, str, size);
 	}
 
+    // Access character at a given index (const version)
+    const char& operator[](std::size_t index) const {
+        if (index >= size) {
+            throw std::out_of_range("Index out of range");
+        }
+        return data[index];
+    }
+
     StringSlice substring(size_t start, size_t length) const {
         // Check if start is out of bounds
         if (start >= size) {
@@ -189,14 +197,11 @@ template <>
 struct StorageTraits<std::string> {
     using StorageType = FixedString;
     using SearchType = const char*;
+    using ElementType = char;
 
     template <typename... Args>
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
-    }
-
-    static SearchType data(const std::string& str) {
-        return str.data();
     }
 };
 
@@ -204,14 +209,11 @@ template <>
 struct StorageTraits<const std::string> {
     using StorageType = const FixedString;
     using SearchType = const char*;
+    using ElementType = char;
 
     template <typename... Args>
     static size_t size(const std::string& str) {
         return sizeof(FixedString) + str.size() - 1;
-    }
-
-    static SearchType data(const std::string& str) {
-        return str.data();
     }
 };
 
@@ -219,28 +221,37 @@ template <>
 struct StorageTraits<StringSlice> {
     using StorageType = FixedString;
     using SearchType = const char*;
+    using ElementType = char;
 
     template<typename... Args>
     static size_t size(const StringSlice& str) {
         return sizeof(FixedString) + str.size() - 1;
     }
+};
 
-    static SearchType data(const StringSlice& str) {
-        return str.data();
+template <std::size_t N>
+struct StorageTraits<char[N]> {
+    using StorageType = FixedString;
+    using SearchType = char*;
+    using ElementType = char;
+
+    static size_t size(char(&)[N]) {
+        return sizeof(FixedString) + N - 2; // subtract 2 because N includes the null terminator
+    }
+
+    static size_t size() {
+        return sizeof(FixedString) + N - 2; // subtract 2 because N includes the null terminator
     }
 };
 
 template <std::size_t N>
-struct StorageTraits<const char(&)[N]> {
+struct StorageTraits<const char[N]> {
     using StorageType = FixedString;
     using SearchType = const char*;
+    using ElementType = char;
 
     static size_t size(const char(&)[N]) {
         return sizeof(FixedString) + N - 2; // subtract 2 because N includes the null terminator
-    }
-
-    static SearchType data(const char(&str)[N]) {
-        return str;
     }
 };
 

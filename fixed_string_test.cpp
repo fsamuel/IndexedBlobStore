@@ -73,6 +73,11 @@ TEST(FixedStringTest, ConversionToString) {
 TEST(FixedStringTest, ConversionToStringSlice) {
     std::string test_string = "hello";
     auto fs = MakeFixedString(test_string);
+    EXPECT_EQ((*fs)[0], 'h');
+    EXPECT_EQ((*fs)[1], 'e');
+    EXPECT_EQ((*fs)[2], 'l');
+    EXPECT_EQ((*fs)[3], 'l');
+    EXPECT_EQ((*fs)[4], 'o');
 
     StringSlice converted_slice = static_cast<StringSlice>(*fs); // Convert FixedString to StringSlice
 
