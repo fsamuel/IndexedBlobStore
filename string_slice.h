@@ -5,11 +5,6 @@
 #include <cstring>
 #include <ostream>
 
-#ifdef _WIN32
-#undef max
-#undef min
-#endif
-
 // The StringSlice class represents a slice of a string, i.e., a substring 
 // defined by an offset and a size within the original string.
 //

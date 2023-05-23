@@ -5,6 +5,7 @@
 #include <string>
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <Windows.h>
 #else
 #include <fcntl.h>

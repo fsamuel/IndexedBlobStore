@@ -5,8 +5,8 @@
 #include <vector>
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <Windows.h>
-#undef max
 #else
 #include <unistd.h>
 #include <sys/mman.h>

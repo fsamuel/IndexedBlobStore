@@ -8,11 +8,6 @@
 #include "storage_traits.h"
 #include "string_slice.h"
 
-#ifdef _WIN32
-#undef max
-#undef min
-#endif
-
 #if defined(_MSC_VER)
 #pragma pack(push, 1)
 #endif

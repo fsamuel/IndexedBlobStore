@@ -7,11 +7,6 @@
 #include <memory>
 #include <atomic>
 
-#ifdef _WIN32
-#undef max
-#undef min
-#endif
-
 // ChunkedVector is a dynamic array-like data structure that uses SharedMemoryBuffer
 // to allocate its memory in chunks. Each chunk is double the size of the previous chunk.
 // It supports basic operations like push_back, pop_back, access at a particular index,
