@@ -402,8 +402,9 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root) {
 	path_to_root.push_back(node.Index());
-	size_t key_index = 0;
-	BlobStoreObject<const KeyType> key_found = node->Search<KeyType>(&blob_store_, key, &key_index);
+
+	BlobStoreObject<const KeyType> key_found;
+	size_t key_index = node->Search(&blob_store_, key, &key_found);
 
 	if (node->is_leaf()) {
 		return Iterator(&blob_store_, std::move(path_to_root), key_index);
@@ -531,9 +532,9 @@ BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, BlobStore
 	// Find the child node where the new key-value should be inserted.
 	auto internal_node = std::move(node).To<InternalNode>();
 
-	size_t key_index = 0;
 	// TODO(fsamuel): This is constructing a string just to search it. This is inefficient.
-	BlobStoreObject<const KeyType> key_found = internal_node->Search<KeyType>(&blob_store_, *key, &key_index);
+	BlobStoreObject<const KeyType> key_found;
+	size_t key_index = internal_node->Search(&blob_store_, *key, &key_found);
 
 	// Don't hold onto the child node longer than necessary to avoid failing to upgrade its lock.
 	InsertionBundle child_node_bundle = Insert(transaction, GetChildConst(internal_node, key_index), key, value);
@@ -604,8 +605,8 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Tr
 	}
 
 	// Find the child node where the key should be deleted.
-	size_t key_index = 0;
-	BlobStoreObject<const KeyType> key_found = new_root->Search<KeyType>(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found;
+	size_t key_index = new_root->Search(&blob_store_, key, &key_found);
 
 	BlobStoreObject<const ValueType> deleted;
 	// As part of the Delete operation, the root node may have been deleted and replaced with a new root node.
@@ -621,8 +622,8 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Tr
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key) {
-	size_t key_index = 0;
-	BlobStoreObject<const KeyType> key_found = node->Search<KeyType>(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found;
+	size_t key_index = node->Search(&blob_store_, key, &key_found);
 
 	if (!key_found) {
 		return BlobStoreObject<const ValueType>();
@@ -642,8 +643,8 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFromInternalNode(Transaction* transaction, BlobStoreObject<InternalNode> node, const KeyType& key) {
-	size_t key_index = 0;
-	BlobStoreObject<const KeyType> key_found = node->Search<KeyType>(&blob_store_, key, &key_index);
+	BlobStoreObject<const KeyType> key_found;
+	size_t key_index = node->Search(&blob_store_, key, &key_found);
 
 	BlobStoreObject<BaseNode> internal_node_base = node.To<BaseNode>();
 
@@ -655,8 +656,8 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 		auto deleted_value = Delete(transaction, &internal_node_base, key_index + 1, key);
 		// We need to update current key to a new successor since we just deleted the
 		// successor to this node. We shouldn't refer to nodes that don't exist.
-		size_t key_index = 0;
-		BlobStoreObject<const KeyType> key_found = node->Search<KeyType>(&blob_store_, key, &key_index);
+		BlobStoreObject<const KeyType> key_found;
+		size_t key_index = node->Search(&blob_store_, key, &key_found);
 
 		if (key_index < node->num_keys() && key == *key_found) {
 			// Can there ever be a null successor? That means there is no successor at all.
@@ -810,8 +811,8 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Tr
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
 	if (node->is_leaf()) {
-		size_t key_index = 0;
-		BlobStoreObject<const KeyType> key_found = node->Search<KeyType, KeyType>(&blob_store_, key, &key_index);
+		BlobStoreObject<const KeyType> key_found;
+		size_t key_index = node->Search(&blob_store_, key, &key_found);
 		return key_found;
 	}
 	for (int i = 0; i <= node->num_keys(); ++i) {

@@ -240,9 +240,9 @@ TEST_F(BlobStoreTest, LeafNode) {
 	leaf_node->set_key(2, ptr3.Index());
 	leaf_node->set_num_keys(3);
 	// Search for the key.
-	size_t index = 0;
-	BlobStoreObject<const std::string> key =
-		leaf_node->Search<const std::string, const char*>(&store, "S2", &index);
+	BlobStoreObject<const std::string> key;
+	size_t index = leaf_node->Search(&store, "S2", &key);
+		
 	EXPECT_EQ(index, 1);
 	EXPECT_EQ(*key, "S2");
 }

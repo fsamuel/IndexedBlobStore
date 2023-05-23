@@ -116,20 +116,22 @@ struct BaseNode {
 	template<typename KeyType, typename U = typename StorageTraits<KeyType>::SearchType>
 	typename std::enable_if<
 		std::is_same<U, KeyType>::value || 
-		std::is_same<U, typename StorageTraits<KeyType>::SearchType>::value ||
+		std::is_convertible<U, typename StorageTraits<KeyType>::SearchType>::value ||
 		std::is_same<U, typename StorageTraits<KeyType>::StorageType>::value,
-		BlobStoreObject<const KeyType>>::type
-	Search(BlobStore* store, const U& key, size_t* index) const {
-		auto it = std::lower_bound(keys.begin(), keys.begin() + num_keys(), key,
+		size_t>::type Search(BlobStore* store, const U& search_key, BlobStoreObject<const KeyType>* key_in_node) const {
+		auto it = std::lower_bound(keys.begin(), keys.begin() + num_keys(), search_key,
 			[store](size_t lhs, const U& rhs) {
 				return *store->Get<KeyType>(lhs) < rhs;
 			});
 
-		*index = std::distance(keys.begin(), it);
-		if (*index < num_keys()) {
-			return store->Get<KeyType>(*it);
+		size_t index = std::distance(keys.begin(), it);
+		if (index < num_keys()) {
+			*key_in_node = store->Get<KeyType>(*it);
 		}
-		return BlobStoreObject<const KeyType>();
+		else {
+			*key_in_node = BlobStoreObject<const KeyType>();
+		}
+		return index;
 	}
 };
 
@@ -160,14 +162,14 @@ struct InternalNode {
 	size_t get_key(size_t index) const { return base.get_key(index); }
 	void set_key(size_t index, size_t key) { base.set_key(index, key); }
 
-	template<typename KeyType, typename U = typename U = typename StorageTraits<KeyType>::SearchType>
+	template<typename KeyType, typename U = typename StorageTraits<KeyType>::SearchType>
 	typename std::enable_if<
 		std::is_same<U, KeyType>::value ||
-		std::is_same<U, typename StorageTraits<KeyType>::SearchType>::value ||
+		std::is_convertible<U, typename StorageTraits<KeyType>::SearchType>::value ||
 		std::is_same<U, typename StorageTraits<KeyType>::StorageType>::value,
-		BlobStoreObject<const KeyType>>::type
-		Search(BlobStore* store, const U& key, size_t* index) const {
-		return base.Search<KeyType, U>(store, key, index);
+		size_t>::type
+		Search(BlobStore* store, const U& search_key, BlobStoreObject<const KeyType>* key_in_node) const {
+		return base.Search<KeyType, U>(store, search_key, key_in_node);
 	}
 };
 
@@ -199,14 +201,14 @@ struct LeafNode {
 	size_t get_key(size_t index) const { return base.get_key(index); }
 	void set_key(size_t index, size_t key) { base.set_key(index, key); }
 
-	template<typename KeyType, typename U = typename U = typename StorageTraits<KeyType>::SearchType>
+	template<typename KeyType, typename U = typename StorageTraits<KeyType>::SearchType>
 	typename std::enable_if<
 		std::is_same<U, KeyType>::value ||
-		std::is_same<U, typename StorageTraits<KeyType>::SearchType>::value ||
+		std::is_convertible<U, typename StorageTraits<KeyType>::SearchType>::value ||
 		std::is_same<U, typename StorageTraits<KeyType>::StorageType>::value,
-		BlobStoreObject<const KeyType>>::type
-		Search(BlobStore* store, const U& key, size_t* index) const {
-		return base.Search<KeyType, U>(store, key, index);
+		size_t>::type
+		Search(BlobStore* store, const U& search_key, BlobStoreObject<const KeyType>* key_in_node) const {
+		return base.Search<KeyType, U>(store, search_key, key_in_node);
 	}
 };
 
