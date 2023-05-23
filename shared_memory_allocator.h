@@ -17,6 +17,12 @@ public:
 	virtual void OnBufferResize() = 0;
 };
 
+// A simple allocator that allocates memory from a shared memory buffer. The allocator
+// maintains a free list of available blocks of memory. When a block is allocated, it is
+// removed from the free list. When a block is freed, it is added back to the free list.
+// The allocator does not attempt to coalesce adjacent free blocks.
+// The allocator is designed to be lock-free by using atomic operations to update the
+// allocator state: size of a free block, or the head of the free list.
 template <typename T>
 class SharedMemoryAllocator {
 public:
@@ -94,18 +100,32 @@ public:
 			FreeNodeHeader* current_block_ptr = ToPtr<FreeNodeHeader>(free_list_offset);
 			size_type block_size = current_block_ptr->size;
 
+			// If we've found a block greater than the size we need (and can accommodate a head
+			// a second block, split it into two blocks. The first piece will be returned to the
+			// free list, and the second piece will be returned to the caller.
 			if (block_size > bytes_needed + sizeof(FreeNodeHeader)) {
+				// TODO(fsamuel): This should be done atomically. We don't want another thread to
+				// allocate the same block before we have a chance to split it. If we fail to 
+				// resize the block, we should go back to the free list and try again.
 				current_block_ptr->size = block_size - bytes_needed;
 				offset_type dataOffset = free_list_offset + block_size - bytes_needed;
 				return NewAllocatedNodeAtOffset(dataOffset, bytes_needed);
 
 			}
+			// The block is large enough to use for allocation but NOT large enough to split.
 			else if (block_size >= bytes_needed) {
 				// Found a block that is large enough, remove it from the free list and return a pointer to its data
 				if (prev_free_list_offset_ptr) {
+					// TODO(fsamuel): Single pointer update, we should do this atomically or move
+					// back to the beginning of the free list and try again.
 					*prev_free_list_offset_ptr = current_block_ptr->next_offset;
 				}
 				else {
+					// The block we found is the first block in the free list, update the free list
+					// offset. Again this needs to be done atomically or we need to move back to the
+					// beginning of the free list and try again.
+					// This design likey results in a lot of fragmentation. We should consider
+					// using a free list that is sorted by size.
 					if (state()->free_list_offset == free_list_offset) {
 						state()->free_list_offset = current_block_ptr->next_offset;
 					}
@@ -122,7 +142,12 @@ public:
 			free_list_offset = current_block_ptr->next_offset;
 		}
 
-		// No block of sufficient size was found, resize the buffer and allocate a new block
+		// No block of sufficient size was found, resize the buffer and allocate a new block.
+		// TODO(fsamuel): We can probably use something like ChunkedVector for resizing the buffer.
+		// We just need to make sure an allocation fully fits into a chunk.
+		// Idea: When we need a new chunk, create a free list node at the beginning of the chunk for
+		// the full size of the chunk. This will allow us to use the free list to find a chunk that
+		// is large enough for an allocation.
 		offset_type data_offset = buffer_.size();
 		buffer_.Resize(buffer_.size() + bytes_needed);
 
@@ -146,6 +171,7 @@ public:
 		// Calculate the offset of the allocated node header
 		offset_type node_header_offset = ToOffset(reinterpret_cast<AllocatedNodeHeader*>(ptr) - 1);
 		AllocatedNodeHeader* current_node = ToPtr<AllocatedNodeHeader>(node_header_offset);
+
 		if (current_node->prev_offset != -1) {
 			AllocatedNodeHeader* prev_node = ToPtr<AllocatedNodeHeader>(current_node->prev_offset);
 			prev_node->next_offset = current_node->next_offset;
@@ -155,6 +181,7 @@ public:
 			next_node->prev_offset = current_node->prev_offset;
 
 		}
+
 		// Add the block to the free list
 		AllocatorStateHeader* state_header_ptr = reinterpret_cast<AllocatorStateHeader*>(buffer_.data());
 		if (state_header_ptr->allocation_offset == node_header_offset) {
@@ -168,6 +195,7 @@ public:
 		FreeNodeHeader* free_node_ptr = ToPtr<FreeNodeHeader>(node_header_offset);
 		free_node_ptr->size = current_node->size;
 		free_node_ptr->next_offset = state_header_ptr->free_list_offset;
+		// TODO(fsamuel): This can be done atomically. If this is stale, we can just try again.
 		state_header_ptr->free_list_offset = ToOffset(free_node_ptr);
 	}
 
@@ -267,6 +295,10 @@ private:
 		}
 	}
 
+	// We should allocate new chunks in multiples of the page size.
+	// The first chunk should always be at least as big as the page size.
+	// This is because we need to store the allocator state header in the first chunk.
+	// Each subsequent chunk should be double the size of the previous chunk.
 	size_t GetPageSize() {
 #ifdef _WIN32
 		SYSTEM_INFO system_info;

@@ -665,7 +665,7 @@ private:
 	};
 
 	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
-	using MetadataVector = ChunkedVector<BlobMetadata, 4096>;
+	using MetadataVector = ChunkedVector<BlobMetadata>;
 
 	// Returns the index of the first free slot in the metadata vector.
 	size_t FindFreeSlot();

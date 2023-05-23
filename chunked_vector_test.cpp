@@ -20,7 +20,7 @@ protected:
 };
 
 TEST_F(ChunkedVectorTest, SanityCheck) {
-	ChunkedVector<int, 4> vector("chunked_vector_test");
+	ChunkedVector<int> vector("chunked_vector_test", 4);
 	EXPECT_EQ(vector.size(), 0);
 	vector.push_back(0);
 	EXPECT_EQ(vector.size(), 1);
@@ -42,7 +42,7 @@ TEST_F(ChunkedVectorTest, SanityCheck) {
 // Basic test for ChunkedVector that populates it with 100 elements and
 // verifies that they are all there.
 TEST_F(ChunkedVectorTest, BasicTest) {
-	ChunkedVector<int, 4> vector("chunked_vector_test");
+	ChunkedVector<int> vector("chunked_vector_test", 4);
 	for (int i = 0; i < 10; i++) {
 		vector.push_back(i);
 	}
@@ -56,7 +56,7 @@ TEST_F(ChunkedVectorTest, BasicTest) {
 // Push back one element and pop it off and make sure size is updated appropriately
 // each time.
 TEST_F(ChunkedVectorTest, PushbackAndPop) {
-	ChunkedVector<int, 4> vec("chunked_vector_test");
+	ChunkedVector<int> vec("chunked_vector_test", 4);
 	EXPECT_EQ(vec.size(), 0);
 	vec.push_back(1);
 	EXPECT_EQ(vec.size(), 1);
@@ -66,7 +66,7 @@ TEST_F(ChunkedVectorTest, PushbackAndPop) {
 
 // Tests reserve, capacity, and resize operations on ChunkedVector.
 TEST_F(ChunkedVectorTest, ReserveCapacityResize) {
-	ChunkedVector<int, 4> vec("chunked_vector_test");
+	ChunkedVector<int> vec("chunked_vector_test", 4);
 	EXPECT_EQ(vec.capacity(), 1);
 	vec.reserve(10);
 	EXPECT_EQ(vec.capacity(), 15);
@@ -82,7 +82,7 @@ TEST_F(ChunkedVectorTest, ReserveCapacityResize) {
 // they are all there. Modify a few elements and make sure they are updated. Also
 // make sure that the other elements are still there and unchanged.
 TEST_F(ChunkedVectorTest, WriteAndRead) {
-	ChunkedVector<int, 4> vec("chunked_vector_test");
+	ChunkedVector<int> vec("chunked_vector_test", 4);
 	for (int i = 0; i < 1000; i++) {
 		vec.push_back(i);
 	}
@@ -110,7 +110,7 @@ TEST_F(ChunkedVectorTest, LargeChunkWithStruct) {
 		int c;
 		int d;
 	};
-	ChunkedVector<TestStruct, 16> vec("chunked_vector_test");
+	ChunkedVector<TestStruct> vec("chunked_vector_test", 16);
 	EXPECT_EQ(vec.size(), 0);
 	TestStruct obj;
 	obj.a = 1;
@@ -128,7 +128,7 @@ TEST_F(ChunkedVectorTest, LargeChunkWithStruct) {
 // Insert 1000 elements into a ChunkedVector and then erase them all and make sure
 // the size is updated appropriately.
 TEST_F(ChunkedVectorTest, Erase) {
-	ChunkedVector<int, 4> vec("chunked_vector_test");
+	ChunkedVector<int> vec("chunked_vector_test", 4);
 	for (int i = 0; i < 1000; i++) {
 		vec.push_back(i);
 	}
@@ -149,7 +149,7 @@ TEST_F(ChunkedVectorTest, EraseStruct) {
 		int c;
 		int d;
 	};
-	ChunkedVector<TestStruct, 16> vec("chunked_vector_test");
+	ChunkedVector<TestStruct> vec("chunked_vector_test", 16);
 	for (int i = 0; i < 1000; i++) {
 		TestStruct obj;
 		obj.a = i;
@@ -175,4 +175,48 @@ TEST_F(ChunkedVectorTest, EraseStruct) {
 	EXPECT_EQ(vec[0].b, 1);
 	EXPECT_EQ(vec[0].c, 2);
 	EXPECT_EQ(vec[0].d, 3);
+}
+
+// Tests a ChunkVector as a byte array.
+TEST_F(ChunkedVectorTest, ByteArray) {
+	ChunkedVector<uint8_t> vec("chunked_vector_test", 4);
+	for (int i = 0; i < 256; i++) {
+		vec.push_back(i);
+	}
+	EXPECT_EQ(vec.size(), 256);
+	for (int i = 0; i < 256; i++) {
+		EXPECT_EQ(vec[i], i);
+	}
+	EXPECT_EQ(vec.capacity(), 508);
+	vec[0] = 3;
+	vec[1] = 4;
+	vec[2] = 5;
+	EXPECT_EQ(vec[0], 3);
+	EXPECT_EQ(vec[1], 4);
+	EXPECT_EQ(vec[2], 5);
+	for (int i = 3; i < 256; i++) {
+		EXPECT_EQ(vec[i], i);
+	}
+}
+
+// Tests a ChunkVector as a byte array with a different chunk size.
+TEST_F(ChunkedVectorTest, ByteArrayLargeChunk) {
+	ChunkedVector<uint8_t> vec("chunked_vector_test", 32);
+	for (int i = 0; i < 256; i++) {
+		vec.push_back(i);
+	}
+	EXPECT_EQ(vec.size(), 256);
+	for (int i = 0; i < 256; i++) {
+		EXPECT_EQ(vec[i], i);
+	}
+	EXPECT_EQ(vec.capacity(), 480);
+	vec[0] = 3;
+	vec[1] = 4;
+	vec[2] = 5;
+	EXPECT_EQ(vec[0], 3);
+	EXPECT_EQ(vec[1], 4);
+	EXPECT_EQ(vec[2], 5);
+	for (int i = 3; i < 256; i++) {
+		EXPECT_EQ(vec[i], i);
+	}
 }
