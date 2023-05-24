@@ -100,6 +100,11 @@ public:
 		}
 	}
 
+	// Returns the blob_store associated with this object.
+	BlobStore* GetBlobStore() const {
+		return control_block_->store_;
+	}
+
 	// Arrow operator: Provides access to the object's methods.
 	StorageType* operator->() {
 		return control_block_->ptr_;
@@ -128,25 +133,18 @@ public:
 	}
 
 	template <typename U = StorageType>
-	typename std::enable_if<std::is_const<U>::value, BlobStoreObject<non_const_T>>::type
-		GetMutableOrClone() {
-		return Clone();
-	}
-
-	template <typename U = T>
-	typename std::enable_if<!std::is_const<U>::value, BlobStoreObject<non_const_T>>::type
-		GetMutableOrClone() {
-		return *this;
-	}
-
-	template <typename U = StorageType>
-	BlobStoreObject< typename std::remove_const<U>::type> Clone() const {
+	BlobStoreObject<typename std::remove_const<U>::type> Clone() const {
 		return control_block_->store_->Clone<U>(control_block_->index_);// .To<std::remove_const<V>::type >();
 	}
 
 	template<typename U>
-	typename std::enable_if<std::is_same<typename std::remove_const<U>::type, typename std::remove_const<T>::type>::value, bool>::type
-	 CompareAndSwap(BlobStoreObject<U> other) {
+	typename std::enable_if<
+		std::is_same<
+		    typename std::remove_const<U>::type,
+		    typename std::remove_const<T>::type
+		>::value,
+		bool
+	>::type CompareAndSwap(BlobStoreObject<U> other) {
 		if (*this == nullptr || other == nullptr) {
 			return false;
 		}
@@ -204,7 +202,7 @@ public:
 		return new_ptr;
 	}
 
-	BlobStoreObject<const T> Downgrade()&& {
+	BlobStoreObject<const T> Downgrade() && {
 		ControlBlock* control_block = control_block_;
 		control_block_ = nullptr;
 		// We should only return a BlobStoreObject<const T> cast of this control_block if it has a refcount of 1.
@@ -447,8 +445,13 @@ public:
 	}
 
 	template <typename T>
-	typename std::enable_if<std::conjunction<std::is_standard_layout<T>, std::is_trivially_copyable<T>>::value, BlobStoreObject<typename std::remove_const<T>::type>>::type
-		Clone(size_t index) {
+	typename std::enable_if<
+		std::conjunction<
+		    std::is_standard_layout<T>,
+		    std::is_trivially_copyable<T>
+		>::value,
+		BlobStoreObject<typename std::remove_const<T>::type>
+	>::type Clone(size_t index) {
 		// This is only safe if the calling object is holding a read or write lock.
 		BlobMetadata& metadata = metadata_[index];
 		size_t clone_index = FindFreeSlot();

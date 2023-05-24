@@ -76,7 +76,7 @@ public:
 	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
 
 	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
-	void PrintNode(BlobStoreObject<const InternalNode> node) {
+	static void PrintNode(BlobStoreObject<const InternalNode> node) {
 		if (node == nullptr) {
 			std::cout << "NULL Node" << std::endl;
 			return;
@@ -88,7 +88,7 @@ public:
 		std::cout << std::endl;
 	}
 
-	void PrintNode(BlobStoreObject<const LeafNode> node) {
+	static void PrintNode(BlobStoreObject<const LeafNode> node) {
 		if (node == nullptr) {
 			std::cout << "NULL Node" << std::endl;
 			return;
@@ -100,7 +100,7 @@ public:
 		std::cout << std::endl;
 	}
 
-	void PrintNode(BlobStoreObject<const BaseNode> node) {
+	static void PrintNode(BlobStoreObject<const BaseNode> node) {
 		if (node == nullptr) {
 			std::cout << "NULL Node" << std::endl;
 			return;
@@ -111,7 +111,7 @@ public:
 		PrintNode(node.To<LeafNode>());
 	}
 
-	void PrintNode(BlobStoreObject<const Node> node) {
+	static void PrintNode(BlobStoreObject<const Node> node) {
 		if (node == nullptr) {
 			std::cout << "NULL Node" << std::endl;
 			return;
@@ -129,7 +129,7 @@ public:
 		}
 	}
 
-	void PrintNode(BlobStoreObject<const HeadNode> node) {
+	static void PrintNode(BlobStoreObject<const HeadNode> node) {
 		if (node == nullptr) {
 			std::cout << "NULL head" << std::endl;
 			return;
@@ -176,41 +176,6 @@ public:
 		}
 	}
 
-	// Prints the tree in a human-readable format in depth-first order.
-	void PrintTreeDepthFirst() {
-		struct NodeWithLevel {
-			BlobStoreObject<BaseNode> node;
-			size_t level;
-		};
-		std::vector<NodeWithLevel> v;
-		v.push_back({ root_, 0 });
-
-		while (!v.empty()) {
-			NodeWithLevel node_with_level = v.back();
-			v.pop_back();
-			if (node_with_level.node->is_internal()) {
-				BlobStoreObject<InternalNode> internal_node = node_with_level.node.To<InternalNode>();
-				std::cout << std::string(node_with_level.level, ' ') << "Internal node (n = " << internal_node->num_keys() << ") ";
-				for (size_t i = 0; i < internal_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, internal_node->keys[i]) << " ";
-				}
-				for (int i = internal_node->num_keys(); i >= 0; --i) {
-					v.push_back({ BlobStoreObject<const BaseNode>(&blob_store_, internal_node->children[i]), node_with_level.level + 1 });
-				}
-				std::cout << std::endl;
-			}
-			else {
-				BlobStoreObject<LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
-				std::cout << std::string(node_with_level.level, ' ') << "Leaf node (n = " << leaf_node->num_keys() << ") ";
-				for (size_t i = 0; i < leaf_node->num_keys(); ++i) {
-					std::cout << *BlobStoreObject<const KeyType>(&blob_store_, leaf_node->keys[i]) << " ";
-				}
-				std::cout << std::endl;
-			}
-		}
-
-	}
-
 private:
 	BlobStore& blob_store_;
 
@@ -247,11 +212,11 @@ private:
 	template<typename U, typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, InternalNode>::value
 	>::type* = nullptr>
-	BlobStoreObject<const BaseNode> GetChildConst(const BlobStoreObject<U>& node, size_t child_index) {
+	static BlobStoreObject<const BaseNode> GetChildConst(const BlobStoreObject<U>& node, size_t child_index) {
 		if (node == nullptr || child_index > node->num_keys()) {
 			return BlobStoreObject<const BaseNode>();
 		}
-		return BlobStoreObject<const BaseNode>(&blob_store_, node->children[child_index]);
+		return BlobStoreObject<const BaseNode>(node.GetBlobStore(), node->children[child_index]);
 	}
 
 	// Grab the key at the provided key_index. This method accepts all node types and works for
@@ -261,11 +226,11 @@ private:
 		std::is_same<typename std::remove_const<U>::type, InternalNode>::value ||
 		std::is_same<typename std::remove_const<U>::type, LeafNode>::value
 	>::type* = nullptr>
-	BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<U>&node, size_t key_index) {
+	static BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<U>& node, size_t key_index) {
 		if (node == nullptr || key_index > node->num_keys() - 1) {
 			return BlobStoreObject<const KeyType>();
 		}
-		return BlobStoreObject<const KeyType>(&blob_store_, node->get_key(key_index));
+		return BlobStoreObject<const KeyType>(node.GetBlobStore(), node->get_key(key_index));
 	}
 
 	// Returns the value stored at position value_index in node. 
@@ -273,11 +238,11 @@ private:
 	template<typename U, typename std::enable_if<
 		std::is_same<typename std::remove_const<U>::type, LeafNode>::value
 	>::type* = nullptr>
-	BlobStoreObject<const ValueType> GetValue(const BlobStoreObject<U>& node, size_t value_index) {
+	static BlobStoreObject<const ValueType> GetValue(const BlobStoreObject<U>& node, size_t value_index) {
 		if (node == nullptr || value_index > node->num_keys() - 1) {
 			return BlobStoreObject<const ValueType>();
 		}
-		return BlobStoreObject<const ValueType>(&blob_store_, node->values[value_index]);
+		return BlobStoreObject<const ValueType>(node.GetBlobStore(), node->values[value_index]);
 	}
 
 	// Searches for the provided key in the provided subtree rooted at node. Returns an iterator starting at the
