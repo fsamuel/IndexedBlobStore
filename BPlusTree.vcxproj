@@ -140,6 +140,7 @@
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="transaction.h" />
     <ClInclude Include="tree_iterator.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="blob_store.cpp" />
@@ -147,6 +148,7 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="shared_memory_buffer.cpp" />
     <ClCompile Include="string_slice.cpp" />
+    <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

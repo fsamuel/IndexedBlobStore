@@ -12,6 +12,7 @@
 #include "shared_memory_allocator.h"
 #include "storage_traits.h"
 #include "string_slice.h"
+#include "utils.h"
 
 #ifdef _WIN64
 typedef __int64 ssize_t;
@@ -852,7 +853,7 @@ typename std::enable_if<
 	size_t index = FindFreeSlot();
 	size_t size = StorageTraits<T>::size(std::forward<Args>(args)...);
 	char* ptr = allocator_.Allocate(size);
-	allocator_.Construct(reinterpret_cast<StorageType*>(ptr), std::forward<Args>(args)...);
+	utils::Construct(reinterpret_cast<StorageType*>(ptr), std::forward<Args>(args)...);
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
 	metadata.offset = allocator_.ToOffset(ptr);

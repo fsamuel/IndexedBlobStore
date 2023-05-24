@@ -1,12 +1,13 @@
 #include "b_plus_tree.h"
 #include "gtest/gtest.h"
+#include "utils.h"
 
 class BPlusTreeTest : public ::testing::Test {
 protected:
     virtual void SetUp() {
         std::remove("metadataBuffer");
         std::remove("dataBuffer");
-        SharedMemoryBuffer metadataBuffer("metadataBuffer", 8192);
+        SharedMemoryBuffer metadataBuffer("metadataBuffer", utils::GetPageSize());
         SharedMemoryBuffer dataBuffer("dataBuffer", 32768);
         blob_store = new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
     }

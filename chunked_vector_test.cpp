@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "shared_memory_allocator.h"
 #include "chunked_vector.h"
+#include "utils.h"
 
 class ChunkedVectorTest : public ::testing::Test {
 protected:
@@ -201,7 +202,8 @@ TEST_F(ChunkedVectorTest, ByteArray) {
 
 // Tests a ChunkVector as a byte array with a different chunk size.
 TEST_F(ChunkedVectorTest, ByteArrayLargeChunk) {
-	ChunkedVector<uint8_t> vec("chunked_vector_test", 32);
+	std::size_t page_size = utils::GetPageSize();
+	ChunkedVector<uint8_t> vec("chunked_vector_test", page_size);
 	for (int i = 0; i < 256; i++) {
 		vec.push_back(i);
 	}
@@ -209,7 +211,7 @@ TEST_F(ChunkedVectorTest, ByteArrayLargeChunk) {
 	for (int i = 0; i < 256; i++) {
 		EXPECT_EQ(vec[i], i);
 	}
-	EXPECT_EQ(vec.capacity(), 480);
+	EXPECT_EQ(vec.capacity(), page_size);
 	vec[0] = 3;
 	vec[1] = 4;
 	vec[2] = 5;
