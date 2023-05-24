@@ -1,3 +1,5 @@
+#include <thread>
+
 #include "gtest/gtest.h"
 #include "shared_memory_allocator.h"
 #include "chunked_vector.h"
@@ -222,3 +224,71 @@ TEST_F(ChunkedVectorTest, ByteArrayLargeChunk) {
 		EXPECT_EQ(vec[i], i);
 	}
 }
+
+// Concurrently push a bunch of elements into a ChunkedVector, joins the threads,
+// and then pop them all concurrently.
+TEST_F(ChunkedVectorTest, ConcurrentPushesAndPops) {
+	const int num_threads = 100;
+	const int num_pushes = 100;
+	ChunkedVector<int> vec("chunked_vector_test", 16);
+
+	auto push_func = [&vec, num_pushes]() {
+		for (int i = 0; i < num_pushes; ++i) {
+			vec.push_back(i);
+		}
+	};
+
+	std::vector<std::thread> threads;
+	for (int i = 0; i < num_threads; ++i) {
+		threads.emplace_back(push_func);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+
+	EXPECT_EQ(vec.size(), num_threads * num_pushes);
+
+	auto pop_func = [&vec, num_pushes]() {
+		for (int i = 0; i < num_pushes; ++i) {
+			vec.pop_back();
+		}
+	};
+
+	for (int i = 0; i < num_threads; ++i) {
+		threads[i] = std::thread(pop_func);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+
+	EXPECT_EQ(vec.size(), 0);
+}
+
+// Concurrently push a bunch of elements into a ChunkedVector, joins the threads,
+// and then pop them all concurrently.
+TEST_F(ChunkedVectorTest, ConcurrentPushesAndPops2) {
+	const int num_threads = 100;
+	const int num_pushes = 100;
+	ChunkedVector<int> vec("chunked_vector_test", 16);
+
+	auto push_pop_func = [&vec, num_pushes]() {
+		for (int i = 0; i < num_pushes; ++i) {
+			vec.push_back(i);
+			vec.pop_back();
+		}
+	};
+
+	std::vector<std::thread> threads;
+	for (int i = 0; i < num_threads; ++i) {
+		threads.emplace_back(push_pop_func);
+	}
+
+	for (auto& thread : threads) {
+		thread.join();
+	}
+
+	EXPECT_EQ(vec.size(), 0);
+}
+

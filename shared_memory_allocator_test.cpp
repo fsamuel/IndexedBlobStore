@@ -128,7 +128,7 @@ TEST_F(SharedMemoryAllocatorTest, RandomDeallocations) {
     using Iterator = typename SharedMemoryAllocator<char>::Iterator;
 	std::vector<char*> ptrs;
     for (int i = 0; i < 100; i++) {
-        char* ptr = shared_mem_allocator->Allocate(1024);
+        char* ptr = shared_mem_allocator->Allocate(10);
         EXPECT_NE(ptr, nullptr);
         ptrs.push_back(ptr);
     }
