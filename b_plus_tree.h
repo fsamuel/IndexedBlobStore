@@ -1,21 +1,14 @@
 #ifndef B_PLUS_TREE_H_
 #define B_PLUS_TREE_H_
 
-#include <assert.h>
-#include <algorithm>
-#include <array>
+#include <limits>
 #include <queue>
-#include <unordered_set>
 
 #include "blob_store.h"
 #include "b_plus_tree_base.h"
-#include "fixed_string.h"
 #include "nodes.h"
 #include "transaction.h"
 #include "tree_iterator.h"
-
-template <typename KeyType, typename ValueType>
-using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<const ValueType>>;
 
 // InsertionBundle represents output of an insertion operation.
 // It is either empty or contains a BlobStoreObject of the newly cloned node,
@@ -23,14 +16,16 @@ using KeyValuePair = std::pair<BlobStoreObject<const KeyType>, BlobStoreObject<c
 // new right sibling node.
 template<typename KeyType, typename NodeType>
 struct InsertionBundle {
-	InsertionBundle(BlobStoreObject<NodeType> new_left_node, BlobStoreObject<const KeyType> new_key, BlobStoreObject<NodeType> new_right_node)
-		: new_left_node(new_left_node), new_key(new_key), new_right_node(new_right_node) {}
-	InsertionBundle() {}
+	InsertionBundle(BlobStoreObject<NodeType> new_left_node,
+                    BlobStoreObject<const KeyType> new_key,
+                    BlobStoreObject<NodeType> new_right_node)
+		: new_left_node(new_left_node),
+          new_key(new_key),
+          new_right_node(new_right_node) {}
+
 	BlobStoreObject<const KeyType> new_key;
 	BlobStoreObject<NodeType> new_left_node;
 	BlobStoreObject<NodeType> new_right_node;
-
-	bool empty() const { return !new_left_node && !new_right_node; }
 };
 
 template <typename KeyType, typename ValueType, std::size_t Order>
@@ -56,9 +51,13 @@ public:
 	}
 
 	// BPlusTreeBase implementation.
-	void Insert(Transaction* transaction, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value) override;
-	Iterator Search(BlobStoreObject<HeadNode> head, const KeyType& key) override;
-	BlobStoreObject<const ValueType> Delete(Transaction* transaction, const KeyType& key) override;
+	void Insert(Transaction* transaction,
+                BlobStoreObject<const KeyType> key,
+                BlobStoreObject<const ValueType> value) override;
+	Iterator Search(BlobStoreObject<HeadNode> head,
+                    const KeyType& key) override;
+	BlobStoreObject<const ValueType> Delete(Transaction* transaction,
+                                            const KeyType& key) override;
 
 
 	// Returns an iterator to the first element greater than or equal to key.
@@ -71,116 +70,14 @@ public:
 	bool Insert(BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
 
 
-	// Deletes a key-value pair from the tree. Returns true if the operation was successful, false if there was a conflicting operation in progress.
-	// If deleted_value is not null, the deleted value is stored in deleted_value.
-	bool Delete(const KeyType& key, BlobStoreObject<const ValueType>* deleted_value);
-
-	// Prints a BlobStoreObject<BaseNode> in a human-readable format.
-	static void PrintNode(BlobStoreObject<const InternalNode> node) {
-		if (node == nullptr) {
-			std::cout << "NULL Node" << std::endl;
-			return;
-		}
-		std::cout << "Internal node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
-		for (size_t i = 0; i < node->num_keys(); ++i) {
-			BlobStoreObject<const KeyType> key_ptr;
-			GetKey(node, i, &key_ptr);
-			std::cout << *key_ptr << " ";
-		}
-		std::cout << std::endl;
-	}
-
-	static void PrintNode(BlobStoreObject<const LeafNode> node) {
-		if (node == nullptr) {
-			std::cout << "NULL Node" << std::endl;
-			return;
-		}
-		std::cout << "Leaf node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
-		for (size_t i = 0; i < node->num_keys(); ++i) {
-			BlobStoreObject<const KeyType> key_ptr;
-			GetKey(node, i, &key_ptr);
-			std::cout << *key_ptr << " ";
-		}
-		std::cout << std::endl;
-	}
-
-	static void PrintNode(BlobStoreObject<const BaseNode> node) {
-		if (node == nullptr) {
-			std::cout << "NULL Node" << std::endl;
-			return;
-		}
-		if (node->is_internal()) {
-			PrintNode(node.To<InternalNode>());
-		}
-		PrintNode(node.To<LeafNode>());
-	}
-
-	static void PrintNode(BlobStoreObject<const Node> node) {
-		if (node == nullptr) {
-			std::cout << "NULL Node" << std::endl;
-			return;
-		}
-		switch (node->type) {
-		case NodeType::LEAF:
-			PrintNode(node.To<LeafNode>());
-			break;
-		case NodeType::INTERNAL:
-			PrintNode(node.To<InternalNode>());
-			break;
-		case NodeType::HEAD:
-			PrintNode(node.To<HeadNode>());
-			break;
-		}
-	}
-
-	static void PrintNode(BlobStoreObject<const HeadNode> node) {
-		if (node == nullptr) {
-			std::cout << "NULL head" << std::endl;
-			return;
-		}
-		std::cout << "head (Index = " << node.Index()
-			      << ", root = "
-			      << node->root_index
-			      << ", version = "
-			      << node->get_version()
-			      << ")"
-			      << std::endl;
-	}
+	// Deletes a key-value pair from the tree. Returns true if the operation was
+	// successful, false if there was a conflicting operation in progress. If
+	// deleted_value is not null, the deleted value is stored in deleted_value.
+	bool Delete(const KeyType& key,
+                BlobStoreObject<const ValueType>* deleted_value);
 
 	// Prints the tree in a human-readable format in breadth-first order.
-	void PrintTree(size_t version) {
-		struct NodeWithLevel {
-			BlobStoreObject<const BaseNode> node;
-			size_t level;
-		};
-		std::queue<NodeWithLevel> queue;
-		BlobStoreObject<const HeadNode> head = blob_store_.Get<HeadNode>(1);
-		// Find the head with the given version
-		while (head->previous != BlobStore::InvalidIndex && head->get_version() > version) {
-			head = blob_store_.Get<HeadNode>(head->previous);
-		}
-		PrintNode(head);
-		queue.push({ blob_store_.Get<BaseNode>(head->root_index), 1 });
-		while (!queue.empty()) {
-			NodeWithLevel node_with_level = queue.front();
-			queue.pop();
-			if (node_with_level.node->is_internal()) {
-				BlobStoreObject<const InternalNode> internal_node = node_with_level.node.To<InternalNode>();
-				for (size_t i = 0; i <= internal_node->num_keys(); ++i) {
-					BlobStoreObject<const BaseNode> child_ptr;
-					GetChild(internal_node, i, &child_ptr);
-					queue.push({ std::move(child_ptr) , node_with_level.level + 1});
-				}
-				std::cout << std::string(node_with_level.level, ' ');
-				PrintNode(internal_node);
-			}
-			else {
-				BlobStoreObject<const LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
-				std::cout << std::string(node_with_level.level, ' ');
-				PrintNode(leaf_node);
-			}
-		}
-	}
+	void Print(size_t version = std::numeric_limits<size_t>::max());
 
 private:
 	BlobStore& blob_store_;
@@ -193,73 +90,120 @@ private:
 		head->previous = BlobStore::InvalidIndex;
 	}
 
-	// Searches for the provided key in the provided subtree rooted at node. Returns an iterator starting at the
-	// first key >= key. If the key is not found, the iterator will be invalid. If the key is found, the path
-	// from the leaf to the root of the tree is returned in path_to_root.
-	Iterator Search(BlobStoreObject<const BaseNode> node, const KeyType& key, std::vector<size_t> path_to_root);
+	// Searches for the provided key in the provided subtree rooted at node.
+	// Returns an iterator starting at the first key >= key. If the key is not
+	// found, the iterator will be invalid. If the key is found, the path from
+	// the leaf to the root of the tree is returned in path_to_root.
+	Iterator Search(BlobStoreObject<const BaseNode> node,
+		            const KeyType& key,
+		            std::vector<size_t> path_to_root);
 
-	// Split a leaf node into two leaf nodes and a middle key, all returned in InsertionBundle.
-	// left_node is modified directly.
-	InsertionBundle SplitLeafNode(Transaction* transaction, BlobStoreObject<LeafNode> left_node);
+	// Split a leaf node into two leaf nodes and a middle key, all returned in
+	// InsertionBundle. left_node is modified directly.
+	InsertionBundle SplitLeafNode(Transaction* transaction,
+                                  BlobStoreObject<LeafNode> left_node);
 
-	// Split an internal node into two internal nodes nodes and a middle key, all returned in InsertionBundle.
-	// left_node is modified directly.
-	InsertionBundle SplitInternalNode(Transaction* transaction, BlobStoreObject<InternalNode> left_node);
+	// Split an internal node into two internal nodes nodes and a middle key, all
+	// returned in InsertionBundle. left_node is modified directly.
+	InsertionBundle SplitInternalNode(Transaction* transaction,
+                                      BlobStoreObject<InternalNode> left_node);
 
-	// Inserts key and value into the leaf node |node|. This method accepts both const and non-const leaves.
-	// If the leaf is const (we're holding a read lock), we clone the node and insert into the clone.
-	// If the leaf is non-const, we insert directly into the node.
+	// Inserts key and value into the leaf node |node|. This method accepts both
+	// const and non-const leaves. If the leaf is const (we're holding a read
+	// lock), we clone the node and insert into the clone. If the leaf is
+	// non-const, we insert directly into the node.
 	template<typename U>
 	typename std::enable_if<
-		std::is_same<typename std::remove_const<U>::type, typename BPlusTree<KeyType, ValueType, Order>::LeafNode>::value,
+		std::is_same<
+		    typename std::remove_const<U>::type,
+		    typename BPlusTree<KeyType, ValueType, Order>::LeafNode
+		>::value,
 		InsertionBundle>::type InsertIntoLeaf(
 			Transaction* transaction,
 			BlobStoreObject<U> node,
 			BlobStoreObject<const KeyType> key,
 			BlobStoreObject<const ValueType> value);
 
-	// Insert new_key and new_child into node with the assumption that node is not full.
+	// Insert new_key and new_child into node with the assumption that node is
+	// not full.
 	void InsertKeyChildIntoInternalNode(BlobStoreObject<InternalNode> node,
 		BlobStoreObject<const KeyType> new_key,
 		BlobStoreObject<BaseNode> new_child);
 
-	InsertionBundle Insert(Transaction* transaction, BlobStoreObject<const BaseNode> node, BlobStoreObject<const KeyType> key, BlobStoreObject<const ValueType> value);
+	InsertionBundle Insert(Transaction* transaction,
+                           BlobStoreObject<const BaseNode> node,
+		                   BlobStoreObject<const KeyType> key,
+		                   BlobStoreObject<const ValueType> value);
 
-	BlobStoreObject<const ValueType> Delete(Transaction* transaction, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key);
-	BlobStoreObject<const ValueType> DeleteFromLeafNode(BlobStoreObject<LeafNode> node, const KeyType& key);
-	BlobStoreObject<const ValueType> DeleteFromInternalNode(Transaction* transaction, BlobStoreObject<InternalNode> node, const KeyType& key);
+	BlobStoreObject<const ValueType> Delete(
+		Transaction* transaction,
+		BlobStoreObject<BaseNode>* parent_node,
+		int child_index,
+		const KeyType& key);
+
+	BlobStoreObject<const ValueType> DeleteFromLeafNode(
+		BlobStoreObject<LeafNode> node,
+		const KeyType& key);
+
+	BlobStoreObject<const ValueType> DeleteFromInternalNode(
+		Transaction* transaction,
+		BlobStoreObject<InternalNode> node,
+		const KeyType& key);
 
 	// Borrow a key from the left sibling of node and return the new right sibling.
-	bool BorrowFromLeftSibling(Transaction* transaction, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling);
+	bool BorrowFromLeftSibling(
+        Transaction* transaction,
+        BlobStoreObject<InternalNode> parent_node,
+        BlobStoreObject<const BaseNode> left_sibling,
+        BlobStoreObject<const BaseNode> right_sibling,
+        int child_index,
+        BlobStoreObject<BaseNode>* out_right_sibling);
+
 	// Borrow a key from the right sibling of node and return the new left sibling.
-	bool BorrowFromRightSibling(Transaction* transaction, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling);
+	bool BorrowFromRightSibling(
+        Transaction* transaction,
+        BlobStoreObject<InternalNode> parent_node,
+        BlobStoreObject<const BaseNode> left_sibling,
+        BlobStoreObject<const BaseNode> right_sibling,
+        int child_index,
+        BlobStoreObject<BaseNode>* out_left_sibling);
 
 	// Returns the key of the successor of node.
-	BlobStoreObject<const KeyType> GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key);
+	BlobStoreObject<const KeyType> GetSuccessorKey(
+        BlobStoreObject<const BaseNode> node,
+	    const KeyType& key);
 
-	// Merges the right child into the left child. The parent key separating the two children is merged into the left child.
+	// Merges the right child into the left child. The parent key separating the
+	// two children is merged into the left child.
 	void MergeInternalNodes(BlobStoreObject<InternalNode> left_child,
 		BlobStoreObject<const InternalNode> right_child,
 		size_t parent_key);
-	// Merges the right child into the left child. Leaves contain all the keys so we don't need to pass the parent key.
-	void MergeLeafNodes(BlobStoreObject<LeafNode> left_child, BlobStoreObject<const LeafNode> right_child);
-	// Merges the provded child with its left or right sibling depending on whether child is the rightmost child of its parent.
-	// The new child is returned in out_child.
+
+	// Merges the right child into the left child. Leaves contain all the keys so
+	// we don't need to pass the parent key.
+	void MergeLeafNodes(
+	    BlobStoreObject<LeafNode> left_child,
+        BlobStoreObject<const LeafNode> right_child);
+
+	// Merges the provded child with its left or right sibling depending on
+	// whether child is the rightmost child of its parent. The new child is
+	// returned in out_child.
 	void MergeChildWithLeftOrRightSibling(
 		Transaction* transaction,
 		BlobStoreObject<InternalNode> parent,
 		int child_index,
 		BlobStoreObject<const BaseNode> child,
 		BlobStoreObject<BaseNode>* out_child);
-	// If the left or right sibling of child has more than the minimum number of keys, borrow a key from the sibling. Otherwise,
-	// merge the child with its sibling. The new child is returned in new_child.
+
+	// If the left or right sibling of child has more than the minimum number of
+	// keys, borrow a key from the sibling. Otherwise, merge the child with its
+	// sibling. The new child is returned in new_child.
 	void RebalanceChildWithLeftOrRightSibling(
 		Transaction* transaction,
 		BlobStoreObject<InternalNode> parent,
 		int child_index,
 		BlobStoreObject<const BaseNode> child,
 		BlobStoreObject<BaseNode>* new_child);
-
 };
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -541,6 +485,41 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Tr
 	}
 	transaction->SetNewRoot(new_root.Index());
 	return deleted;
+}
+
+template <typename KeyType, typename ValueType, size_t Order>
+void BPlusTree<KeyType, ValueType, Order>::Print(size_t version) {
+	struct NodeWithLevel {
+		BlobStoreObject<const BaseNode> node;
+		size_t level;
+	};
+	std::queue<NodeWithLevel> queue;
+	BlobStoreObject<const HeadNode> head = blob_store_.Get<HeadNode>(1);
+	// Find the head with the given version
+	while (head->previous != BlobStore::InvalidIndex && head->get_version() > version) {
+		head = blob_store_.Get<HeadNode>(head->previous);
+	}
+	PrintNode(head);
+	queue.push({ blob_store_.Get<BaseNode>(head->root_index), 1 });
+	while (!queue.empty()) {
+		NodeWithLevel node_with_level = queue.front();
+		queue.pop();
+		if (node_with_level.node->is_internal()) {
+			BlobStoreObject<const InternalNode> internal_node = node_with_level.node.To<InternalNode>();
+			for (size_t i = 0; i <= internal_node->num_keys(); ++i) {
+				BlobStoreObject<const BaseNode> child_ptr;
+				GetChild(internal_node, i, &child_ptr);
+				queue.push({ std::move(child_ptr) , node_with_level.level + 1 });
+			}
+			std::cout << std::string(node_with_level.level, ' ');
+			PrintNode<KeyType>(internal_node);
+		}
+		else {
+			BlobStoreObject<const LeafNode> leaf_node = node_with_level.node.To<LeafNode>();
+			std::cout << std::string(node_with_level.level, ' ');
+			PrintNode<KeyType>(leaf_node);
+		}
+	}
 }
 
 template <typename KeyType, typename ValueType, size_t Order>

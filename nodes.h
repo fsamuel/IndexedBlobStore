@@ -276,4 +276,71 @@ void GetChildConst(
 	}
 	*child_ptr = BlobStoreObject<const BaseNode<Order>>(node.GetBlobStore(), node->children[child_index]);
 }
+
+
+// Prints a BlobStoreObject<BaseNode> in a human-readable format.
+template<typename KeyType, std::size_t Order>
+void PrintNode(BlobStoreObject<const InternalNode<Order>> node) {
+	if (node == nullptr) {
+		std::cout << "NULL Node" << std::endl;
+		return;
+	}
+	std::cout << "Internal node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
+	for (size_t i = 0; i < node->num_keys(); ++i) {
+		BlobStoreObject<const KeyType> key_ptr;
+		GetKey(node, i, &key_ptr);
+		std::cout << *key_ptr << " ";
+	}
+	std::cout << std::endl;
+}
+
+template<typename KeyType, std::size_t Order>
+void PrintNode(BlobStoreObject<const LeafNode<Order>> node) {
+	if (node == nullptr) {
+		std::cout << "NULL Node" << std::endl;
+		return;
+	}
+	std::cout << "Leaf node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
+	for (size_t i = 0; i < node->num_keys(); ++i) {
+		BlobStoreObject<const KeyType> key_ptr;
+		GetKey(node, i, &key_ptr);
+		std::cout << *key_ptr << " ";
+	}
+	std::cout << std::endl;
+}
+
+template<std::size_t Order>
+void PrintNode(BlobStoreObject<const BaseNode<Order>> node) {
+	if (node == nullptr) {
+		std::cout << "NULL Node" << std::endl;
+		return;
+	}
+	if (node->is_internal()) {
+		PrintNode(node.To<InternalNode>());
+	}
+	PrintNode(node.To<LeafNode>());
+}
+
+void PrintNode(BlobStoreObject<const HeadNode> node);
+
+template<std::size_t Order>
+void PrintNode(BlobStoreObject<const Node> node) {
+	if (node == nullptr) {
+		std::cout << "NULL Node" << std::endl;
+		return;
+	}
+	switch (node->type) {
+	case NodeType::LEAF:
+		PrintNode(node.To<LeafNode<Order>>());
+		break;
+	case NodeType::INTERNAL:
+		PrintNode(node.To<InternalNode<Order>>());
+		break;
+	case NodeType::HEAD:
+		PrintNode(node.To<HeadNode>());
+		break;
+	}
+}
+
+
 #endif // NODES_H_

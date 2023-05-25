@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <unordered_set>
 
 #include "b_plus_tree_base.h"
 #include "nodes.h"

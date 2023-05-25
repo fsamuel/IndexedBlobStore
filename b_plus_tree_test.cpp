@@ -299,9 +299,8 @@ TEST_F(BPlusTreeTest, TransactionInsertion) {
 		EXPECT_EQ(*it.GetKey(), 70);
 		EXPECT_EQ(*it.GetValue(), 7000);
 		std::move(txn).Commit();
-		tree.PrintTree(1000);
+		tree.Print();
 	}
-
 }
 
 // Insert 50 elements into the B+ tree. Create a transaction, insert a few more through the transaction.

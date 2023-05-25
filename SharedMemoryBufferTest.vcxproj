@@ -49,6 +49,7 @@
     <ClCompile Include="chunked_vector_test.cpp" />
     <ClCompile Include="fixed_string.cpp" />
     <ClCompile Include="fixed_string_test.cpp" />
+    <ClCompile Include="nodes.cpp" />
     <ClCompile Include="nodes_test.cpp" />
     <ClCompile Include="shared_memory_buffer.cpp" />
     <ClCompile Include="blob_store.cpp" />
