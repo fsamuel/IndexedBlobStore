@@ -83,7 +83,9 @@ public:
 		}
 		std::cout << "Internal node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
 		for (size_t i = 0; i < node->num_keys(); ++i) {
-			std::cout << *GetKey(node, i) << " ";
+			BlobStoreObject<const KeyType> key_ptr;
+			GetKey(node, i, &key_ptr);
+			std::cout << *key_ptr << " ";
 		}
 		std::cout << std::endl;
 	}
@@ -95,7 +97,9 @@ public:
 		}
 		std::cout << "Leaf node (Index = " << node.Index() << ", n = " << node->num_keys() << ", version = " << node->get_version() << ") ";
 		for (size_t i = 0; i < node->num_keys(); ++i) {
-			std::cout << *GetKey(node, i) << " ";
+			BlobStoreObject<const KeyType> key_ptr;
+			GetKey(node, i, &key_ptr);
+			std::cout << *key_ptr << " ";
 		}
 		std::cout << std::endl;
 	}
@@ -163,7 +167,9 @@ public:
 			if (node_with_level.node->is_internal()) {
 				BlobStoreObject<const InternalNode> internal_node = node_with_level.node.To<InternalNode>();
 				for (size_t i = 0; i <= internal_node->num_keys(); ++i) {
-					queue.push({ GetChild(internal_node, i), node_with_level.level + 1 });
+					BlobStoreObject<const BaseNode> child_ptr;
+					GetChild(internal_node, i, &child_ptr);
+					queue.push({ std::move(child_ptr) , node_with_level.level + 1});
 				}
 				std::cout << std::string(node_with_level.level, ' ');
 				PrintNode(internal_node);
@@ -185,64 +191,6 @@ private:
 		head->set_version(0);
 		head->root_index = root.Index();
 		head->previous = BlobStore::InvalidIndex;
-	}
-
-	// Returns the child at the given index of the given node preserving constness.
-	template<typename U, typename std::enable_if<
-		std::is_same<typename std::remove_const<U>::type, InternalNode>::value
-	>::type* = nullptr>
-	auto GetChild(const BlobStoreObject<U>& node, size_t child_index) -> typename std::conditional <
-		std::is_const<U>::value,
-		BlobStoreObject<const BaseNode>,
-		BlobStoreObject<BaseNode>
-	>::type {
-		using const_preserving_BaseNode = typename std::conditional <
-			std::is_const<U>::value,
-			const BaseNode,
-			BaseNode
-		>::type;
-		if (node == nullptr || child_index > node->num_keys()) {
-			return BlobStoreObject<const_preserving_BaseNode>();
-		}
-		return BlobStoreObject<const_preserving_BaseNode>(&blob_store_, node->children[child_index]);
-	}
-
-	// Grab the child at the provided child_index. This method accepts only
-	// internal nodes and works for both const and non-const nodes
-	template<typename U, typename std::enable_if<
-		std::is_same<typename std::remove_const<U>::type, InternalNode>::value
-	>::type* = nullptr>
-	static BlobStoreObject<const BaseNode> GetChildConst(const BlobStoreObject<U>& node, size_t child_index) {
-		if (node == nullptr || child_index > node->num_keys()) {
-			return BlobStoreObject<const BaseNode>();
-		}
-		return BlobStoreObject<const BaseNode>(node.GetBlobStore(), node->children[child_index]);
-	}
-
-	// Grab the key at the provided key_index. This method accepts all node types and works for
-	// both const and non-const nodes.
-	template<typename U, typename std::enable_if<
-		std::is_same<typename std::remove_const<U>::type, BaseNode>::value ||
-		std::is_same<typename std::remove_const<U>::type, InternalNode>::value ||
-		std::is_same<typename std::remove_const<U>::type, LeafNode>::value
-	>::type* = nullptr>
-	static BlobStoreObject<const KeyType> GetKey(const BlobStoreObject<U>& node, size_t key_index) {
-		if (node == nullptr || key_index > node->num_keys() - 1) {
-			return BlobStoreObject<const KeyType>();
-		}
-		return BlobStoreObject<const KeyType>(node.GetBlobStore(), node->get_key(key_index));
-	}
-
-	// Returns the value stored at position value_index in node. 
-	// node can be a const or non-const LeafNode.
-	template<typename U, typename std::enable_if<
-		std::is_same<typename std::remove_const<U>::type, LeafNode>::value
-	>::type* = nullptr>
-	static BlobStoreObject<const ValueType> GetValue(const BlobStoreObject<U>& node, size_t value_index) {
-		if (node == nullptr || value_index > node->num_keys() - 1) {
-			return BlobStoreObject<const ValueType>();
-		}
-		return BlobStoreObject<const ValueType>(node.GetBlobStore(), node->values[value_index]);
 	}
 
 	// Searches for the provided key in the provided subtree rooted at node. Returns an iterator starting at the
@@ -376,9 +324,13 @@ typename BPlusTree<KeyType, ValueType, Order>::Iterator BPlusTree<KeyType, Value
 	}
 
 	if (key_index < node->num_keys() && key == *key_found) {
-		return Search(GetChild(node.To<InternalNode>(), key_index + 1), key, std::move(path_to_root));
+		BlobStoreObject<const BaseNode> child;
+		GetChild(node.To<InternalNode>(), key_index + 1, &child);
+		return Search(std::move(child), key, std::move(path_to_root));
 	}
-	return Search(GetChild(node.To<InternalNode>(), key_index), key, std::move(path_to_root));
+	BlobStoreObject<const BaseNode> child;
+	GetChild(node.To<InternalNode>(), key_index, &child);
+	return Search(std::move(child), key, std::move(path_to_root));
 }
 
 template<typename KeyType, typename ValueType, size_t Order>
@@ -386,7 +338,8 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	BlobStoreObject<LeafNode> new_right_node = transaction->New<LeafNode>();
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
-	BlobStoreObject<const KeyType> middle_key = GetKey(left_node, middle_key_index);
+	BlobStoreObject<const KeyType> middle_key;
+	GetKey(left_node, middle_key_index, &middle_key);
 
 	new_right_node->set_num_keys(left_node->num_keys() - middle_key_index);
 	for (int i = 0; i < new_right_node->num_keys(); ++i) {
@@ -411,7 +364,8 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType
 	BlobStoreObject<InternalNode> new_right_node = transaction->New<InternalNode>(Order);
 
 	int middle_key_index = (left_node->num_keys() - 1) / 2;
-	BlobStoreObject<const KeyType> middle_key = GetKey(left_node, middle_key_index);
+	BlobStoreObject<const KeyType> middle_key;
+	GetKey(left_node, middle_key_index, &middle_key);
 
 	new_right_node->set_num_keys(left_node->num_keys() - middle_key_index - 1);
 	for (int i = 0; i < new_right_node->num_keys(); ++i) {
@@ -453,7 +407,8 @@ typename std::enable_if<
 	// Shift the keys and values right.
 	int i = new_left_node->num_keys() - 1;
 	while (i >= 0) {
-		BlobStoreObject<const KeyType> key_ptr = GetKey(new_left_node, i);
+		BlobStoreObject<const KeyType> key_ptr;
+		GetKey(new_left_node, i, &key_ptr);
 		if (*key >= *key_ptr) {
 			break;
 		}
@@ -474,7 +429,8 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 	BlobStoreObject<BaseNode> new_child) {
 	int i = node->num_keys() - 1;
 	while (i >= 0) {
-		BlobStoreObject<const KeyType> key_ptr = GetKey(node, i);
+		BlobStoreObject<const KeyType> key_ptr;
+		GetKey(node, i, &key_ptr);
 		if (*new_key >= *key_ptr) {
 			break;
 		}
@@ -502,7 +458,9 @@ BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, BlobStore
 	size_t key_index = internal_node->Search(&blob_store_, *key, &key_found);
 
 	// Don't hold onto the child node longer than necessary to avoid failing to upgrade its lock.
-	InsertionBundle child_node_bundle = Insert(transaction, GetChildConst(internal_node, key_index), key, value);
+	BlobStoreObject<const BaseNode> child;
+	GetChildConst(internal_node, key_index, &child);
+	InsertionBundle child_node_bundle = Insert(transaction, std::move(child), key, value);
 	BlobStoreObject<InternalNode> new_internal_node = transaction->GetMutable<InternalNode>(std::move(internal_node));
 
 	new_internal_node->children[key_index] = child_node_bundle.new_left_node.Index();
@@ -594,7 +552,8 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 		return BlobStoreObject<const ValueType>();
 	}
 
-	auto deleted_value = GetValue(node, key_index);
+	BlobStoreObject<const ValueType> deleted_value;
+	GetValue(node, key_index, &deleted_value);
 
 	// Shift keys and values to fill the gap
 	for (int j = key_index + 1; j < node->num_keys(); j++) {
@@ -739,7 +698,8 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(Transaction* t
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Transaction* transaction, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
 	BlobStoreObject<InternalNode> parent_internal_node = parent_node->To<InternalNode>();
-	BlobStoreObject<const BaseNode> const_child = GetChildConst(parent_internal_node, child_index);
+	BlobStoreObject<const BaseNode> const_child;
+	GetChildConst(parent_internal_node, child_index, &const_child);
 	BlobStoreObject<BaseNode> child;
 	// The current child where we want to delete a node is too small.
 	if (const_child->will_underflow()) {
@@ -782,8 +742,9 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 	}
 	for (int i = 0; i <= node->num_keys(); ++i) {
 		auto internal_node = node.To<InternalNode>();
-		auto child = GetChild(internal_node, i); // Get the leftmost child
-		auto key_ptr = GetSuccessorKey(child, std::move(key));
+		BlobStoreObject<const BaseNode> child;
+		GetChild(internal_node, i, &child); // Get the leftmost child
+		auto key_ptr = GetSuccessorKey(std::move(child), std::move(key));
 		if (key_ptr != nullptr)
 			return key_ptr;
 	}
@@ -839,12 +800,13 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 		key_index_in_parent = child_index;
 		left_child = transaction->GetMutable<BaseNode>(std::move(child));
 		parent->children[child_index] = left_child.Index();
-		right_child = GetChildConst(parent, child_index + 1);
+		GetChildConst(parent, child_index + 1, &right_child);
 		*out_child = left_child;
 	}
 	else {
 		key_index_in_parent = child_index - 1;
-		BlobStoreObject<const BaseNode> const_left_child = GetChildConst(parent, child_index - 1);
+		BlobStoreObject<const BaseNode> const_left_child;
+		GetChildConst(parent, child_index - 1, &const_left_child);
 		left_child = transaction->GetMutable<BaseNode>(std::move(const_left_child));
 		parent->children[child_index - 1] = left_child.Index();
 		right_child = child;
@@ -880,13 +842,19 @@ void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
 	int child_index,
 	BlobStoreObject<const BaseNode> child,
 	BlobStoreObject<BaseNode>* new_child) {
-	BlobStoreObject<const BaseNode> left_sibling = child_index > 0 ? GetChildConst(parent, child_index - 1) : BlobStoreObject<const BaseNode>();
+	BlobStoreObject<const BaseNode> left_sibling;
+	if (child_index > 0) {
+		GetChildConst(parent, child_index - 1, &left_sibling);
+	}
 	if (left_sibling != nullptr && !left_sibling->will_underflow()) {
 		BorrowFromLeftSibling(transaction, parent, std::move(left_sibling), std::move(child), child_index, new_child);
 		return;
 	}
 
-	BlobStoreObject<const BaseNode> right_sibling = (child_index + 1) <= parent->num_keys() ? GetChildConst(parent, child_index + 1) : BlobStoreObject<const BaseNode>();
+	BlobStoreObject<const BaseNode> right_sibling;
+	if ((child_index + 1) <= parent->num_keys()) {
+		GetChildConst(parent, child_index + 1, &right_sibling);
+	}
 	if (right_sibling != nullptr && !right_sibling->will_underflow()) {
 		BorrowFromRightSibling(transaction, parent, std::move(child), std::move(right_sibling), child_index, new_child);
 		return;

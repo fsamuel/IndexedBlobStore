@@ -215,4 +215,65 @@ struct LeafNode {
 static_assert(std::is_trivially_copyable<LeafNode<>>::value, "LeafNode is trivially copyable");
 static_assert(std::is_standard_layout<LeafNode<>>::value, "LeafNode is standard layout");
 
+
+// Grab the key at the provided key_index. This method accepts all node types and works for
+// both const and non-const nodes.
+template<typename KeyType, typename U>
+static void GetKey(const BlobStoreObject<U>&node, size_t key_index, BlobStoreObject<const KeyType>*key_ptr) {
+	if (node == nullptr || key_index > node->num_keys() - 1) {
+		*key_ptr = BlobStoreObject<const KeyType>();
+		return;
+	}
+	*key_ptr = BlobStoreObject<const KeyType>(node.GetBlobStore(), node->get_key(key_index));
+}
+
+// Returns the value stored at position value_index in node. 
+// node can be a const or non-const LeafNode.
+template<typename ValueType, typename U>
+static void GetValue(const BlobStoreObject<U>& node, size_t value_index, BlobStoreObject<const ValueType>* value_ptr) {
+	if (node == nullptr || value_index > node->num_keys() - 1) {
+		*value_ptr = BlobStoreObject<const ValueType>();
+		return;
+	}
+	*value_ptr = BlobStoreObject<const ValueType>(node.GetBlobStore(), node->values[value_index]);
+}
+
+// Returns the child at the given index of the given node preserving constness.
+template<std::size_t Order>
+void GetChild(
+	const BlobStoreObject<InternalNode<Order>>& node,
+	size_t child_index,
+	BlobStoreObject<BaseNode<Order>>* child_ptr) {
+	if (node == nullptr || child_index > node->num_keys()) {
+		*child_ptr = BlobStoreObject<BaseNode<Order>>();
+		return;
+	}
+	*child_ptr = BlobStoreObject<BaseNode<Order>>(node.GetBlobStore(), node->children[child_index]);
+}
+
+template<std::size_t Order>
+void GetChild(
+	const BlobStoreObject<const InternalNode<Order>>& node,
+	size_t child_index,
+	BlobStoreObject<const BaseNode<Order>>* child_ptr) {
+	if (node == nullptr || child_index > node->num_keys()) {
+		*child_ptr = BlobStoreObject<const BaseNode<Order>>();
+		return;
+	}
+	*child_ptr = BlobStoreObject<const BaseNode<Order>>(node.GetBlobStore(), node->children[child_index]);
+}
+
+// Grab the child at the provided child_index. This method accepts only
+// internal nodes and works for both const and non-const nodes
+template<typename U, std::size_t Order>
+void GetChildConst(
+	const BlobStoreObject<U>& node,
+	size_t child_index,
+	BlobStoreObject<const BaseNode<Order>>* child_ptr) {
+	if (node == nullptr || child_index > node->num_keys()) {
+		*child_ptr = BlobStoreObject<const BaseNode<Order>>();
+		return;
+	}
+	*child_ptr = BlobStoreObject<const BaseNode<Order>>(node.GetBlobStore(), node->children[child_index]);
+}
 #endif // NODES_H_
