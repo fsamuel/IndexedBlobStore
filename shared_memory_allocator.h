@@ -55,11 +55,17 @@ public:
 	// Helper method to convert an offset relative to the start of the buffer to a pointer
 	template<class U>
 	const U* ToPtr(offset_type offset) const {
+		if (offset == -1) {
+			return nullptr;
+		}
 		return reinterpret_cast<const U*>(reinterpret_cast<const char*>(buffer_.data()) + offset);
 	}
 
 	template<class U>
 	U* ToPtr(offset_type offset) {
+		if (offset == -1) {
+			return nullptr;
+		}
 		return reinterpret_cast<U*>(reinterpret_cast<char*>(buffer_.data()) + offset);
 	}
 
@@ -81,7 +87,7 @@ private:
 	struct AllocatorStateHeader {
 		uint32_t magic_number;      // Magic number for verifying the allocator state header
 		std::atomic<offset_type> free_list_offset; // Offset of the first free block in the free list
-		offset_type allocation_offset; // Offset of the first allocation block.
+		std::atomic<offset_type> allocation_offset; // Offset of the first allocation block.
 	};
 
 	AllocatorStateHeader* state() {
@@ -107,22 +113,14 @@ private:
 	}
 
 	// Returns the next node in the allocation list, or nullptr if there are no more nodes.
-	AllocatedNodeHeader* NextNode(AllocatedNodeHeader* node) {
-		offset_type next_offset = node->next_offset;
-		if (next_offset == -1) {
-			return nullptr;
-		}
-		return ToPtr<AllocatedNodeHeader>(next_offset);
+	AllocatedNodeHeader* NextNode(AllocatedNodeHeader* node) {;
+		return ToPtr<AllocatedNodeHeader>(node->next_offset);
 	}
 
 	// Returns the previous node in the allocation list, or nullptr if there 
 	// are no more nodes.
 	AllocatedNodeHeader* PreviousNode(AllocatedNodeHeader* node) {
-		offset_type prev_offset = node->prev_offset;
-		if (prev_offset == -1) {
-			return nullptr;
-		}
-		return ToPtr<AllocatedNodeHeader>(prev_offset);
+		return ToPtr<AllocatedNodeHeader>(node->prev_offset);
 	}
 
 	// Header for a free node in the allocator
@@ -135,21 +133,12 @@ private:
 
 	// Returns the first free node in the free list, or nullptr if there are no free nodes.
 	FreeNodeHeader* FirstFreeNode() {
-		AllocatorStateHeader* state_header_ptr = state();
-		offset_type free_list_offset = state_header_ptr->free_list_offset;
-		if (free_list_offset == -1) {
-			return nullptr;
-		}
-		return ToPtr<FreeNodeHeader>(free_list_offset);
+		return ToPtr<FreeNodeHeader>(state()->free_list_offset);
 	}
 
 	// Returns the next node in the free list, or nullptr if there are no more nodes.
 	FreeNodeHeader* NextFreeNode(FreeNodeHeader* node) {
-		offset_type next_offset = node->next_offset;
-		if (next_offset == -1) {
-			return nullptr;
-		}
-		return ToPtr<FreeNodeHeader>(next_offset);
+		return ToPtr<FreeNodeHeader>(node->next_offset);
 	}
 
 	void InitializeAllocatorStateIfNecessary() {
@@ -177,18 +166,26 @@ private:
 	T* NewAllocatedNodeAtOffset(offset_type offset, size_type size) {
 		AllocatedNodeHeader* node_header_ptr = ToPtr<AllocatedNodeHeader>(offset);
 		node_header_ptr->size = size;
-		// Add the node to the front of the allocation list
-		if (state()->allocation_offset != -1) {
-			AllocatedNodeHeader* next_node = ToPtr<AllocatedNodeHeader>(state()->allocation_offset);
-			node_header_ptr->next_offset = state()->allocation_offset;
-			node_header_ptr->prev_offset = next_node->prev_offset;
-			next_node->prev_offset = offset;
+		while (true) {
+			// Add the node to the front of the allocation list
+			offset_type next_node_offset = state()->allocation_offset;
+			AllocatedNodeHeader* next_node = ToPtr<AllocatedNodeHeader>(next_node_offset);
+			if (next_node != nullptr) {
+				node_header_ptr->next_offset = next_node_offset;
+				node_header_ptr->prev_offset = next_node->prev_offset;
+				// This is a lot of work to get right. We need to undo this if the
+				// compare_exchange fails.
+				next_node->prev_offset = offset;
+			}
+			else {
+				node_header_ptr->next_offset = -1;
+				node_header_ptr->prev_offset = -1;
+			}
+			if (state()->allocation_offset.compare_exchange_weak(next_node_offset, offset)) {
+				break;
+			}
 		}
-		else {
-			node_header_ptr->next_offset = -1;
-			node_header_ptr->prev_offset = -1;
-		}
-		state()->allocation_offset = offset;
+
 
 		return ToPtr<T>(offset + sizeof(AllocatedNodeHeader));
 	}
@@ -411,10 +408,7 @@ typename SharedMemoryAllocator<T>::size_type SharedMemoryAllocator<T>::GetCapaci
 
 template<typename T>
 typename SharedMemoryAllocator<T>::Iterator SharedMemoryAllocator<T>::begin() {
-	AllocatorStateHeader* state_header_ptr = state();
-	if (state_header_ptr->allocation_offset == -1)
-		return Iterator(nullptr, this);
-	return Iterator(ToPtr<AllocatedNodeHeader>(state_header_ptr->allocation_offset), this);
+	return Iterator(ToPtr<AllocatedNodeHeader>(state()->allocation_offset), this);
 }
 
 template<typename T>
