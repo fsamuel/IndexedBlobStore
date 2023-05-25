@@ -87,7 +87,6 @@ private:
 	struct AllocatorStateHeader {
 		uint32_t magic_number;      // Magic number for verifying the allocator state header
 		std::atomic<offset_type> free_list_offset; // Offset of the first free block in the free list
-		std::atomic<offset_type> allocation_offset; // Offset of the first allocation block.
 	};
 
 	AllocatorStateHeader* state() {
@@ -103,24 +102,11 @@ private:
 	// Header for an allocated node in the allocator
 	struct AllocatedNodeHeader {
 		size_type size; // Size of the allocated block, including the header
-		offset_type next_offset; // Offset of the next allocation.
-		offset_type prev_offset; // Offset of the previous allocation.
 	};
 
 	// Given a pointer, returns the AllocatedNodeHeader.
 	AllocatedNodeHeader* GetNode(T* ptr) {
 		return reinterpret_cast<AllocatedNodeHeader*>(ptr) - 1;
-	}
-
-	// Returns the next node in the allocation list, or nullptr if there are no more nodes.
-	AllocatedNodeHeader* NextNode(AllocatedNodeHeader* node) {;
-		return ToPtr<AllocatedNodeHeader>(node->next_offset);
-	}
-
-	// Returns the previous node in the allocation list, or nullptr if there 
-	// are no more nodes.
-	AllocatedNodeHeader* PreviousNode(AllocatedNodeHeader* node) {
-		return ToPtr<AllocatedNodeHeader>(node->prev_offset);
 	}
 
 	// Header for a free node in the allocator
@@ -148,7 +134,6 @@ private:
 			// Initialize the allocator state header
 			state_header_ptr->magic_number = 0x12345678;
 			state_header_ptr->free_list_offset = -1;
-			state_header_ptr->allocation_offset = -1;
 		}
 	}
 
@@ -160,78 +145,14 @@ private:
 		}
 
 		// Calculate the number of bytes needed for the memory block
-		return sizeof(AllocatedNodeHeader) + sizeof(T) * n;
+		return std::max(sizeof(AllocatedNodeHeader) + sizeof(T) * n, sizeof(FreeNodeHeader)) ;
 	}
 
 	T* NewAllocatedNodeAtOffset(offset_type offset, size_type size) {
-		AllocatedNodeHeader* node_header_ptr = ToPtr<AllocatedNodeHeader>(offset);
-		node_header_ptr->size = size;
-		while (true) {
-			// Add the node to the front of the allocation list
-			offset_type next_node_offset = state()->allocation_offset;
-			AllocatedNodeHeader* next_node = ToPtr<AllocatedNodeHeader>(next_node_offset);
-			if (next_node != nullptr) {
-				node_header_ptr->next_offset = next_node_offset;
-				node_header_ptr->prev_offset = next_node->prev_offset;
-				// This is a lot of work to get right. We need to undo this if the
-				// compare_exchange fails.
-				next_node->prev_offset = offset;
-			}
-			else {
-				node_header_ptr->next_offset = -1;
-				node_header_ptr->prev_offset = -1;
-			}
-			if (state()->allocation_offset.compare_exchange_weak(next_node_offset, offset)) {
-				break;
-			}
-		}
-
-
+		AllocatedNodeHeader* allocated_node = ToPtr<AllocatedNodeHeader>(offset);
+		allocated_node->size = size;
 		return ToPtr<T>(offset + sizeof(AllocatedNodeHeader));
 	}
-
-public:
-
-	// Iterator class for iterating over the allocated nodes in the allocator
-	class Iterator {
-	public:
-		Iterator(AllocatedNodeHeader* nodePtr,
-			SharedMemoryAllocator* allocator) :
-			node_ptr_(nodePtr), allocator_(allocator) {}
-
-		T& operator*() const {
-			return *reinterpret_cast<T*>(node_ptr_ + 1);
-		}
-
-		T* operator->() const {
-			return reinterpret_cast<T*>(node_ptr_ + 1);
-		}
-
-		Iterator& operator++() {
-			if (node_ptr_ == nullptr)
-				return *this;
-			node_ptr_ = allocator_->NextNode(node_ptr_);
-			return *this;
-		}
-
-		bool operator==(const Iterator& other) const {
-			return node_ptr_ == other.node_ptr_;
-		}
-
-		bool operator!=(const Iterator& other) const {
-			return node_ptr_ != other.node_ptr_;
-		}
-
-	private:
-		AllocatedNodeHeader* node_ptr_;
-		SharedMemoryAllocator* allocator_;
-	};
-
-	// Return an iterator to the first allocated object
-	Iterator begin();
-
-	// Return an iterator to the end of the allocated objects
-	Iterator end();
 
 private:
 
@@ -283,8 +204,9 @@ T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
 			offset_type data_offset = ToOffset(current_free_node) + free_node_size - bytes_needed;
 			return NewAllocatedNodeAtOffset(data_offset, bytes_needed);
 		}
+
 		// The block is large enough to use for allocation but NOT large enough to split.
-		else if (free_node_size >= bytes_needed) {
+		if (free_node_size >= bytes_needed) {
 			// Found a block that is large enough, remove it from the free list and return a pointer to its data
 			if (prev_free_node != nullptr) {
 				offset_type current_free_node_offset = ToOffset(current_free_node);
@@ -326,6 +248,8 @@ T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
 	// Idea: When we need a new chunk, create a free list node at the beginning of the chunk for
 	// the full size of the chunk. This will allow us to use the free list to find a chunk that
 	// is large enough for an allocation.
+	// We don't want to insert a new node multiple times for a single chunk, so we need to make
+	// sure that the free list head encodes the last chunk that was allocated.
 	offset_type data_offset = buffer_.size();
 	buffer_.Resize(buffer_.size() + bytes_needed);
 
@@ -350,35 +274,15 @@ void SharedMemoryAllocator<T>::Deallocate(T* ptr) {
 	AllocatedNodeHeader* current_node = GetNode(ptr);
 	offset_type node_header_offset = ToOffset(current_node);
 
-	// TODO(fsamuel): AllocatedNodes should not have next and previous pointers set.
-	// This makes thread-safety difficult. We should consider removing these pointers
-	AllocatedNodeHeader* prev_node = PreviousNode(current_node);
-	if (prev_node != nullptr) {
-		prev_node->next_offset = current_node->next_offset;
-	}
-	AllocatedNodeHeader* next_node = NextNode(current_node);
-	if (next_node != nullptr) {
-		next_node->prev_offset = current_node->prev_offset;
-	}
-
 	// Add the block to the free list
 	while (true) {
-		// Get the next allocated node offset.
-		offset_type next_node_offset = current_node->next_offset;
 		// Get the current head of the free list
 		offset_type free_list_offset = state()->free_list_offset;
-		FreeNodeHeader* free_list_head = ToPtr<FreeNodeHeader>(free_list_offset);
 		// Set the next pointer of the new free node to the current head of the free list
 		FreeNodeHeader* free_node_ptr = ToPtr<FreeNodeHeader>(node_header_offset);
 		free_node_ptr->next_offset.store(free_list_offset);
 		// Try to set the head of the free list to the new free node
 		if (state()->free_list_offset.compare_exchange_weak(free_list_offset, node_header_offset)) {
-			// The head of the free list was successfully updated.
-			// If the allocation is at the front of the allocation list,
-			// update the allocation offset to refer to the next allocation.
-			if (state()->allocation_offset == node_header_offset) {
-				state()->allocation_offset = next_node_offset;
-			}
 			break;
 		}
 		// The head of the free list was updated by another thread, try again
@@ -404,16 +308,6 @@ typename SharedMemoryAllocator<T>::size_type SharedMemoryAllocator<T>::GetCapaci
 	offset_type node_header_offset = ToOffset(reinterpret_cast<AllocatedNodeHeader*>(ptr) - 1);
 	AllocatedNodeHeader* curent_node = ToPtr<AllocatedNodeHeader>(node_header_offset);
 	return (curent_node->size - sizeof(AllocatedNodeHeader)) / sizeof(T);
-}
-
-template<typename T>
-typename SharedMemoryAllocator<T>::Iterator SharedMemoryAllocator<T>::begin() {
-	return Iterator(ToPtr<AllocatedNodeHeader>(state()->allocation_offset), this);
-}
-
-template<typename T>
-typename SharedMemoryAllocator<T>::Iterator SharedMemoryAllocator<T>::end() {
-	return Iterator(nullptr, this);
 }
 
 #endif  // SHARED_MEMORY_ALLOCATOR_H_
