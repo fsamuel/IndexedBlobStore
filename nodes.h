@@ -41,6 +41,8 @@ struct Node {
 	}
 };
 
+// These partially verify that we can safely store the nodes in the blob store and
+// that we can safely clone them.
 static_assert(std::is_trivially_copyable<Node>::value, "Node is trivially copyable");
 static_assert(std::is_standard_layout<Node>::value, "Node is standard layout");
 
@@ -64,7 +66,6 @@ struct HeadNode {
 
 static_assert(std::is_trivially_copyable<HeadNode>::value, "HeadNode is trivially copyable");
 static_assert(std::is_standard_layout<HeadNode>::value, "HeadNode is standard layout");
-
 
 template<std::size_t Order = 4>
 struct BaseNode {
@@ -277,7 +278,6 @@ void GetChildConst(
 	*child_ptr = BlobStoreObject<const BaseNode<Order>>(node.GetBlobStore(), node->children[child_index]);
 }
 
-
 // Prints a BlobStoreObject<BaseNode> in a human-readable format.
 template<typename KeyType, std::size_t Order>
 void PrintNode(BlobStoreObject<const InternalNode<Order>> node) {
@@ -341,6 +341,5 @@ void PrintNode(BlobStoreObject<const Node> node) {
 		break;
 	}
 }
-
 
 #endif // NODES_H_

@@ -715,8 +715,8 @@ BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccesso
 		size_t key_index = node->Search(&blob_store_, key, &key_found);
 		return key_found;
 	}
-	for (int i = 0; i <= node->num_keys(); ++i) {
-		auto internal_node = node.To<InternalNode>();
+	BlobStoreObject<const InternalNode> internal_node = std::move(node).To<InternalNode>();
+	for (int i = 0; i <= internal_node->num_keys(); ++i) {
 		BlobStoreObject<const BaseNode> child;
 		GetChild(internal_node, i, &child); // Get the leftmost child
 		auto key_ptr = GetSuccessorKey(std::move(child), std::move(key));
@@ -735,30 +735,23 @@ void BPlusTree<KeyType, ValueType, Order>::MergeInternalNodes(
 	size_t parent_key) {
 	// Move the key from the parent node down to the left sibling node
 	left_node->set_key(left_node->num_keys(), parent_key);
+	left_node->children[left_node->num_keys() + 1] = right_node->children[0];
 	left_node->increment_num_keys();
 
 	// Move all keys and child pointers from the right sibling node to the left sibling node
 	for (size_t i = 0; i < right_node->num_keys(); ++i) {
 		left_node->set_key(left_node->num_keys(), right_node->get_key(i));
-		left_node->children[left_node->num_keys()] = right_node->children[i];
-
-		// Update the parent of the moved children
+		left_node->children[left_node->num_keys() + 1] = right_node->children[i + 1];
 		left_node->increment_num_keys();
 	}
-	left_node->children[left_node->num_keys()] = right_node->children[right_node->num_keys()];
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::MergeLeafNodes(
 	BlobStoreObject<LeafNode> left_node,
 	BlobStoreObject<const LeafNode> right_node) {
-	// Move the key from the parent node down to the left sibling node
-	left_node->set_key(left_node->num_keys(), right_node->get_key(0));
-	left_node->values[left_node->num_keys()] = right_node->values[0];
-	left_node->increment_num_keys();
-
 	// Move all keys and values from the right sibling node to the left sibling node
-	for (size_t i = 1; i < right_node->num_keys(); ++i) {
+	for (size_t i = 0; i < right_node->num_keys(); ++i) {
 		left_node->set_key(left_node->num_keys(), right_node->get_key(i));
 		left_node->values[left_node->num_keys()] = right_node->values[i];
 		left_node->increment_num_keys();
