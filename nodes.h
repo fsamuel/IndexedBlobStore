@@ -51,9 +51,9 @@ struct HeadNode {
 	// The index of the previous head.
 	BlobStore::index_type previous;
 
-	HeadNode(std::size_t version) : node(NodeType::HEAD, version), previous(BlobStore::InvalidIndex) {}
+	HeadNode(std::size_t version) : node(NodeType::HEAD, version), root_index(BlobStore::InvalidIndex), previous(BlobStore::InvalidIndex) {}
 
-	HeadNode() : node(NodeType::HEAD, 0), previous(BlobStore::InvalidIndex) {}
+	HeadNode() : node(NodeType::HEAD, 0), root_index(BlobStore::InvalidIndex), previous(BlobStore::InvalidIndex) {}
 
 	bool is_head() const { return node.is_head(); }
 	bool is_leaf() const { return node.is_leaf(); }

@@ -138,7 +138,7 @@ private:
 	BlobStoreObject<const ValueType> Delete(
 		Transaction* transaction,
 		BlobStoreObject<BaseNode>* parent_node,
-		int child_index,
+		size_t child_index,
 		const KeyType& key);
 
 	BlobStoreObject<const ValueType> DeleteFromLeafNode(
@@ -156,7 +156,7 @@ private:
         BlobStoreObject<InternalNode> parent_node,
         BlobStoreObject<const BaseNode> left_sibling,
         BlobStoreObject<const BaseNode> right_sibling,
-        int child_index,
+        size_t child_index,
         BlobStoreObject<BaseNode>* out_right_sibling);
 
 	// Borrow a key from the right sibling of node and return the new left sibling.
@@ -165,7 +165,7 @@ private:
         BlobStoreObject<InternalNode> parent_node,
         BlobStoreObject<const BaseNode> left_sibling,
         BlobStoreObject<const BaseNode> right_sibling,
-        int child_index,
+        size_t child_index,
         BlobStoreObject<BaseNode>* out_left_sibling);
 
 	// Returns the key of the successor of node.
@@ -191,7 +191,7 @@ private:
 	void MergeChildWithLeftOrRightSibling(
 		Transaction* transaction,
 		BlobStoreObject<InternalNode> parent,
-		int child_index,
+		size_t child_index,
 		BlobStoreObject<const BaseNode> child,
 		BlobStoreObject<BaseNode>* out_child);
 
@@ -201,7 +201,7 @@ private:
 	void RebalanceChildWithLeftOrRightSibling(
 		Transaction* transaction,
 		BlobStoreObject<InternalNode> parent,
-		int child_index,
+		size_t child_index,
 		BlobStoreObject<const BaseNode> child,
 		BlobStoreObject<BaseNode>* new_child);
 };
@@ -281,7 +281,7 @@ template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitLeafNode(Transaction* transaction, BlobStoreObject<LeafNode> left_node) {
 	BlobStoreObject<LeafNode> new_right_node = transaction->New<LeafNode>();
 
-	int middle_key_index = (left_node->num_keys() - 1) / 2;
+	size_t middle_key_index = (left_node->num_keys() - 1) / 2;
 	BlobStoreObject<const KeyType> middle_key;
 	GetKey(left_node, middle_key_index, &middle_key);
 
@@ -307,7 +307,7 @@ template<typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle BPlusTree<KeyType, ValueType, Order>::SplitInternalNode(Transaction* transaction, BlobStoreObject<InternalNode> left_node) {
 	BlobStoreObject<InternalNode> new_right_node = transaction->New<InternalNode>(Order);
 
-	int middle_key_index = (left_node->num_keys() - 1) / 2;
+	size_t middle_key_index = (left_node->num_keys() - 1) / 2;
 	BlobStoreObject<const KeyType> middle_key;
 	GetKey(left_node, middle_key_index, &middle_key);
 
@@ -349,19 +349,18 @@ typename std::enable_if<
 		return bundle;
 	}
 	// Shift the keys and values right.
-	int i = new_left_node->num_keys() - 1;
-	while (i >= 0) {
+	size_t i = new_left_node->num_keys();
+	for (; i > 0; --i) {
 		BlobStoreObject<const KeyType> key_ptr;
-		GetKey(new_left_node, i, &key_ptr);
+		GetKey(new_left_node, i - 1, &key_ptr);
 		if (*key >= *key_ptr) {
 			break;
 		}
-		new_left_node->set_key(i + 1, new_left_node->get_key(i));
-		new_left_node->values[i + 1] = new_left_node->values[i];
-		--i;
+		new_left_node->set_key(i, new_left_node->get_key(i - 1));
+		new_left_node->values[i] = new_left_node->values[i - 1];
 	}
-	new_left_node->set_key(i + 1, key.Index());
-	new_left_node->values[i + 1] = value.Index();
+	new_left_node->set_key(i, key.Index());
+	new_left_node->values[i] = value.Index();
 	new_left_node->increment_num_keys();
 	return InsertionBundle(new_left_node.To<BaseNode>(), BlobStoreObject<const KeyType>(), BlobStoreObject<BaseNode>());
 }
@@ -371,19 +370,18 @@ void BPlusTree<KeyType, ValueType, Order>::InsertKeyChildIntoInternalNode(
 	BlobStoreObject<InternalNode> node,
 	BlobStoreObject<const KeyType> new_key,
 	BlobStoreObject<BaseNode> new_child) {
-	int i = node->num_keys() - 1;
-	while (i >= 0) {
+	size_t i = node->num_keys();
+	for (; i > 0; --i) {
 		BlobStoreObject<const KeyType> key_ptr;
-		GetKey(node, i, &key_ptr);
+		GetKey(node, i - 1, &key_ptr);
 		if (*new_key >= *key_ptr) {
 			break;
 		}
-		node->set_key(i + 1, node->get_key(i));
-		node->children[i + 2] = node->children[i + 1];
-		--i;
+		node->set_key(i, node->get_key(i - 1));
+		node->children[i + 1] = node->children[i];
 	}
-	node->set_key(i + 1, new_key.Index());
-	node->children[i + 2] = new_child.Index();
+	node->set_key(i, new_key.Index());
+	node->children[i + 1] = new_child.Index();
 	node->increment_num_keys();
 }
 
@@ -434,11 +432,9 @@ BPlusTree<KeyType, ValueType, Order>::Insert(Transaction* transaction, BlobStore
 			return node_bundle;
 		}
 		// insert the new child node and its minimum key into the parent node
-		int j = new_internal_node->num_keys() - 1;
-		while (j >= static_cast<int>(key_index)) {
-			new_internal_node->children[j + 2] = new_internal_node->children[j + 1];
-			new_internal_node->set_key(j + 1, new_internal_node->get_key(j));
-			--j;
+		for (size_t j = new_internal_node->num_keys(); j > key_index; --j) {
+			new_internal_node->children[j + 1] = new_internal_node->children[j];
+			new_internal_node->set_key(j, new_internal_node->get_key(j - 1));
 		}
 		new_internal_node->children[key_index + 1] = child_node_bundle.new_right_node.Index();
 		new_internal_node->set_key(key_index, child_node_bundle.new_key.Index());
@@ -535,7 +531,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 	GetValue(node, key_index, &deleted_value);
 
 	// Shift keys and values to fill the gap
-	for (int j = key_index + 1; j < node->num_keys(); j++) {
+	for (size_t j = key_index + 1; j < node->num_keys(); j++) {
 		node->set_key(j - 1, node->get_key(j));
 		node->values[j - 1] = node->values[j];
 	}
@@ -575,7 +571,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::DeleteFro
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(Transaction* transaction, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_right_sibling) {
+bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(Transaction* transaction, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, size_t child_index, BlobStoreObject<BaseNode>* out_right_sibling) {
 	BlobStoreObject<BaseNode> new_left_sibling = transaction->GetMutable<BaseNode>(std::move(left_sibling));
 	BlobStoreObject<BaseNode> new_right_sibling = transaction->GetMutable<BaseNode>(std::move(right_sibling));
 	*out_right_sibling = new_right_sibling;
@@ -584,15 +580,15 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(Transaction* tr
 	parent_node->children[child_index] = new_right_sibling.Index();
 
 	// Move keys and children in the child node to make space for the borrowed key
-	for (int i = new_right_sibling->num_keys() - 1; i >= 0; --i) {
-		new_right_sibling->keys[i + 1] = new_right_sibling->keys[i];
+	for (size_t i = new_right_sibling->num_keys(); i > 0; --i) {
+		new_right_sibling->keys[i] = new_right_sibling->keys[i -1];
 	}
 
 	if (new_right_sibling->is_internal()) {
 		auto new_right_sibling_internal_node = new_right_sibling.To<InternalNode>();
 		auto new_left_sibling_internal_node = new_left_sibling.To<InternalNode>();
 
-		for (int i = new_right_sibling_internal_node->num_keys(); i >= 0; --i) {
+		for (size_t i = new_right_sibling_internal_node->num_keys(); i >= 0; --i) {
 			new_right_sibling_internal_node->children[i + 1] = new_right_sibling_internal_node->children[i];
 		}
 		new_right_sibling_internal_node->children[0] = new_left_sibling_internal_node->children[new_left_sibling_internal_node->num_keys()];
@@ -604,8 +600,8 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(Transaction* tr
 		auto new_left_sibling_leaf_node = new_left_sibling.To<LeafNode>();
 
 		// Move keys and children in the child node to make space for the borrowed key
-		for (int i = new_right_sibling_leaf_node->num_keys() - 1; i >= 0; --i) {
-			new_right_sibling_leaf_node->values[i + 1] = new_right_sibling_leaf_node->values[i];
+		for (size_t i = new_right_sibling_leaf_node->num_keys(); i > 0; --i) {
+			new_right_sibling_leaf_node->values[i] = new_right_sibling_leaf_node->values[i-1];
 		}
 		new_right_sibling_leaf_node->values[0] = new_left_sibling_leaf_node->values[new_left_sibling_leaf_node->num_keys() - 1];
 		new_right_sibling->set_key(0, new_left_sibling_leaf_node->get_key(new_left_sibling_leaf_node->num_keys() - 1));
@@ -623,7 +619,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(Transaction* tr
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(Transaction* transaction, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, int child_index, BlobStoreObject<BaseNode>* out_left_sibling) {
+bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(Transaction* transaction, BlobStoreObject<InternalNode> parent_node, BlobStoreObject<const BaseNode> left_sibling, BlobStoreObject<const BaseNode> right_sibling, size_t child_index, BlobStoreObject<BaseNode>* out_left_sibling) {
 	BlobStoreObject<BaseNode> new_left_sibling = transaction->GetMutable<BaseNode>(std::move(left_sibling));
 	BlobStoreObject<BaseNode> new_right_sibling = transaction->GetMutable<BaseNode>(std::move(right_sibling));
 
@@ -675,7 +671,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(Transaction* t
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Transaction* transaction, BlobStoreObject<BaseNode>* parent_node, int child_index, const KeyType& key) {
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(Transaction* transaction, BlobStoreObject<BaseNode>* parent_node, size_t child_index, const KeyType& key) {
 	BlobStoreObject<InternalNode> parent_internal_node = parent_node->To<InternalNode>();
 	BlobStoreObject<const BaseNode> const_child;
 	GetChildConst(parent_internal_node, child_index, &const_child);
@@ -771,10 +767,10 @@ void BPlusTree<KeyType, ValueType, Order>::MergeLeafNodes(
 
 template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
-	Transaction* transaction, BlobStoreObject<InternalNode> parent, int child_index, BlobStoreObject<const BaseNode> child, BlobStoreObject<BaseNode>* out_child) {
+	Transaction* transaction, BlobStoreObject<InternalNode> parent, size_t child_index, BlobStoreObject<const BaseNode> child, BlobStoreObject<BaseNode>* out_child) {
 	BlobStoreObject<BaseNode> left_child;
 	BlobStoreObject<const BaseNode> right_child;
-	int key_index_in_parent;
+	size_t key_index_in_parent;
 	if (child_index < parent->num_keys()) {
 		key_index_in_parent = child_index;
 		left_child = transaction->GetMutable<BaseNode>(std::move(child));
@@ -806,7 +802,7 @@ void BPlusTree<KeyType, ValueType, Order>::MergeChildWithLeftOrRightSibling(
 	transaction->Drop(std::move(right_child));
 
 	// Update the parent node by removing the key that was moved down and the pointer to the right sibling node
-	for (int i = key_index_in_parent; i < parent->num_keys() - 1; ++i) {
+	for (size_t i = key_index_in_parent; i < parent->num_keys() - 1; ++i) {
 		parent->set_key(i, parent->get_key(i + 1));
 		parent->children[i + 1] = parent->children[i + 2];
 	}
@@ -818,7 +814,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
 	Transaction* transaction,
 	BlobStoreObject<InternalNode> parent,
-	int child_index,
+	size_t child_index,
 	BlobStoreObject<const BaseNode> child,
 	BlobStoreObject<BaseNode>* new_child) {
 	BlobStoreObject<const BaseNode> left_sibling;

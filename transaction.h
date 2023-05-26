@@ -191,7 +191,7 @@ public:
 	}
 
 	void Abort()&& {
-		for (auto object_info : new_objects_) {
+		for (const ObjectInfo& object_info : new_objects_) {
 			blob_store_->Drop(object_info.index);
 		}
 	}

@@ -32,14 +32,6 @@ namespace {
 	}
 }
 
-// Base template for non-std::array types
-template <typename T>
-struct IsStdArray : std::false_type {};
-
-// Specialization for std::array types
-template <typename T, std::size_t N>
-struct IsStdArray<std::array<T, N>> : std::true_type {};
-
 class BlobStore;
 
 class BlobStoreObserver {
@@ -810,7 +802,6 @@ private:
 		if (metadata->lock_state == WRITE_LOCK_FLAG) {
 			return;
 		}
-		std::int32_t expected;
 		while (true) {
 			std::int32_t expected = 1;
 			if (metadata->lock_state.compare_exchange_weak(expected, WRITE_LOCK_FLAG)) {
