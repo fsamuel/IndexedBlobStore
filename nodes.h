@@ -49,9 +49,9 @@ static_assert(std::is_standard_layout<Node>::value, "Node is standard layout");
 struct HeadNode {
 	Node node;
 	// The index of the root node.
-	BlobStore::index_type root_index;
+	std::size_t root_index;
 	// The index of the previous head.
-	BlobStore::index_type previous;
+	std::size_t previous;
 
 	HeadNode(std::size_t version) : node(NodeType::HEAD, version), root_index(BlobStore::InvalidIndex), previous(BlobStore::InvalidIndex) {}
 
@@ -73,7 +73,7 @@ struct BaseNode {
 	// The number of keys in the node.
 	std::size_t n;
 	// The keys in the node.
-	std::array<BlobStore::index_type, Order - 1> keys;
+	std::array<std::size_t, Order - 1> keys;
 
 	BaseNode(NodeType type, std::size_t n) : node(type, 0), n(n) {
 		// Initialize all keys to invalid index.
@@ -142,7 +142,7 @@ static_assert(std::is_standard_layout<BaseNode<>>::value, "BaseNode is standard 
 template<std::size_t Order = 4>
 struct InternalNode {
 	BaseNode<Order> base;
-	std::array<BlobStore::index_type, Order> children;
+	std::array<std::size_t, Order> children;
 	explicit InternalNode(std::size_t n)
 		: base(NodeType::INTERNAL, n) {
 		for (size_t i = 0; i < Order; ++i) {
@@ -180,7 +180,7 @@ static_assert(std::is_standard_layout<InternalNode<>>::value, "InternalNode is s
 template<std::size_t Order = 4>
 struct LeafNode {
 	BaseNode<Order> base;
-	std::array<BlobStore::index_type, Order - 1> values;
+	std::array<std::size_t, Order - 1> values;
 
 	LeafNode(std::size_t num_keys = 0)
 		: base(NodeType::LEAF, num_keys) {

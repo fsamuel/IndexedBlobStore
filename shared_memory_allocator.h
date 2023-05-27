@@ -20,9 +20,6 @@ public:
 template <typename T>
 class SharedMemoryAllocator {
 public:
-	using size_type = std::size_t;
-	using offset_type = std::ptrdiff_t;
-
 	// Constructor that takes a reference to the shared memory buffer to be used for allocation
 	explicit SharedMemoryAllocator(SharedMemoryBuffer&& buffer);
 
@@ -33,40 +30,40 @@ public:
 	}
 
 	// Allocate memory for n objects of type T, and return a pointer to the first object
-	T* Allocate(size_type bytes);
+	T* Allocate(std::size_t bytes);
 
-	// Deallocate memory at the given pointer offset
-	void Deallocate(offset_type offset);
+	// Deallocate memory at the given pointer index
+	void Deallocate(std::size_t index);
 
 	// Deallocate memory at the given pointer.
 	void Deallocate(T* ptr);
 
-	// Returns the size of the allocated block at the given offset.
-	size_type GetCapacity(offset_type offset) const;
+	// Returns the size of the allocated block at the given index.
+	std::size_t GetCapacity(std::size_t index) const;
 
 	// Returns the size of the allocated block at the given pointer.
-	size_type GetCapacity(T* ptr);
+	std::size_t GetCapacity(T* ptr);
 
-	// Helper method to convert a pointer to an offset relative to the start of the buffer
-	offset_type ToOffset(const void* ptr) const {
+	// Helper method to convert a pointer to an index relative to the start of the buffer
+	std::size_t ToIndex(const void* ptr) const {
 		return reinterpret_cast<const char*>(ptr) - reinterpret_cast<const char*>(buffer_.data());
 	}
 
-	// Helper method to convert an offset relative to the start of the buffer to a pointer
+	// Helper method to convert an index relative to the start of the buffer to a pointer
 	template<class U>
-	const U* ToPtr(offset_type offset) const {
-		if (offset == -1) {
+	const U* ToPtr(std::size_t index) const {
+		if (index == -1) {
 			return nullptr;
 		}
-		return reinterpret_cast<const U*>(reinterpret_cast<const char*>(buffer_.data()) + offset);
+		return reinterpret_cast<const U*>(reinterpret_cast<const char*>(buffer_.data()) + index);
 	}
 
 	template<class U>
-	U* ToPtr(offset_type offset) {
-		if (offset == -1) {
+	U* ToPtr(std::size_t index) {
+		if (index == -1) {
 			return nullptr;
 		}
-		return reinterpret_cast<U*>(reinterpret_cast<char*>(buffer_.data()) + offset);
+		return reinterpret_cast<U*>(reinterpret_cast<char*>(buffer_.data()) + index);
 	}
 
 	void AddObserver(SharedMemoryAllocatorObserver* observer) {
@@ -86,7 +83,7 @@ private:
 	// Header for the allocator state in the shared memory buffer
 	struct AllocatorStateHeader {
 		uint32_t magic_number;      // Magic number for verifying the allocator state header
-		std::atomic<offset_type> free_list_offset; // Offset of the first free block in the free list
+		std::atomic<std::size_t> free_list_index; // index of the first free block in the free list
 	};
 
 	AllocatorStateHeader* state() {
@@ -101,7 +98,7 @@ private:
 
 	// Header for an allocated node in the allocator
 	struct AllocatedNodeHeader {
-		size_type size; // Size of the allocated block, including the header
+		std::size_t size; // Size of the allocated block, including the header
 	};
 
 	// Given a pointer, returns the AllocatedNodeHeader.
@@ -112,19 +109,19 @@ private:
 	// Header for a free node in the allocator
 	struct FreeNodeHeader {
 		// Size of the free block, including the header
-		std::atomic<size_type> size;
-		// Offset of the next free block in the free list
-		std::atomic<offset_type> next_offset;
+		std::atomic<std::size_t> size;
+		// index of the next free block in the free list
+		std::atomic<std::size_t> next_index;
 	};
 
 	// Returns the first free node in the free list, or nullptr if there are no free nodes.
 	FreeNodeHeader* FirstFreeNode() {
-		return ToPtr<FreeNodeHeader>(state()->free_list_offset);
+		return ToPtr<FreeNodeHeader>(state()->free_list_index);
 	}
 
 	// Returns the next node in the free list, or nullptr if there are no more nodes.
 	FreeNodeHeader* NextFreeNode(FreeNodeHeader* node) {
-		return ToPtr<FreeNodeHeader>(node->next_offset);
+		return ToPtr<FreeNodeHeader>(node->next_index);
 	}
 
 	void InitializeAllocatorStateIfNecessary() {
@@ -133,13 +130,13 @@ private:
 		if (state_header_ptr->magic_number != 0x12345678) {
 			// Initialize the allocator state header
 			state_header_ptr->magic_number = 0x12345678;
-			state_header_ptr->free_list_offset = -1;
+			state_header_ptr->free_list_index = -1;
 		}
 	}
 
-	static size_type CalculateBytesNeeded(size_type bytes) {
+	static std::size_t CalculateBytesNeeded(std::size_t bytes) {
 		// Calculate the number of objects needed based on the requested size and the size of each object
-		size_type n = bytes / sizeof(T);
+		std::size_t n = bytes / sizeof(T);
 		if (bytes % sizeof(T) != 0) {
 			n++;
 		}
@@ -148,10 +145,10 @@ private:
 		return std::max(sizeof(AllocatedNodeHeader) + sizeof(T) * n, sizeof(FreeNodeHeader)) ;
 	}
 
-	T* NewAllocatedNodeAtOffset(offset_type offset, size_type size) {
-		AllocatedNodeHeader* allocated_node = ToPtr<AllocatedNodeHeader>(offset);
+	T* NewAllocatedNodeAtIndex(std::size_t index, std::size_t size) {
+		AllocatedNodeHeader* allocated_node = ToPtr<AllocatedNodeHeader>(index);
 		allocated_node->size = size;
-		return ToPtr<T>(offset + sizeof(AllocatedNodeHeader));
+		return ToPtr<T>(index + sizeof(AllocatedNodeHeader));
 	}
 
 private:
@@ -178,9 +175,9 @@ SharedMemoryAllocator<T>::SharedMemoryAllocator(SharedMemoryAllocator&& other)
 }
 
 template<typename T>
-T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
+T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes) {
 	// Calculate the number of bytes needed for the memory block
-	size_type bytes_needed = CalculateBytesNeeded(bytes);
+	std::size_t bytes_needed = CalculateBytesNeeded(bytes);
 
 	InitializeAllocatorStateIfNecessary();
 
@@ -189,28 +186,28 @@ T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
 	// Search the free list for a block of sufficient size
 	FreeNodeHeader* prev_free_node = nullptr;
 	while (current_free_node != nullptr) {
-		size_type free_node_size = current_free_node->size;
+		std::size_t free_node_size = current_free_node->size;
 
 		// If we've found a block greater than the size we need (and can accommodate a head
 		// a second block, split it into two blocks. The first piece will be returned to the
 		// free list, and the second piece will be returned to the caller.
 		if (free_node_size > bytes_needed + sizeof(FreeNodeHeader)) {
-			size_type new_free_node_size = free_node_size - bytes_needed;
+			std::size_t new_free_node_size = free_node_size - bytes_needed;
 			if (!current_free_node->size.compare_exchange_weak(free_node_size, new_free_node_size)) {
 				// The block was resized by another thread, go back to the free list and try again.
 				current_free_node = FirstFreeNode();
 				continue;
 			}
-			offset_type data_offset = ToOffset(current_free_node) + free_node_size - bytes_needed;
-			return NewAllocatedNodeAtOffset(data_offset, bytes_needed);
+			std::size_t data_index = ToIndex(current_free_node) + free_node_size - bytes_needed;
+			return NewAllocatedNodeAtIndex(data_index, bytes_needed);
 		}
 
 		// The block is large enough to use for allocation but NOT large enough to split.
 		if (free_node_size >= bytes_needed) {
 			// Found a block that is large enough, remove it from the free list and return a pointer to its data
 			if (prev_free_node != nullptr) {
-				offset_type current_free_node_offset = ToOffset(current_free_node);
-				if (!prev_free_node->next_offset.compare_exchange_weak(current_free_node_offset, current_free_node->next_offset)) {
+				std::size_t current_free_node_index = ToIndex(current_free_node);
+				if (!prev_free_node->next_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index)) {
 					// The block was removed from the free list by another thread, go back to the
 					// beginning of the free list and try again.
 					current_free_node = FirstFreeNode();
@@ -219,12 +216,12 @@ T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
 			}
 			else {
 				// The block we found is the first block in the free list, update the free list
-				// offset. Again this needs to be done atomically or we need to move back to the
+				// index. Again this needs to be done atomically or we need to move back to the
 				// beginning of the free list and try again.
 				// This design likey results in a lot of fragmentation. We should consider
 				// using a free list that is sorted by size
-				offset_type current_free_node_offset = ToOffset(current_free_node);
-				if (!state()->free_list_offset.compare_exchange_weak(current_free_node_offset, current_free_node->next_offset)) {
+				std::size_t current_free_node_index = ToIndex(current_free_node);
+				if (!state()->free_list_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index)) {
 					// The block was removed from the free list by another thread, go back to the
 					// beginning of the free list and try again.
 					current_free_node = FirstFreeNode();
@@ -234,7 +231,7 @@ T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
 
 			// Return a pointer to the data in the new block
 			AllocatedNodeHeader* node_header_ptr = reinterpret_cast<AllocatedNodeHeader*>(current_free_node);
-			return NewAllocatedNodeAtOffset(ToOffset(node_header_ptr), std::max(bytes_needed, free_node_size));
+			return NewAllocatedNodeAtIndex(ToIndex(node_header_ptr), std::max(bytes_needed, free_node_size));
 		}
 
 		// Move to the next block in the free list
@@ -250,39 +247,39 @@ T* SharedMemoryAllocator<T>::Allocate(size_type bytes) {
 	// is large enough for an allocation.
 	// We don't want to insert a new node multiple times for a single chunk, so we need to make
 	// sure that the free list head encodes the last chunk that was allocated.
-	offset_type data_offset = buffer_.size();
+	std::size_t data_index = buffer_.size();
 	buffer_.Resize(buffer_.size() + bytes_needed);
 
 	// Return a pointer to the data in the new block
-	T* new_node = NewAllocatedNodeAtOffset(data_offset, bytes_needed);
+	T* new_node = NewAllocatedNodeAtIndex(data_index, bytes_needed);
 	NotifyObserversOfResize();
 
 	return new_node;
 }
 
-// Deallocate memory at the given pointer offset
+// Deallocate memory at the given pointer index
 template<typename T>
-void SharedMemoryAllocator<T>::Deallocate(offset_type offset) {
-	if (offset < 0)
+void SharedMemoryAllocator<T>::Deallocate(std::size_t index) {
+	if (index < 0)
 		return;
-	T* ptr = ToPtr<T>(offset);
+	T* ptr = ToPtr<T>(index);
 	Deallocate(ptr);
 }
 
 template<typename T>
 void SharedMemoryAllocator<T>::Deallocate(T* ptr) {
 	AllocatedNodeHeader* current_node = GetNode(ptr);
-	offset_type node_header_offset = ToOffset(current_node);
+	std::size_t node_header_index = ToIndex(current_node);
 
 	// Add the block to the free list
 	while (true) {
 		// Get the current head of the free list
-		offset_type free_list_offset = state()->free_list_offset;
+		std::size_t free_list_index = state()->free_list_index;
 		// Set the next pointer of the new free node to the current head of the free list
-		FreeNodeHeader* free_node_ptr = ToPtr<FreeNodeHeader>(node_header_offset);
-		free_node_ptr->next_offset.store(free_list_offset);
+		FreeNodeHeader* free_node_ptr = ToPtr<FreeNodeHeader>(node_header_index);
+		free_node_ptr->next_index.store(free_list_index);
 		// Try to set the head of the free list to the new free node
-		if (state()->free_list_offset.compare_exchange_weak(free_list_offset, node_header_offset)) {
+		if (state()->free_list_index.compare_exchange_weak(free_list_index, node_header_index)) {
 			break;
 		}
 		// The head of the free list was updated by another thread, try again
@@ -290,23 +287,23 @@ void SharedMemoryAllocator<T>::Deallocate(T* ptr) {
 }
 
 template<typename T>
-typename SharedMemoryAllocator<T>::size_type SharedMemoryAllocator<T>::GetCapacity(offset_type offset) const {
-	if (offset < 0) {
+std::size_t SharedMemoryAllocator<T>::GetCapacity(std::size_t index) const {
+	if (index < 0) {
 		return 0;
 	}
-	offset_type node_header_offset = offset - sizeof(AllocatedNodeHeader);
-	const AllocatedNodeHeader* current_node = ToPtr<AllocatedNodeHeader>(node_header_offset);
+	std::size_t node_header_index = index - sizeof(AllocatedNodeHeader);
+	const AllocatedNodeHeader* current_node = ToPtr<AllocatedNodeHeader>(node_header_index);
 	return (current_node->size - sizeof(AllocatedNodeHeader)) / sizeof(T);
 }
 
 // Returns the size of the allocated block at the given pointer.
 template<typename T>
-typename SharedMemoryAllocator<T>::size_type SharedMemoryAllocator<T>::GetCapacity(T* ptr) {
+std::size_t SharedMemoryAllocator<T>::GetCapacity(T* ptr) {
 	if (ptr == nullptr) {
 		return 0;
 	}
-	offset_type node_header_offset = ToOffset(reinterpret_cast<AllocatedNodeHeader*>(ptr) - 1);
-	AllocatedNodeHeader* curent_node = ToPtr<AllocatedNodeHeader>(node_header_offset);
+	std::size_t node_header_index = ToIndex(reinterpret_cast<AllocatedNodeHeader*>(ptr) - 1);
+	AllocatedNodeHeader* curent_node = ToPtr<AllocatedNodeHeader>(node_header_index);
 	return (curent_node->size - sizeof(AllocatedNodeHeader)) / sizeof(T);
 }
 

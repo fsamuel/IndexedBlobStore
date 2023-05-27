@@ -387,10 +387,8 @@ private:
 class BlobStore : public SharedMemoryAllocatorObserver {
 public:
 	using Allocator = SharedMemoryAllocator<char>;
-	using offset_type = typename Allocator::offset_type;
-	using index_type = size_t;
 
-	static constexpr index_type InvalidIndex = static_cast<index_type>(-1);
+	static constexpr std::size_t InvalidIndex = std::numeric_limits<std::size_t>::max();
 
 	// Constructor that initializes the BlobStore with the provided metadata and data shared memory buffers.
 	BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& dataBuffer);
@@ -454,13 +452,13 @@ public:
 		memcpy(ptr, obj, metadata.size);
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
-		clone_metadata.offset = allocator_.ToOffset(ptr);
+		clone_metadata.offset = allocator_.ToIndex(ptr);
 		clone_metadata.lock_state = 0;
 		clone_metadata.next_free_index = -1;
 		return BlobStoreObject<typename std::remove_const<T>::type>(this, clone_index);
 	}
 
-	bool CompareAndSwap(size_t index, BlobStore::offset_type expected_offset, BlobStore::offset_type new_offset) {
+	bool CompareAndSwap(size_t index, std::size_t expected_offset, std::size_t new_offset) {
 		if (index == BlobStore::InvalidIndex) {
 			return false;
 		}
@@ -625,7 +623,7 @@ private:
 		// TODO(fsamuel): Can we get this from the allocator?
 		size_t size;
 		// The offset of the blob in the shared memory buffer.
-		std::atomic<offset_type> offset;
+		std::atomic<std::size_t> offset;
 		// The lock state of the blob.
 		std::atomic<int> lock_state;
 		// This field can take one of three states:
@@ -638,7 +636,7 @@ private:
 
 		BlobMetadata() : size(0), offset(0), lock_state(0), next_free_index(0) {}
 
-		BlobMetadata(size_t size, size_t count, offset_type offset) : size(size), offset(offset), lock_state(0), next_free_index(-1) {}
+		BlobMetadata(size_t size, size_t count, std::size_t offset) : size(size), offset(offset), lock_state(0), next_free_index(-1) {}
 
 		BlobMetadata(const BlobMetadata& other) : size(other.size), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index.load()) {}
 
@@ -688,7 +686,7 @@ private:
 			return nullptr;
 		}
 		
-		offset_type offset_value = metadata->offset;
+		std::size_t offset_value = metadata->offset;
 		if (offset != nullptr) {
 			*offset = offset_value;
 		}
@@ -850,7 +848,7 @@ typename std::enable_if<
 	utils::Construct(reinterpret_cast<StorageType*>(ptr), std::forward<Args>(args)...);
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
-	metadata.offset = allocator_.ToOffset(ptr);
+	metadata.offset = allocator_.ToIndex(ptr);
 	metadata.lock_state = 0;
 	metadata.next_free_index = -1;
 	return BlobStoreObject<T>(this, index);
@@ -870,7 +868,7 @@ typename std::enable_if<
 	std::uninitialized_copy(initList.begin(), initList.end(), reinterpret_cast<ElementType*>(ptr));
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
-	metadata.offset = allocator_.ToOffset(ptr);
+	metadata.offset = allocator_.ToIndex(ptr);
 	metadata.lock_state = 0;
 	metadata.next_free_index = -1;
 	return BlobStoreObject<T>(this, index);
