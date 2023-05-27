@@ -14,29 +14,30 @@ static std::size_t next_power_of_two(std::size_t v) {
 
 ChunkManager::ChunkManager(const std::string& name_prefix, std::size_t initial_chunk_size)
     : name_prefix_(name_prefix), chunk_size_(next_power_of_two(initial_chunk_size)) {
-    chunks_.push_back(SharedMemoryBuffer(name_prefix_ + "_0", chunk_size_ + sizeof(std::size_t)));
-    num_chunks_ = reinterpret_cast<std::atomic<std::size_t>*>(chunks_[0].data());
+    chunks_.push_back(SharedMemoryBuffer(name_prefix_ + "_0", chunk_size_ + sizeof(std::uint64_t)));
+    num_chunks_encoded_ = reinterpret_cast<std::atomic<std::uint64_t>*>(chunks_[0].data());
     load_chunks_if_necessary();
 }
 
 ChunkManager::ChunkManager(ChunkManager&& other)
-    : name_prefix_(std::move(other.name_prefix_)), chunk_size_(other.chunk_size_), chunks_(std::move(other.chunks_)), num_chunks_(other.num_chunks_) {}
+    : name_prefix_(std::move(other.name_prefix_)), chunk_size_(other.chunk_size_), chunks_(std::move(other.chunks_)), num_chunks_encoded_(other.num_chunks_encoded_) {}
 
 ChunkManager& ChunkManager::operator=(ChunkManager&& other) {
     name_prefix_ = std::move(other.name_prefix_);
 	chunk_size_ = std::move(other.chunk_size_);
 	chunks_ = std::move(other.chunks_);
-	num_chunks_ = other.num_chunks_;
+	num_chunks_encoded_ = other.num_chunks_encoded_;
 	return *this;
 }
 
 std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index, uint8_t** data, std::size_t* chunk_size) {
     while (true) {
-        std::size_t num_chunks = num_chunks_->load();
+        std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();
+        std::uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
         if (chunk_index < num_chunks) {
             std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
             if (chunk_index < chunks_.size()) {
-                std::size_t offset = chunk_index == 0 ? sizeof(std::size_t) : 0;
+                std::size_t offset = chunk_index == 0 ? sizeof(std::uint64_t) : 0;
                 *data = reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + offset;
                 *chunk_size = chunk_size_ * (static_cast<std::size_t>(1) << chunk_index);
                 return 0;
@@ -44,7 +45,9 @@ std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index, uint8_t** data
             // Another thread or process has resized the chunks vector. Try again.
             continue;
         }
-        if (num_chunks_->compare_exchange_strong(num_chunks, chunk_index + 1)) {
+        if (num_chunks_encoded_->compare_exchange_strong(
+                num_chunks_encoded,
+                set_num_chunks(num_chunks_encoded, chunk_index + 1))) {
             std::size_t num_chunks_loaded = load_chunks_if_necessary();
             std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
             if (chunk_index < chunks_.size()) {
@@ -59,16 +62,17 @@ std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index, uint8_t** data
 
 void ChunkManager::remove_chunk() {
     while (true) {
-        std::size_t num_chunks = *num_chunks_;
+        std::uint64_t num_chunks_encoded = *num_chunks_encoded_;
+        std::uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
         if (num_chunks <= 1) {
             return;
         }
-        if (num_chunks_->compare_exchange_strong(num_chunks, num_chunks - 1)) {
+        if (num_chunks_encoded_->compare_exchange_strong(num_chunks_encoded, decrement_num_chunks(num_chunks_encoded))) {
             // TODO(fsamuel): It's not safe to delete files corresponding to chunks because another
             // thread might increment the chunk count and start using the chunk again.
             // In order to be safe, we need a way to know when a chunk is no longer in use.
             // For now, we just keep the files around.
-            // Idea: perhaps we can keep a separate increment and decrement count for each chunk.
+            // Idea:
             // When a new chunk is added, the state of the counts is stored in the previous chunk.
             // When a chunk is removed, the state of the counts is stored in the previous chunk.
             // The state in the previous chunk is used to determine the file name of the next chunk.
@@ -81,8 +85,9 @@ void ChunkManager::remove_chunk() {
     }
 }
 
-std::size_t ChunkManager::num_chunks() const {
-    return *num_chunks_;
+std::uint64_t ChunkManager::num_chunks() const {
+    std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();
+    return decode_num_chunks(num_chunks_encoded);
 }
 
 uint8_t* ChunkManager::at(std::uint64_t index) {
@@ -94,16 +99,17 @@ uint8_t* ChunkManager::at(std::uint64_t index) {
 uint8_t* ChunkManager::at(std::size_t chunk_index, std::size_t offset_in_chunk) {
     std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
     if (chunk_index == 0) {
-        offset_in_chunk += sizeof(std::size_t);
+        offset_in_chunk += sizeof(std::uint64_t);
     }
     return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + offset_in_chunk;
 }
 
 std::size_t ChunkManager::capacity() const {
-    std::size_t num_chunks = num_chunks_->load();
+    std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();
+    std::uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
     std::size_t chunk_size = chunk_size_;
     std::size_t total_capacity = 0;
-    for (std::size_t i = 0; i < num_chunks; ++i) {
+    for (std::uint64_t i = 0; i < num_chunks; ++i) {
         total_capacity += chunk_size;
         chunk_size *= 2;
     }
@@ -111,17 +117,50 @@ std::size_t ChunkManager::capacity() const {
 }
 
 std::size_t ChunkManager::load_chunks_if_necessary() {
-    std::size_t num_chunks = num_chunks_->load();
-    if (num_chunks == 0) {
-        if (num_chunks_->compare_exchange_strong(num_chunks, 1)) {
+    std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();
+    if (num_chunks_encoded == 0) {
+        std::uint64_t new_num_chunks_encoded = increment_num_chunks(num_chunks_encoded);
+        if (num_chunks_encoded_->compare_exchange_strong(num_chunks_encoded, new_num_chunks_encoded)) {
             return 0;
 		}
     }
     std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-    std::size_t num_chunks_loaded = 0;
+    std::uint64_t num_chunks_loaded = 0;
+    uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
     while (chunks_.size() < num_chunks) {
         chunks_.push_back(SharedMemoryBuffer(name_prefix_ + "_" + std::to_string(chunks_.size()), chunk_size_ << chunks_.size()));
         ++num_chunks_loaded;
     }
     return num_chunks_loaded;
+}
+
+std::uint64_t ChunkManager::decode_num_chunks(uint64_t num_chunks_encoded) const {
+    // The first 32-bits of num_chunks_encoded are the number of increments.
+    // The next 32-bits of num_chunks_encoded are the number of decrements.
+    // The number of chunks is the number of increments minus the number of decrements.
+    return (num_chunks_encoded >> 32) - (num_chunks_encoded & ((1ull << 32) - 1));
+}
+
+std::uint64_t ChunkManager::increment_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t value) const {
+    return ((num_chunks_encoded + (value << 32)) & 0xFFFFFFFF00000000) | (num_chunks_encoded & ((1ull << 32) - 1));
+}
+
+std::uint64_t ChunkManager::decrement_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t value) const {
+   return (num_chunks_encoded & 0xFFFFFFFF00000000) | (num_chunks_encoded + value) & ((1ull << 32) - 1);
+}
+
+std::uint64_t ChunkManager::set_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t num_chunks) const {
+    uint64_t num_chunks_decoded = decode_num_chunks(num_chunks_encoded);
+    if (num_chunks_decoded > num_chunks) {
+        uint64_t decrement_count = num_chunks_decoded - num_chunks;
+        return decrement_num_chunks(num_chunks_encoded, decrement_count);
+    }
+    else if (num_chunks_decoded < num_chunks) {
+		uint64_t increment_count = num_chunks - num_chunks_decoded;
+        return increment_num_chunks(num_chunks_encoded, increment_count);
+    }
+    else {
+		return num_chunks_encoded;
+	}
+
 }

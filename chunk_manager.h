@@ -52,6 +52,23 @@ private:
     // Returns the number of chunks that were added.
     std::size_t load_chunks_if_necessary();
 
+    // num_chunks consists of two 32-bit quantities: the number of increments and the number of decrements.
+    // 32-bit quantities into a single number that represents the
+    // number of chunks.
+    std::uint64_t decode_num_chunks(uint64_t num_chunks_encoded) const;
+
+    // Increments the first quantity of the encoded num_chunks.
+    std::uint64_t increment_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t value = 1ull) const;
+
+    // Increments the second quanity of the encoded num_chunks.
+    std::uint64_t decrement_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t value = 1ull) const;
+
+    // Sets the num_chunks to the specified value. If the specified value is less than the current value,
+    // then the function increments the second quantity of the encoded num_chunks. If the specified value
+    // is greater than the current value, then the function increments the first quantity of the encoded
+    // num_chunks.
+    std::uint64_t set_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t num_chunks) const;
+
     // Prefix for the names of the shared memory buffers.
     std::string name_prefix_;
     // The size of the first chunk in bytes.
@@ -59,7 +76,7 @@ private:
     // Vector of SharedMemoryBuffers that store the chunks of the ChunkManager.
     std::vector<SharedMemoryBuffer> chunks_;
     // The number of chunks in the ChunkManager, cached from the first chunk for performance.
-    std::atomic<std::size_t>* num_chunks_;
+    std::atomic<std::uint64_t>* num_chunks_encoded_;
     // Mutex for protecting the chunks vector. This is needed because the vector is modified
     // when a new chunk is added or removed.
     mutable std::shared_mutex chunks_rw_mutex_;
