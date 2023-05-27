@@ -131,6 +131,7 @@
     <ClInclude Include="b_plus_tree.h" />
     <ClInclude Include="b_plus_tree_base.h" />
     <ClInclude Include="chunked_vector.h" />
+    <ClInclude Include="chunk_manager.h" />
     <ClInclude Include="fixed_string.h" />
     <ClInclude Include="nodes.h" />
     <ClInclude Include="storage_traits.h" />
@@ -144,6 +145,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="blob_store.cpp" />
+    <ClCompile Include="chunk_manager.cpp" />
     <ClCompile Include="fixed_string.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="nodes.cpp" />

@@ -38,6 +38,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ClInclude Include="chunked_vector.h" />
+    <ClInclude Include="chunk_manager.h" />
     <ClInclude Include="fixed_string.h" />
     <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
@@ -47,6 +48,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="chunked_vector_test.cpp" />
+    <ClCompile Include="chunk_manager.cpp" />
+    <ClCompile Include="chunk_manager_test.cpp" />
     <ClCompile Include="fixed_string.cpp" />
     <ClCompile Include="fixed_string_test.cpp" />
     <ClCompile Include="nodes.cpp" />

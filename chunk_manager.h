@@ -1,0 +1,67 @@
+#ifndef CHUNK_MANAGER_H_
+#define CHUNK_MANAGER_H_
+
+#include <atomic>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <vector>
+
+#include "shared_memory_buffer.h"
+
+// ChunkManager is a data structure that manages chunks of shared memory.
+// Each chunk is double the size of the previous chunk.
+// The number of chunks is stored in the first chunk for persistence.
+// It supports basic operations like adding a chunk at the end, removing a chunk at the end,
+// and allocating a contiguous space of a certain size.
+class ChunkManager {
+public:
+    // Constructs a ChunkManager with the specified name_prefix for the shared memory buffers.
+    // Each SharedMemoryBuffer will be named as name_prefix_i, where i is the chunk index.
+    // Reads the number of chunks from the first chunk and adds any necessary chunks.
+    ChunkManager(const std::string& name_prefix, std::size_t initial_chunk_size);
+
+    ChunkManager(ChunkManager&& other);
+    ChunkManager& operator=(ChunkManager&& other);
+
+    // Adds a new chunk to the end of the ChunkManager and updates the number of chunks in the first chunk.
+    void add_chunk(size_t* chunk_index, size_t* chunk_size);
+
+    // Removes the last chunk from the ChunkManager and updates the number of chunks in the first chunk.
+    void remove_chunk();
+
+    // Returns the number of chunks that the ChunkManager is managing.
+    std::size_t num_chunks() const;
+
+    // Returns a pointer to the specified index in the ChunkManager.
+    uint8_t* at(std::uint64_t index);
+
+    // Returns a pointer to the specified index in the ChunkManager.
+    // This version of the function takes a chunk index and an offset in the chunk.
+    uint8_t* at(std::size_t chunk_index, std::size_t offset_in_chunk);
+
+    // Returns a pointer to the start of the chunk at the specified index.
+    uint8_t* get_chunk_start(std::size_t chunk_index);
+
+    // Returns the capacity of the ChunkManager.
+    std::size_t capacity() const;
+
+private:
+    // Loads the number of chunks from the first chunk and adds any necessary chunks.
+    void load_chunks();
+
+    // Prefix for the names of the shared memory buffers.
+    std::string name_prefix_;
+    // The size of the first chunk in bytes.
+    std::size_t chunk_size_;
+    // Vector of SharedMemoryBuffers that store the chunks of the ChunkManager.
+    std::vector<SharedMemoryBuffer> chunks_;
+    // The number of chunks in the ChunkManager, cached from the first chunk for performance.
+    std::atomic<std::uint32_t>* num_chunks_;
+    // Mutex for protecting the chunks vector. This is needed because the vector is modified
+    // when a new chunk is added or removed.
+    mutable std::shared_mutex chunks_rw_mutex_;
+};
+
+#endif // CHUNK_MANAGER_H_
