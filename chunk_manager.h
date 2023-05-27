@@ -44,9 +44,6 @@ public:
     // This version of the function takes a chunk index and an offset in the chunk.
     uint8_t* at(std::size_t chunk_index, std::size_t offset_in_chunk);
 
-    // Returns a pointer to the start of the chunk at the specified index.
-    uint8_t* get_chunk_start(std::size_t chunk_index);
-
     // Returns the capacity of the ChunkManager.
     std::size_t capacity() const;
 

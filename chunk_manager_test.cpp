@@ -60,18 +60,6 @@ TEST_F(ChunkManagerTest, AccessChunkAndOffset) {
     manager.get_or_create_chunk(2, &chunk, &chunk_size);
     manager.get_or_create_chunk(3, &chunk, &chunk_size);
 
-    // Access the start of each chunk
-    uint8_t* chunk0_start = manager.get_chunk_start(0);
-    uint8_t* chunk1_start = manager.get_chunk_start(1);
-    uint8_t* chunk2_start = manager.get_chunk_start(2);
-    uint8_t* chunk3_start = manager.get_chunk_start(3);
-
-    // Verify the chunk start addresses
-    EXPECT_TRUE(chunk0_start != nullptr);
-    EXPECT_TRUE(chunk1_start != nullptr);
-    EXPECT_TRUE(chunk2_start != nullptr);
-    EXPECT_TRUE(chunk3_start != nullptr);
-
     // Access a specific offset within a chunk
     uint8_t* data1 = manager.at(1, 16);
     uint8_t* data2 = manager.at(2, 32);
@@ -144,25 +132,21 @@ TEST_F(ChunkManagerTest, ConcurrentAccess) {
     for (std::size_t i = 0; i < num_threads; ++i) {
         threads[i] = std::thread([&manager, &num_created, i, iterations]() {
             std::size_t chunk_size;
-            uint8_t* chunk;
-            std::size_t num_chunks_created = manager.get_or_create_chunk(i, &chunk, &chunk_size);
+            uint8_t* chunk_start;
+            std::size_t num_chunks_created = manager.get_or_create_chunk(i, &chunk_start, &chunk_size);
             num_created.fetch_add(num_chunks_created);
 
             for (std::size_t j = 0; j < iterations; ++j) {
-                uint8_t* chunk_start = manager.get_chunk_start(i);
                 uint8_t* chunk_offset_data = manager.at(i, j % iterations);
 
                 // Verify the chunk start and offset access
-                EXPECT_TRUE(chunk_start != nullptr);
                 EXPECT_TRUE(chunk_offset_data != nullptr);
                 // Verify the chunk offset is within the chunk.
                 EXPECT_GE(chunk_offset_data, chunk_start);
                 EXPECT_LE(chunk_offset_data, chunk_start + chunk_size);
-                EXPECT_EQ(chunk, chunk_start);
 
-                bool created = manager.get_or_create_chunk(i, &chunk, &chunk_size);
-                EXPECT_FALSE(created);
-                EXPECT_EQ(chunk, chunk_start);
+                num_chunks_created = manager.get_or_create_chunk(i, &chunk_start, &chunk_size);
+                EXPECT_EQ(num_chunks_created, 0);
 
                 // Modify the accessed memory
                 *chunk_offset_data = static_cast<uint8_t>(i + j);

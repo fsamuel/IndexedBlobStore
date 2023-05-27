@@ -99,16 +99,6 @@ uint8_t* ChunkManager::at(std::size_t chunk_index, std::size_t offset_in_chunk) 
     return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + offset_in_chunk;
 }
 
-uint8_t* ChunkManager::get_chunk_start(std::size_t chunk_index) {
-    std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-    if (chunk_index == 0) {
-        return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + sizeof(std::size_t);
-    }
-    else {
-        return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data());
-    }
-}
-
 std::size_t ChunkManager::capacity() const {
     std::size_t num_chunks = num_chunks_->load();
     std::size_t chunk_size = chunk_size_;
