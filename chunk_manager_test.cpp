@@ -30,32 +30,35 @@ TEST_F(ChunkManagerTest, AddChunkAndRemoveChunk) {
     EXPECT_EQ(manager.num_chunks(), 1);
 
     // Add 3 more chunks
-    size_t chunk_index;
-    size_t chunk_size;
-    manager.add_chunk(&chunk_index, &chunk_size);
-    manager.add_chunk(&chunk_index, &chunk_size);
-    manager.add_chunk(&chunk_index, &chunk_size);
+    uint8_t* chunk;
+    std::size_t chunk_size;
+    std::size_t chunks_created = manager.get_or_create_chunk(0, &chunk, &chunk_size);
+    EXPECT_EQ(chunks_created, 0);
+    chunks_created = manager.get_or_create_chunk(1, &chunk, &chunk_size);
+    EXPECT_EQ(chunks_created, 1);
+    chunks_created = manager.get_or_create_chunk(2, &chunk, &chunk_size);
+    EXPECT_EQ(chunks_created, 1);
 
-    // Now, there should be 4 chunks
-    EXPECT_EQ(manager.num_chunks(), 4);
+    // Now, there should be 3 chunks
+    EXPECT_EQ(manager.num_chunks(), 3);
 
     // Remove 2 chunks
     manager.remove_chunk();
     manager.remove_chunk();
 
     // Now, there should be 2 chunks
-    EXPECT_EQ(manager.num_chunks(), 2);
+    EXPECT_EQ(manager.num_chunks(), 1);
 }
 
 TEST_F(ChunkManagerTest, AccessChunkAndOffset) {
     ChunkManager manager("test_chunk", 64);
 
     // Add 3 more chunks
-    size_t chunk_index;
-    size_t chunk_size;
-	manager.add_chunk(&chunk_index, &chunk_size);
-    manager.add_chunk(&chunk_index, &chunk_size);
-    manager.add_chunk(&chunk_index, &chunk_size);
+    uint8_t* chunk;
+    std::size_t chunk_size;
+	manager.get_or_create_chunk(1, &chunk, &chunk_size);
+    manager.get_or_create_chunk(2, &chunk, &chunk_size);
+    manager.get_or_create_chunk(3, &chunk, &chunk_size);
 
     // Access the start of each chunk
     uint8_t* chunk0_start = manager.get_chunk_start(0);
@@ -95,11 +98,9 @@ TEST_F(ChunkManagerTest, TotalCapacity) {
 
     // Add 3 more chunks
     {
-        size_t chunk_index;
-        size_t chunk_size;
-        manager.add_chunk(&chunk_index, &chunk_size);
-        manager.add_chunk(&chunk_index, &chunk_size);
-        manager.add_chunk(&chunk_index, &chunk_size);
+        uint8_t* chunk;
+        std::size_t chunk_size;
+        manager.get_or_create_chunk(3, &chunk, &chunk_size);
     }
 
     // The total capacity should be the sum of capacities of all chunks
@@ -112,25 +113,44 @@ TEST_F(ChunkManagerTest, TotalCapacity) {
     EXPECT_EQ(manager.capacity(), total_capacity);
 }
 
+// Tests get_or_create_chunk() verifying that it will not create a new chunk
+// if the chunk already exists and that it can create multiple chunks to get
+// to the desired chunk.
+TEST_F(ChunkManagerTest, GetOrCreateChunk) {
+	ChunkManager manager("test_chunk", 64);
+
+	// Initially, there should be 1 chunk
+	EXPECT_EQ(manager.num_chunks(), 1);
+
+	// Add 3 more chunks
+	uint8_t* chunk;
+	std::size_t chunk_size;
+	std::size_t num_created = manager.get_or_create_chunk(5, &chunk, &chunk_size);
+    EXPECT_EQ(num_created, 5);
+    EXPECT_EQ(manager.num_chunks(), 6);
+    num_created = manager.get_or_create_chunk(2, &chunk, &chunk_size);
+    EXPECT_EQ(num_created, 0);
+    EXPECT_EQ(manager.num_chunks(), 6);
+}
 TEST_F(ChunkManagerTest, ConcurrentAccess) {
     const std::size_t chunk_size = 64;
     ChunkManager manager("test_chunk", chunk_size);
     const std::size_t num_threads = 8;
-    const std::size_t iterations = chunk_size * 2;
-  
+    const std::size_t iterations = chunk_size;
+    std::atomic<std::size_t> num_created(0);
     std::vector<std::thread> threads(num_threads);
 
     // Concurrently access and modify the ChunkManager
     for (std::size_t i = 0; i < num_threads; ++i) {
-        threads[i] = std::thread([&manager, i, iterations]() {
-            std::size_t chunk_index;
+        threads[i] = std::thread([&manager, &num_created, i, iterations]() {
             std::size_t chunk_size;
-            manager.add_chunk(&chunk_index, &chunk_size);
-            for (std::size_t j = 0; j < iterations; ++j) {
-                // Access a specific chunk and offset
+            uint8_t* chunk;
+            std::size_t num_chunks_created = manager.get_or_create_chunk(i, &chunk, &chunk_size);
+            num_created.fetch_add(num_chunks_created);
 
-                uint8_t* chunk_start = manager.get_chunk_start(chunk_index);
-                uint8_t* chunk_offset_data = manager.at(chunk_index, j % iterations);
+            for (std::size_t j = 0; j < iterations; ++j) {
+                uint8_t* chunk_start = manager.get_chunk_start(i);
+                uint8_t* chunk_offset_data = manager.at(i, j % iterations);
 
                 // Verify the chunk start and offset access
                 EXPECT_TRUE(chunk_start != nullptr);
@@ -138,9 +158,14 @@ TEST_F(ChunkManagerTest, ConcurrentAccess) {
                 // Verify the chunk offset is within the chunk.
                 EXPECT_GE(chunk_offset_data, chunk_start);
                 EXPECT_LE(chunk_offset_data, chunk_start + chunk_size);
+                EXPECT_EQ(chunk, chunk_start);
+
+                bool created = manager.get_or_create_chunk(i, &chunk, &chunk_size);
+                EXPECT_FALSE(created);
+                EXPECT_EQ(chunk, chunk_start);
 
                 // Modify the accessed memory
-                *chunk_offset_data = static_cast<uint8_t>(chunk_index + j);
+                *chunk_offset_data = static_cast<uint8_t>(i + j);
             }
         });
     }
@@ -150,15 +175,16 @@ TEST_F(ChunkManagerTest, ConcurrentAccess) {
         threads[i].join();
     }
 
-    EXPECT_EQ(manager.num_chunks(), num_threads + 1);
+    EXPECT_EQ(manager.num_chunks(), num_threads);
+    EXPECT_EQ(num_created.load(), num_threads - 1);
     // Perform additional verification after thread completion
     for (std::size_t i = 0; i < num_threads; ++i) {
         for (std::size_t j = 0; j < iterations; ++j) {
             // Access the same chunk and offset
-            uint8_t* chunk_offset_data = manager.at(i + 1, j % iterations);
+            uint8_t* chunk_offset_data = manager.at(i, j % iterations);
 
             // Verify the correctness of the modifications
-            EXPECT_EQ(*chunk_offset_data, static_cast<uint8_t>(i + j + 1));
+            EXPECT_EQ(*chunk_offset_data, static_cast<uint8_t>(i + j));
         }
     }
 }

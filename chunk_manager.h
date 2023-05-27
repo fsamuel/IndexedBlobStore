@@ -25,8 +25,11 @@ public:
     ChunkManager(ChunkManager&& other);
     ChunkManager& operator=(ChunkManager&& other);
 
-    // Adds a new chunk to the end of the ChunkManager and updates the number of chunks in the first chunk.
-    void add_chunk(size_t* chunk_index, size_t* chunk_size);
+    // Ensures that a chunk exists up to the specified chunk index, and returns
+    // a pointer to the chunk at that index. If the chunk already existed, then
+    // the function returns 0. If one or more chunks were added to get to the provided
+    // chunk index, then the function returns the number of chunks that were added.
+    std::size_t get_or_create_chunk(size_t chunk_index, uint8_t** data, std::size_t* chunk_size);
 
     // Removes the last chunk from the ChunkManager and updates the number of chunks in the first chunk.
     void remove_chunk();
@@ -49,7 +52,8 @@ public:
 
 private:
     // Loads the number of chunks from the first chunk and adds any necessary chunks.
-    void load_chunks();
+    // Returns the number of chunks that were added.
+    std::size_t load_chunks_if_necessary();
 
     // Prefix for the names of the shared memory buffers.
     std::string name_prefix_;
@@ -58,7 +62,7 @@ private:
     // Vector of SharedMemoryBuffers that store the chunks of the ChunkManager.
     std::vector<SharedMemoryBuffer> chunks_;
     // The number of chunks in the ChunkManager, cached from the first chunk for performance.
-    std::atomic<std::uint32_t>* num_chunks_;
+    std::atomic<std::size_t>* num_chunks_;
     // Mutex for protecting the chunks vector. This is needed because the vector is modified
     // when a new chunk is added or removed.
     mutable std::shared_mutex chunks_rw_mutex_;
