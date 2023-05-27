@@ -240,21 +240,19 @@ T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes) {
 	}
 
 	// No block of sufficient size was found, resize the buffer and allocate a new block.
-	// TODO(fsamuel): We can probably use something like ChunkedVector for resizing the buffer.
-	// We just need to make sure an allocation fully fits into a chunk.
-	// Idea: When we need a new chunk, create a free list node at the beginning of the chunk for
-	// the full size of the chunk. This will allow us to use the free list to find a chunk that
-	// is large enough for an allocation.
-	// We don't want to insert a new node multiple times for a single chunk, so we need to make
-	// sure that the free list head encodes the last chunk that was allocated.
+
+	// Get the current head of the free list
 	std::size_t data_index = buffer_.size();
 	buffer_.Resize(buffer_.size() + bytes_needed);
 
-	// Return a pointer to the data in the new block
-	T* new_node = NewAllocatedNodeAtIndex(data_index, bytes_needed);
+	// Set the next pointer of the new free node to the current head of the free list
+	AllocatedNodeHeader* allocated_node = ToPtr<AllocatedNodeHeader>(data_index);
+	allocated_node->size = bytes_needed;
+	Deallocate(data_index + sizeof(AllocatedNodeHeader));
+
 	NotifyObserversOfResize();
 
-	return new_node;
+	Allocate(bytes);
 }
 
 // Deallocate memory at the given pointer index
