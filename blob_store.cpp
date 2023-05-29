@@ -1,6 +1,6 @@
 #include "blob_store.h"
 
-BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& dataBuffer) :
+BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, ChunkManager&& dataBuffer) :
     allocator_(std::move(dataBuffer)),
     metadata_(std::move(metadataBuffer))
 {
@@ -50,35 +50,6 @@ void BlobStore::Drop(size_t index) {
         NotifyObserversOnDroppedBlob(index);
         return;
     }
-}
-
-void BlobStore::Compact() {
-    std::string buffer_name = allocator_.buffer_name();
-    SharedMemoryBuffer temp_buffer(buffer_name + "_data_compact");
-    Allocator new_allocator(std::move(temp_buffer));
-    for (size_t i = 0; i < metadata_.size(); ++i) {
-        BlobMetadata& metadata_entry = metadata_[i];
-
-        // Skip free slots
-        if (metadata_entry.next_free_index != -1) {
-            continue;
-        }
-
-        // Allocate memory in the new allocator and copy the data
-        char* new_ptr = new_allocator.Allocate(metadata_entry.size);
-        std::memcpy(new_ptr, allocator_.ToPtr<char>(metadata_entry.offset), metadata_entry.size);
-
-        // Update metadata with the new pointer
-        metadata_entry.offset = new_allocator.ToIndex(new_ptr);;
-    }
-
-    allocator_ = std::move(new_allocator);
-    std::remove(buffer_name.c_str());
-
-    // Rename the new shared memory file to the original name
-    std::rename((buffer_name + "_data_compact").c_str(), buffer_name.c_str());
-
-    NotifyObserversOnMemoryReallocated();
 }
 
 void BlobStore::AddObserver(BlobStoreObserver* observer) {

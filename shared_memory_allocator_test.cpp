@@ -1,18 +1,30 @@
 #include "shared_memory_allocator.h"
+#include "chunk_manager.h"
 #include "gtest/gtest.h"
 
 class SharedMemoryAllocatorTest : public ::testing::Test {
 protected:
     virtual void SetUp() {
         // create a shared memory allocator
-        std::remove("test_buffer");
-        SharedMemoryBuffer buffer("test_buffer", 1024);
-        shared_mem_allocator = new SharedMemoryAllocator<char>(std::move(buffer));
+        RemoveChunkFiles();
+        // The initial chunk size must be at least the size of the allocator header.
+        ChunkManager manager("test_buffer", 32);
+        shared_mem_allocator = new SharedMemoryAllocator<char>(std::move(manager));
     }
 
     virtual void TearDown() {
         // cleanup the shared memory allocator
         delete shared_mem_allocator;
+        RemoveChunkFiles();
+    }
+
+    void RemoveChunkFiles() {
+        // Delete all files with the prefix "test_chunk"
+        // Do this in case the previous test failed and left some files behind
+        for (int i = 0; i < 20; ++i) {
+            std::string filename = "test_buffer_" + std::to_string(i);
+            std::remove(filename.c_str());
+        }
     }
 
     SharedMemoryAllocator<char>* shared_mem_allocator;
@@ -30,7 +42,7 @@ TEST_F(SharedMemoryAllocatorTest, FreeMemory) {
     shared_mem_allocator->Deallocate(ptr);
 
     // attempt to free the same pointer again should fail
-    EXPECT_DEATH(shared_mem_allocator->Deallocate(ptr), "");
+    EXPECT_FALSE(shared_mem_allocator->Deallocate(ptr));
 }
 
 TEST_F(SharedMemoryAllocatorTest, FreeNullPointer) {

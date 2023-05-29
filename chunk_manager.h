@@ -29,7 +29,7 @@ public:
     // a pointer to the chunk at that index. If the chunk already existed, then
     // the function returns 0. If one or more chunks were added to get to the provided
     // chunk index, then the function returns the number of chunks that were added.
-    std::size_t get_or_create_chunk(size_t chunk_index, uint8_t** data, std::size_t* chunk_size);
+    std::size_t get_or_create_chunk(size_t chunk_index, uint8_t** data, std::size_t* chunk_size) const;
 
     // Removes the last chunk from the ChunkManager and updates the number of chunks in the first chunk.
     void remove_chunk();
@@ -38,19 +38,27 @@ public:
     std::size_t num_chunks() const;
 
     // Returns a pointer to the specified index in the ChunkManager.
-    uint8_t* at(std::uint64_t index);
+    uint8_t* at(std::uint64_t index) const;
 
     // Returns a pointer to the specified index in the ChunkManager.
     // This version of the function takes a chunk index and an offset in the chunk.
-    uint8_t* at(std::size_t chunk_index, std::size_t offset_in_chunk);
+    uint8_t* at(std::size_t chunk_index, std::size_t offset_in_chunk) const;
 
     // Returns the capacity of the ChunkManager.
     std::size_t capacity() const;
 
+    // Returns an encoded index that can be used to retrieve the chunk index
+    // and offset in the chunk. The chunk index is stored in the upper 32 bits,
+    // and the offset in the chunk is stored in the lower 32 bits.
+    std::uint64_t encode_index(std::size_t chunk_index, std::size_t offset_in_chunk) const;
+
+    // Returns the chunk index from the encoded index.
+    std::size_t chunk_index(std::uint64_t encoded_index) const;
+
 private:
     // Loads the number of chunks from the first chunk and adds any necessary chunks.
     // Returns the number of chunks that were added.
-    std::size_t load_chunks_if_necessary();
+    std::size_t load_chunks_if_necessary() const;
 
     // num_chunks consists of two 32-bit quantities: the number of increments and the number of decrements.
     // 32-bit quantities into a single number that represents the
@@ -74,7 +82,9 @@ private:
     // The size of the first chunk in bytes.
     std::size_t chunk_size_;
     // Vector of SharedMemoryBuffers that store the chunks of the ChunkManager.
-    std::vector<SharedMemoryBuffer> chunks_;
+    // This is mutable because the vector is modified when a new chunk is added or removed
+    // which can happen even when just reading from the ChunkManager.
+    mutable std::vector<SharedMemoryBuffer> chunks_;
     // The number of chunks in the ChunkManager, cached from the first chunk for performance.
     std::atomic<std::uint64_t>* num_chunks_encoded_;
     // Mutex for protecting the chunks vector. This is needed because the vector is modified

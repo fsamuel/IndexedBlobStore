@@ -1,25 +1,38 @@
 #include "blob_store.h"
 #include "gtest/gtest.h"
 
+#include "chunk_manager.h"
 #include "fixed_string.h"
 #include "nodes.h"
 
 class BlobStoreTest : public ::testing::Test {
 protected:
 	virtual void SetUp() {
-		std::remove("DataBuffer");
-		std::remove("MetadataBuffer");
+		RemoveChunkFiles();
 		// create a shared memory allocator
-		dataBuffer = new SharedMemoryBuffer("DataBuffer", 4096);
+		dataBuffer = new ChunkManager("DataBuffer", 4096);
 		metadataBuffer = new SharedMemoryBuffer("MetadataBuffer", 4096);
 	}
 
 	virtual void TearDown() {
 		delete dataBuffer;
 		delete metadataBuffer;
+		RemoveChunkFiles();
 	}
 
-	SharedMemoryBuffer *dataBuffer = nullptr;
+	void RemoveChunkFiles() {
+		// Delete all files with the prefix "test_chunk"
+		// Do this in case the previous test failed and left some files behind
+		for (int i = 0; i < 20; ++i) {
+			std::string filename = "DataBuffer_" + std::to_string(i);
+			std::remove(filename.c_str());
+			filename = "MetadataBuffer_" + std::to_string(i);
+			std::remove(filename.c_str());
+		}
+		std::remove("MetadataBuffer");
+
+	}
+	ChunkManager *dataBuffer = nullptr;
 	SharedMemoryBuffer *metadataBuffer = nullptr;
 };
 
@@ -30,10 +43,10 @@ TEST_F(BlobStoreTest, CreateEmptyBlobStore) {
 
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	BlobStoreObject<char> ptr1 = store.New<char>(100);
-	strcpy(&*ptr1, "This is a test.");
-	BlobStoreObject<char> ptr2 = store.New<char>(100);
-	strcpy(&*ptr2, "Hello World!");
+	BlobStoreObject<std::string> ptr1 = store.New<std::string>("This is a test.");
+	//strcpy(&*ptr1, "This is a test.");
+	BlobStoreObject<std::string> ptr2 = store.New<std::string>("Hello World!");
+	//strcpy(&*ptr2, "Hello World!");
 	EXPECT_EQ(store.GetSize(), 2);
 }
 

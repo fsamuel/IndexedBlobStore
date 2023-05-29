@@ -391,7 +391,7 @@ public:
 	static constexpr std::size_t InvalidIndex = std::numeric_limits<std::size_t>::max();
 
 	// Constructor that initializes the BlobStore with the provided metadata and data shared memory buffers.
-	BlobStore(SharedMemoryBuffer&& metadataBuffer, SharedMemoryBuffer&& dataBuffer);
+	BlobStore(SharedMemoryBuffer&& metadataBuffer, ChunkManager&& dataBuffer);
 
 	// BlobStore destructor
 	~BlobStore();
@@ -495,9 +495,6 @@ public:
 		object = nullptr;
 		Drop(index);
 	}
-
-	// Compacts the BlobStore, removing any unused space between objects.
-	void Compact();
 		
 	// Returns the number of stored objects in the BlobStore.
 	size_t GetSize() const {

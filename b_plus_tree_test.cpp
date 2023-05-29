@@ -1,4 +1,5 @@
 #include "b_plus_tree.h"
+#include "chunk_manager.h"
 #include "gtest/gtest.h"
 #include "utils.h"
 
@@ -8,7 +9,7 @@ protected:
         std::remove("metadataBuffer");
         std::remove("dataBuffer");
         SharedMemoryBuffer metadataBuffer("metadataBuffer", utils::GetPageSize());
-        SharedMemoryBuffer dataBuffer("dataBuffer", 32768);
+        ChunkManager dataBuffer("dataBuffer", 4 * utils::GetPageSize());
         blob_store = new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
     }
 
