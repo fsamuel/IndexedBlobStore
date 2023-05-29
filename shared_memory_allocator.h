@@ -31,7 +31,7 @@ public:
 	explicit SharedMemoryAllocator(SharedMemoryAllocator&& other);
 
 	// Allocate memory for n objects of type T, and return a pointer to the first object
-	T* Allocate(std::size_t bytes);
+	T* Allocate(std::size_t bytes_requested);
 
 	// Deallocate memory at the given pointer index
 	bool Deallocate(std::size_t index);
@@ -49,13 +49,6 @@ public:
 	std::uint64_t ToIndex(AllocatedNodeHeader* ptr) const;
 
 	std::uint64_t ToIndex(FreeNodeHeader* ptr) const;
-
-	std::uint64_t ToIndexImpl(AllocatedNodeHeader* ptr, std::true_type, std::false_type) const;
-
-	std::uint64_t ToIndexImpl(FreeNodeHeader* ptr, std::false_type, std::true_type) const;
-
-	template<typename U>
-	std::uint64_t ToIndexImpl(U* ptr, std::false_type, std::false_type) const;
 
 	template<typename U>
 	std::uint64_t ToIndex(U* ptr) const {
@@ -117,8 +110,11 @@ private:
 	// Header for an allocated node in the allocator
 	struct AllocatedNodeHeader {
 		std::size_t size; // Size of the allocated block, including the header
-		std::size_t chunk_index; // index of the chunk in the chunk manager
-		std::size_t signature; // 
+		// The index of the chunk in the chunk manager. This is necessary to convert
+		// the pointer to an index relative to the start of the chunk.
+		std::size_t chunk_index;
+		// The magic number is used to verify that the header is valid.
+		std::size_t signature;
 	};
 
 	// Given a pointer, returns the AllocatedNodeHeader.
@@ -183,6 +179,13 @@ private:
 		return ToPtr<T>(index + sizeof(AllocatedNodeHeader));
 	}
 
+	std::uint64_t ToIndexImpl(AllocatedNodeHeader* ptr, std::true_type, std::false_type) const;
+
+	std::uint64_t ToIndexImpl(FreeNodeHeader* ptr, std::false_type, std::true_type) const;
+
+	template<typename U>
+	std::uint64_t ToIndexImpl(U* ptr, std::false_type, std::false_type) const;
+
 private:
 
 	ChunkManager chunk_manager_;  // Reference to the shared memory buffer used for allocation
@@ -203,9 +206,9 @@ SharedMemoryAllocator<T>::SharedMemoryAllocator(SharedMemoryAllocator&& other)
 }
 
 template<typename T>
-T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes) {
+T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes_requested) {
 	// Calculate the number of bytes needed for the memory block
-	std::size_t bytes_needed = CalculateBytesNeeded(bytes);
+	std::size_t bytes_needed = CalculateBytesNeeded(bytes_requested);
 
 	InitializeAllocatorStateIfNecessary();
 
@@ -282,7 +285,7 @@ T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes) {
 	}
 	// TODO(fsamuel): This might lead to stack overflow. We should consider
 	// a loop that allocates a new chunk and then tries to allocate the block.
-	return Allocate(bytes);
+	return Allocate(bytes_requested);
 }
 
 // Deallocate memory at the given pointer index
