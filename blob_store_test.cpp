@@ -30,8 +30,8 @@ protected:
 			std::remove(filename.c_str());
 		}
 		std::remove("MetadataBuffer");
-
 	}
+
 	ChunkManager *dataBuffer = nullptr;
 	SharedMemoryBuffer *metadataBuffer = nullptr;
 };

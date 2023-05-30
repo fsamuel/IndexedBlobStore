@@ -134,7 +134,7 @@ bool ChunkedVector<T>::empty() const {
 template <typename T>
 std::size_t ChunkedVector<T>::capacity() const {
     std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-    return (chunk_size_ * ((1 << chunks_.size()) - 1)) / ElementSize;
+    return (chunk_size_ * ((static_cast<std::size_t>(1) << chunks_.size()) - 1)) / ElementSize;
 }
 
 template <typename T>
@@ -149,14 +149,14 @@ void ChunkedVector<T>::load_chunks() {
 
     // Load the additional chunks
     for (std::size_t i = 1; i < num_chunks; ++i) {
-        chunks_.emplace_back(name_prefix_ + "_" + std::to_string(i), chunk_size_ * (1 << i));
+        chunks_.emplace_back(name_prefix_ + "_" + std::to_string(i), chunk_size_ * (static_cast<std::size_t>(1) << i));
     }
 }
 
 template <typename T>
 void ChunkedVector<T>::expand() {
     std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-    chunks_.emplace_back(name_prefix_ + "_" + std::to_string(chunks_.size()), chunk_size_ * (1 << chunks_.size()));
+    chunks_.emplace_back(name_prefix_ + "_" + std::to_string(chunks_.size()), chunk_size_ * (static_cast<std::size_t>(1) << chunks_.size()));
 }
 
 template <typename T>

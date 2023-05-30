@@ -175,13 +175,13 @@ void SharedMemoryBuffer::MapMemory(std::size_t size) {
 #ifdef _WIN32
 	// Windows implementation
 	// Create or open the file mapping
-	file_mapping_ = CreateFileMappingA(file_handle_, nullptr, PAGE_READWRITE, 0, size, nullptr);
+	file_mapping_ = CreateFileMappingA(file_handle_, nullptr, PAGE_READWRITE, 0u, static_cast<DWORD>(size), nullptr);
 	if (file_mapping_ == nullptr) {
 		data_ = nullptr;
 		return;
 	}
 	// Map the file into memory
-	data_ = MapViewOfFile(file_mapping_, FILE_MAP_ALL_ACCESS, 0, 0, size);
+	data_ = MapViewOfFile(file_mapping_, FILE_MAP_ALL_ACCESS, 0, 0, static_cast<DWORD>(size));
 	if (data_ == nullptr) {
 		CloseHandle(file_mapping_);
 		CloseHandle(file_handle_);

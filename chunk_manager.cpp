@@ -14,7 +14,7 @@ static std::size_t next_power_of_two(std::size_t v) {
 
 ChunkManager::ChunkManager(const std::string& name_prefix, std::size_t initial_chunk_size)
     : name_prefix_(name_prefix), chunk_size_(next_power_of_two(initial_chunk_size)) {
-    chunks_.push_back(SharedMemoryBuffer(name_prefix_ + "_0", chunk_size_ + sizeof(std::uint64_t)));
+    chunks_.emplace_back(name_prefix_ + "_0", chunk_size_ + sizeof(std::uint64_t));
     num_chunks_encoded_ = reinterpret_cast<std::atomic<std::uint64_t>*>(chunks_[0].data());
     load_chunks_if_necessary();
 }
@@ -160,7 +160,7 @@ std::size_t ChunkManager::load_chunks_if_necessary() {
     std::uint64_t num_chunks_loaded = 0;
     uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
     while (chunks_.size() < num_chunks) {
-        chunks_.push_back(SharedMemoryBuffer(name_prefix_ + "_" + std::to_string(chunks_.size()), chunk_size_ << chunks_.size()));
+        chunks_.emplace_back(name_prefix_ + "_" + std::to_string(chunks_.size()), chunk_size_ << chunks_.size());
         ++num_chunks_loaded;
     }
     return num_chunks_loaded;

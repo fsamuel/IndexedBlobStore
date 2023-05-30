@@ -6,17 +6,29 @@
 class BPlusTreeTest : public ::testing::Test {
 protected:
     virtual void SetUp() {
-        std::remove("metadataBuffer");
-        std::remove("dataBuffer");
-        SharedMemoryBuffer metadataBuffer("metadataBuffer", utils::GetPageSize());
-        ChunkManager dataBuffer("dataBuffer", 4 * utils::GetPageSize());
+		RemoveChunkFiles();
+        SharedMemoryBuffer metadataBuffer("MetadataBuffer", utils::GetPageSize());
+        ChunkManager dataBuffer("DataBuffer", 4 * utils::GetPageSize());
         blob_store = new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
     }
 
     virtual void TearDown() {
         // cleanup the BlobStore
         delete blob_store;
+		RemoveChunkFiles();
     }
+
+	void RemoveChunkFiles() {
+		// Delete all files with the prefix "test_chunk"
+		// Do this in case the previous test failed and left some files behind
+		for (int i = 0; i < 20; ++i) {
+			std::string filename = "DataBuffer_" + std::to_string(i);
+			std::remove(filename.c_str());
+			filename = "MetadataBuffer_" + std::to_string(i);
+			std::remove(filename.c_str());
+		}
+		std::remove("MetadataBuffer");
+	}
 
     BlobStore* blob_store;
 };
