@@ -6,11 +6,6 @@
 
 #include "chunk_manager.h"
 
-class SharedMemoryAllocatorObserver {
-public:
-	virtual void OnBufferResize() = 0;
-};
-
 // A simple allocator that allocates memory from a shared memory buffer. The allocator
 // maintains a free list of available blocks of memory. When a block is allocated, it is
 // removed from the free list. When a block is freed, it is added back to the free list.
@@ -66,14 +61,6 @@ public:
 		return reinterpret_cast<U*>(chunk_manager_.at(index));
 	}
 
-	void AddObserver(SharedMemoryAllocatorObserver* observer) {
-		observers_.push_back(observer);
-	}
-
-	void RemoveObserver(SharedMemoryAllocatorObserver* observer) {
-		observers_.erase(std::remove(observers_.begin(), observers_.end(), observer), observers_.end());
-	}
-
 	SharedMemoryAllocator& operator=(SharedMemoryAllocator&& other) noexcept {
 		chunk_manager_ = std::move(other.chunk_manager_);
 		return *this;
@@ -89,12 +76,6 @@ private:
 
 	AllocatorStateHeader* state() {
 		return reinterpret_cast<AllocatorStateHeader*>(chunk_manager_.at(0, 0));
-	}
-
-	void NotifyObserversOfResize() {
-		for (SharedMemoryAllocatorObserver* observer : observers_) {
-			observer->OnBufferResize();
-		}
 	}
 
 	// Header for a free/allocated node in the allocator
@@ -142,12 +123,11 @@ private:
 			state_header_ptr->free_list_index = InvalidIndex;
 			state_header_ptr->num_chunks = 1;
 
-			Node* allocated_node = reinterpret_cast<Node*>(chunk_manager_.at(sizeof(AllocatorStateHeader)));
-			allocated_node->size = chunk_manager_.capacity() - sizeof(AllocatorStateHeader);
-			allocated_node->chunk_index = 0;
-			allocated_node->version = 1;
-
-			Deallocate(reinterpret_cast<T*>(allocated_node + 1));
+			uint8_t* data = chunk_manager_.at(sizeof(AllocatorStateHeader));
+			T* buffer = NewAllocatedNode(data, 0, chunk_manager_.capacity() - sizeof(AllocatorStateHeader));
+			// An initial allocation always starts at verison 1.
+			GetNode(buffer)->version = 1;
+			Deallocate(buffer);
 		}
 
 	}
@@ -163,10 +143,11 @@ private:
 		return std::max(sizeof(Node) + sizeof(T) * n, sizeof(Node)) ;
 	}
 
-	T* NewAllocatedNodeAtIndex(std::size_t index, std::size_t size) {
-		Node* allocated_node = ToPtr<Node>(index);
+	T* NewAllocatedNode(uint8_t* buffer, std::size_t chunk_index, std::size_t size) {
+		Node* allocated_node = reinterpret_cast<Node*>(buffer);
 		allocated_node->size = size;
-		allocated_node->chunk_index = chunk_manager_.chunk_index(index);
+		allocated_node->chunk_index = chunk_index;
+		allocated_node->next_index.store(InvalidIndex);
 		allocated_node->version.fetch_add(1);
 		return reinterpret_cast<T*>(allocated_node + 1);
 	}
@@ -183,9 +164,8 @@ private:
 
 
 private:
-
-	ChunkManager chunk_manager_;  // Reference to the shared memory buffer used for allocation
-	std::vector<SharedMemoryAllocatorObserver*> observers_;
+	// Reference to the shared memory buffer used for allocation
+	ChunkManager chunk_manager_;  
 };
 
 template<typename T>
@@ -197,8 +177,7 @@ SharedMemoryAllocator<T>::SharedMemoryAllocator(ChunkManager&& chunk_manager)
 
 template<typename T>
 SharedMemoryAllocator<T>::SharedMemoryAllocator(SharedMemoryAllocator&& other)
-	: chunk_manager_(std::move(other.chunk_manager_)),
-	observers_(std::move(other.observers_)) {
+	: chunk_manager_(std::move(other.chunk_manager_)) {
 }
 
 template<typename T>
@@ -216,13 +195,10 @@ T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes_requested) {
 		std::size_t last_num_chunks = state()->num_chunks.load();
 		uint8_t* new_chunk_data;
 		std::size_t new_chunk_size;
-		if (chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data, &new_chunk_size)) {
-			Node* new_allocation = reinterpret_cast<Node*>(new_chunk_data);
-			new_allocation->size = new_chunk_size;
-			new_allocation->chunk_index = last_num_chunks;
-			new_allocation->version = 1;
-
-			Deallocate(reinterpret_cast<T*>(new_allocation + 1));
+		if (chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data, &new_chunk_size) > 0) {
+			T* buffer = NewAllocatedNode(new_chunk_data, last_num_chunks, new_chunk_size);
+			GetNode(buffer)->version = 1;
+			Deallocate(buffer);
 			state()->num_chunks.compare_exchange_strong(last_num_chunks, last_num_chunks + 1);
 		}
 	}
@@ -231,33 +207,29 @@ T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes_requested) {
 // Deallocate memory at the given pointer index
 template<typename T>
 bool SharedMemoryAllocator<T>::Deallocate(std::size_t index) {
-	if (index < 0)
-		return false;
 	T* ptr = ToPtr<T>(index);
 	return Deallocate(ptr);
 }
 
 template<typename T>
 bool SharedMemoryAllocator<T>::Deallocate(T* ptr) {
-	Node* current_node = GetNode(ptr);
-	if (current_node == nullptr || !current_node->is_allocated()) {
-		// The pointer is not a valid allocation
+	Node* node = GetNode(ptr);
+	if (node == nullptr || !node->is_allocated()) {
+		// The pointer is not a valid allocation.
 		return false;
 	}
-	std::size_t chunk_index = current_node->chunk_index;
-	std::size_t node_header_index = ToIndex(current_node);
+
+	std::size_t node_header_index = ToIndex(node);
+
+	// This should only be done once.
+	node->version.fetch_add(1);
 
 	// Add the block to the free list
 	while (true) {
 		// Get the current head of the free list
 		std::size_t free_list_index = state()->free_list_index.load();
 		// Set the next pointer of the new free node to the current head of the free list
-		Node* free_node_ptr = reinterpret_cast<Node*>(current_node);
-		// We can't early exit if 0xdeadbeef is found in the signature because
-		// we may have updated the signature but not the free_list_index.
-		free_node_ptr->chunk_index = chunk_index;
-		free_node_ptr->next_index.store(free_list_index);
-		free_node_ptr->version.fetch_add(1);
+		node->next_index.store(free_list_index);
 		// Try to set the head of the free list to the new free node
 		if (state()->free_list_index.compare_exchange_weak(free_list_index, node_header_index)) {
 			return true;
@@ -316,7 +288,8 @@ T* SharedMemoryAllocator<T>::AllocateFromFreeNode(std::size_t bytes_needed) {
 	while (current_free_node != nullptr) {
 		std::uint32_t version = current_free_node->version.load();
 		std::size_t free_node_size = current_free_node->size.load();
-		if (current_free_node->version.load() != version) {
+		if (current_free_node->version.load() != version ||
+			!current_free_node->is_free()) {
 			current_free_node = FirstFreeNode();
 			continue;
 		}
@@ -331,17 +304,15 @@ T* SharedMemoryAllocator<T>::AllocateFromFreeNode(std::size_t bytes_needed) {
 				current_free_node = FirstFreeNode();
 				continue;
 			}
-			std::size_t data_index = ToIndex(current_free_node) + free_node_size - bytes_needed;
-			return NewAllocatedNodeAtIndex(data_index, bytes_needed);
+			std::size_t chunk_index = current_free_node->chunk_index;
+			uint8_t* data = reinterpret_cast<uint8_t*>(current_free_node) +
+				free_node_size - bytes_needed;
+			return NewAllocatedNode(data, chunk_index, bytes_needed);
 		}
 
 		// The block is large enough to use for allocation but NOT large enough to split.
 		if (free_node_size >= bytes_needed) {
-			// Found a block that is large enough, remove it from the free list and return a pointer to its data
-			// TODO(fsamuel): This worries me. What if the prev_free_node has been 
-			// removed from the free list by another thread? We should probably
-			// check that the prev_free_node is still in the free list before
-			// updating its next_index. 
+			// Found a block that is large enough, remove it from the free list and return a pointer to its data.
 			if (prev_free_node != nullptr) {
 				std::size_t current_free_node_index = ToIndex(current_free_node);
 				if (current_free_node_index == InvalidIndex || !prev_free_node->next_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index.load()) || !prev_free_node->is_free()) {
@@ -355,14 +326,13 @@ T* SharedMemoryAllocator<T>::AllocateFromFreeNode(std::size_t bytes_needed) {
 				}
 			}
 			else {
-				// The block we found is the first block in the free list, update the free list
-				// index. Again this needs to be done atomically or we need to move back to the
-				// beginning of the free list and try again.
-				// This design likey results in a lot of fragmentation. We should consider
-				// using a free list that is sorted by size
+				// The block we found is the first block in the free list, update the free
+				// list index. Again this needs to be done atomically or we need to move
+				// back to the beginning of the free list and try again. This design
+				// likely results in a lot of fragmentation. We should consider using a 
+				// free list that is sorted by size
 				std::size_t current_free_node_index = ToIndex(current_free_node);
 				if (!state()->free_list_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index.load())) {
-					std::cout << "Unable to update the head of the free list. Trying again. " << std::endl;
 					// The block was removed from the free list by another thread, go back to the
 					// beginning of the free list and try again.
 					current_free_node = FirstFreeNode();
@@ -371,7 +341,8 @@ T* SharedMemoryAllocator<T>::AllocateFromFreeNode(std::size_t bytes_needed) {
 			}
 
 			// Return a pointer to the data in the new block
-			return NewAllocatedNodeAtIndex(ToIndex(current_free_node), std::max(bytes_needed, free_node_size));
+			std::size_t chunk_index = current_free_node->chunk_index;
+			return NewAllocatedNode(reinterpret_cast<uint8_t*>(current_free_node), chunk_index, std::max(bytes_needed, free_node_size));
 		}
 
 		// Move to the next block in the free list

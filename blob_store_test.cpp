@@ -287,3 +287,26 @@ TEST_F(BlobStoreTest, IntArray) {
 	EXPECT_EQ(ptr2[2], 3);
 	EXPECT_EQ(ptr2[3], 4);
 }
+
+// Similar to IntArray creates 8 concurrent threads and drops each blob after writing
+// to it and verifying.
+TEST_F(BlobStoreTest, IntArrayConcurrent) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	std::array<int, 4> arr = { 1, 2, 3, 4 };
+	std::vector<std::thread> threads;
+	for (int i = 0; i < 8; i++) {
+		threads.push_back(std::thread([&, i]() {
+			BlobStoreObject<int[4]> ptr =
+				store.New<int[4]>({ i * 8 + 1, i * 8 + 2, i * 8 + 3, i * 8 + 4 });
+			EXPECT_EQ(ptr->size(), 4);
+			EXPECT_EQ(ptr[0], i * 8 + 1);
+			EXPECT_EQ(ptr[1], i * 8 + 2);
+			EXPECT_EQ(ptr[2], i * 8 + 3);
+			EXPECT_EQ(ptr[3], i * 8 + 4);
+			store.Drop(std::move(ptr));
+		}));
+	}
+	for (auto &thread : threads) {
+		thread.join();
+	}
+}

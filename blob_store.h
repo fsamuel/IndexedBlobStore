@@ -384,7 +384,7 @@ private:
 // BlobStore is a class that manages the storage and retrieval of objects
 // (blobs) in shared memory. It supports storing, getting, and deleting
 // objects while maintaining a compact memory footprint.
-class BlobStore : public SharedMemoryAllocatorObserver {
+class BlobStore {
 public:
 	using Allocator = SharedMemoryAllocator<char>;
 
@@ -663,9 +663,6 @@ private:
 
 	// Returns the number of free slots in the metadata vector.
 	size_t GetFreeSlotCount() const;
-
-	// SharedMemoryAllocatorObserver overrides.
-	void OnBufferResize() override;
 
 	void NotifyObserversOnMemoryReallocated();
 	void NotifyObserversOnDroppedBlob(size_t index);

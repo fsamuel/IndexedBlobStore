@@ -7,11 +7,9 @@ BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer, ChunkManager&& dataBuf
     if (metadata_.empty()) {
         metadata_.emplace_back();
     }
-    allocator_.AddObserver(this);
 }
 
 BlobStore::~BlobStore() {
-    allocator_.RemoveObserver(this);
 }
 
 void BlobStore::Drop(size_t index) {
@@ -99,8 +97,4 @@ size_t BlobStore::GetFreeSlotCount() const {
         }
     }
     return count;
-}
-
-void BlobStore::OnBufferResize() {
-    NotifyObserversOnMemoryReallocated();
 }
