@@ -342,9 +342,16 @@ T* SharedMemoryAllocator<T>::AllocateFromFreeNode(std::size_t bytes_needed) {
 		// The block is large enough to use for allocation but NOT large enough to split.
 		if (free_node_size >= bytes_needed) {
 			// Found a block that is large enough, remove it from the free list and return a pointer to its data
+			// TODO(fsamuel): This worries me. What if the prev_free_node has been 
+			// removed from the free list by another thread? We should probably
+			// check that the prev_free_node is still in the free list before
+			// updating its next_index. 
 			if (prev_free_node != nullptr) {
 				std::size_t current_free_node_index = ToIndex(current_free_node);
-				if (current_free_node_index == InvalidIndex || !prev_free_node->next_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index.load())) {
+				if (current_free_node_index == InvalidIndex || !prev_free_node->next_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index.load()) || prev_free_node->node_type != NodeType::Free) {
+					// Checking prev_free_node's node_type is safe because we know that
+					// both free and allocated nodes have the same structure, and we 
+					// do not currently coalesce nodes.
 					// The block was removed from the free list by another thread, go back to the
 					// beginning of the free list and try again.
 					current_free_node = FirstFreeNode();
