@@ -97,15 +97,10 @@ private:
 		}
 	}
 
-	enum class NodeType { Allocated, Free };
-
 	// Header for a free/allocated node in the allocator
-	// Header for a free node in the allocator
 	struct Node {
 		// Version number for detecting state changes in the node.
 		std::atomic<std::uint32_t> version;
-		// Type of the node: Allocated or Free
-		NodeType node_type;
 		// The index of the chunk in the chunk manager. This is necessary to convert
 		// the pointer to an index relative to the start of the chunk.
 		std::size_t chunk_index;
@@ -113,6 +108,14 @@ private:
 		std::atomic<std::size_t> size;
 		// index of the next free block in the free list
 		std::atomic<std::size_t> next_index;
+
+		bool is_allocated() const {
+			return !is_free();
+		}
+
+		bool is_free() const {
+			return (version.load() & 0x1) == 0;
+		}
 	};
 
 	// Given a pointer, returns the Node.
@@ -142,7 +145,6 @@ private:
 			Node* allocated_node = reinterpret_cast<Node*>(chunk_manager_.at(sizeof(AllocatorStateHeader)));
 			allocated_node->size = chunk_manager_.capacity() - sizeof(AllocatorStateHeader);
 			allocated_node->chunk_index = 0;
-			allocated_node->node_type = NodeType::Allocated;
 			allocated_node->version = 1;
 
 			Deallocate(reinterpret_cast<T*>(allocated_node + 1));
@@ -165,7 +167,6 @@ private:
 		Node* allocated_node = ToPtr<Node>(index);
 		allocated_node->size = size;
 		allocated_node->chunk_index = chunk_manager_.chunk_index(index);
-		allocated_node->node_type = NodeType::Allocated;
 		allocated_node->version.fetch_add(1);
 		return reinterpret_cast<T*>(allocated_node + 1);
 	}
@@ -219,7 +220,6 @@ T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes_requested) {
 			Node* new_allocation = reinterpret_cast<Node*>(new_chunk_data);
 			new_allocation->size = new_chunk_size;
 			new_allocation->chunk_index = last_num_chunks;
-            new_allocation->node_type = NodeType::Allocated;
 			new_allocation->version = 1;
 
 			Deallocate(reinterpret_cast<T*>(new_allocation + 1));
@@ -240,7 +240,7 @@ bool SharedMemoryAllocator<T>::Deallocate(std::size_t index) {
 template<typename T>
 bool SharedMemoryAllocator<T>::Deallocate(T* ptr) {
 	Node* current_node = GetNode(ptr);
-	if (current_node == nullptr || current_node->node_type != NodeType::Allocated) {
+	if (current_node == nullptr || !current_node->is_allocated()) {
 		// The pointer is not a valid allocation
 		return false;
 	}
@@ -257,7 +257,6 @@ bool SharedMemoryAllocator<T>::Deallocate(T* ptr) {
 		// we may have updated the signature but not the free_list_index.
 		free_node_ptr->chunk_index = chunk_index;
 		free_node_ptr->next_index.store(free_list_index);
-		free_node_ptr->node_type = NodeType::Free;
 		free_node_ptr->version.fetch_add(1);
 		// Try to set the head of the free list to the new free node
 		if (state()->free_list_index.compare_exchange_weak(free_list_index, node_header_index)) {
@@ -292,13 +291,10 @@ template<typename T>
 std::uint64_t SharedMemoryAllocator<T>::ToIndexImpl(Node* ptr, std::true_type) const {
 	std::uint32_t version = ptr->version.load();
 	std::size_t chunk_index = ptr->chunk_index;
-	if (ptr->version.load() != version) {
+	const uint8_t* data = chunk_manager_.get_chunk_start(chunk_index);
+	if (ptr->version.load() != version || data == nullptr) {
 		return InvalidIndex;
 	}
-	uint8_t* data;
-	std::size_t chunk_size;
-	// We should really be using get_chunk_start here.
-	chunk_manager_.get_or_create_chunk(chunk_index, &data, &chunk_size);
 	return chunk_manager_.encode_index(chunk_index, reinterpret_cast<uint8_t*>(ptr) - data);
 }
 
@@ -348,7 +344,7 @@ T* SharedMemoryAllocator<T>::AllocateFromFreeNode(std::size_t bytes_needed) {
 			// updating its next_index. 
 			if (prev_free_node != nullptr) {
 				std::size_t current_free_node_index = ToIndex(current_free_node);
-				if (current_free_node_index == InvalidIndex || !prev_free_node->next_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index.load()) || prev_free_node->node_type != NodeType::Free) {
+				if (current_free_node_index == InvalidIndex || !prev_free_node->next_index.compare_exchange_weak(current_free_node_index, current_free_node->next_index.load()) || !prev_free_node->is_free()) {
 					// Checking prev_free_node's node_type is safe because we know that
 					// both free and allocated nodes have the same structure, and we 
 					// do not currently coalesce nodes.

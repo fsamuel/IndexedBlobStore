@@ -30,7 +30,7 @@ ChunkManager& ChunkManager::operator=(ChunkManager&& other) {
 	return *this;
 }
 
-std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index, uint8_t** data, std::size_t* chunk_size) const {
+std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index, uint8_t** data, std::size_t* chunk_size) {
     while (true) {
         std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();
         std::uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
@@ -58,6 +58,19 @@ std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index, uint8_t** data
         }
         // Another thread or process has resized the chunks vector. Try again.
     }
+}
+
+const uint8_t* ChunkManager::get_chunk_start(std::size_t chunk_index) const {
+    return const_cast<ChunkManager*>(this)->get_chunk_start(chunk_index);
+}
+
+uint8_t* ChunkManager::get_chunk_start(std::size_t chunk_index) {
+    std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
+    if (chunk_index >= chunks_.size()) {
+        return nullptr;
+    }
+    std::size_t offset = chunk_index == 0 ? sizeof(std::uint64_t) : 0;
+    return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + offset;
 }
 
 void ChunkManager::remove_chunk() {
@@ -90,13 +103,21 @@ std::uint64_t ChunkManager::num_chunks() const {
     return decode_num_chunks(num_chunks_encoded);
 }
 
-uint8_t* ChunkManager::at(std::uint64_t index) const {
+const uint8_t* ChunkManager::at(std::uint64_t index) const {
+    return const_cast<ChunkManager*>(this)->at(index);
+}
+
+uint8_t* ChunkManager::at(std::uint64_t index) {
     std::size_t chunk_index = index >> 56;
     std::size_t offset = index & ((1ull << 56) - 1);
     return at(chunk_index, offset);
 }
 
-uint8_t* ChunkManager::at(std::size_t chunk_index, std::size_t offset_in_chunk) const {
+const uint8_t* ChunkManager::at(std::size_t chunk_index, std::size_t offset_in_chunk) const {
+    return const_cast<ChunkManager*>(this)->at(chunk_index, offset_in_chunk);
+}
+
+uint8_t* ChunkManager::at(std::size_t chunk_index, std::size_t offset_in_chunk) {
     std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
     if (chunk_index == 0) {
         offset_in_chunk += sizeof(std::uint64_t);
@@ -127,7 +148,7 @@ std::size_t ChunkManager::chunk_index(std::uint64_t encoded_index) const {
     return encoded_index >> 56;
 }
 
-std::size_t ChunkManager::load_chunks_if_necessary() const {
+std::size_t ChunkManager::load_chunks_if_necessary() {
     std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();
     if (num_chunks_encoded == 0) {
         std::uint64_t new_num_chunks_encoded = increment_num_chunks(num_chunks_encoded);
