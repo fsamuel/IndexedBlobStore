@@ -1,3 +1,5 @@
+#include <array>
+
 #include "shared_memory_allocator.h"
 #include "chunk_manager.h"
 #include "gtest/gtest.h"
@@ -130,4 +132,69 @@ TEST_F(SharedMemoryAllocatorTest, MemoryRecycling) {
     shared_mem_allocator->Deallocate(ptr2);
     shared_mem_allocator->Deallocate(ptr3);
     shared_mem_allocator->Deallocate(ptr4);
+}
+
+// Similar to MemoryRecycling but with multiple concurrent threads.
+TEST_F(SharedMemoryAllocatorTest, MemoryRecyclingMultithreaded) {
+	std::vector<std::thread> threads;
+    std::array<std::array<char*, 4>, 10> ptrs;
+    for (int thread_index = 0; thread_index < 10; ++thread_index) {
+        threads.push_back(std::thread([this, thread_index, &ptrs]() {
+			char* ptr1 = shared_mem_allocator->Allocate(256);
+            ptrs[thread_index][0] = ptr1;
+			EXPECT_NE(ptr1, nullptr);
+            for (int i = 0; i < 256; i++) {
+				ptr1[i] = 'a';
+			}
+			shared_mem_allocator->Deallocate(ptr1);
+
+			char* ptr2 = shared_mem_allocator->Allocate(256);
+			EXPECT_NE(ptr2, nullptr);
+            for (int i = 0; i < 256; i++) {
+				ptr2[i] = 'b';
+			}
+            ptrs[thread_index][1] = ptr2;
+
+			char* ptr3 = shared_mem_allocator->Allocate(256);
+			EXPECT_NE(ptr3, nullptr);
+            for (int i = 0; i < 256; i++) {
+				ptr3[i] = 'c';
+			}
+            ptrs[thread_index][2] = ptr3;
+			EXPECT_TRUE(ptr3 > ptr2 + 256 || ptr3 < ptr2 - 256);
+
+			char* ptr4 = shared_mem_allocator->Allocate(256);
+			EXPECT_NE(ptr4, nullptr);
+            for (int i = 0; i < 256; i++) {
+				ptr4[i] = 'd';
+			}
+            ptrs[thread_index][3] = ptr4;
+			EXPECT_TRUE(ptr4 > ptr3 + 256 || ptr4 < ptr3 - 256);
+			EXPECT_TRUE(ptr4 > ptr2 + 256 || ptr4 < ptr2 - 256);
+
+			// Verify that memory isn't being clobbered.
+            for (int i = 0; i < 256; i++) {
+				EXPECT_EQ(ptr2[i], 'b');
+			}
+            for (int i = 0; i < 256; i++) {
+				EXPECT_EQ(ptr3[i], 'c');
+			}
+            for (int i = 0; i < 256; i++) {
+				EXPECT_EQ(ptr4[i], 'd');
+			}
+
+			shared_mem_allocator->Deallocate(ptr2);
+			shared_mem_allocator->Deallocate(ptr3);
+			shared_mem_allocator->Deallocate(ptr4);
+		}));
+	}
+    for (auto& thread : threads) {
+		thread.join();
+	}
+    std::set<char*> ptr_set;
+    for (int i = 0; i < 10; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            ptr_set.insert(ptrs[i][j]);
+        }
+    }
 }
