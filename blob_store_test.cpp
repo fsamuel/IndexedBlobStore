@@ -293,20 +293,53 @@ TEST_F(BlobStoreTest, IntArray) {
 TEST_F(BlobStoreTest, IntArrayConcurrent) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
 	std::array<int, 4> arr = { 1, 2, 3, 4 };
+	std::array<BlobStoreObject<int[4]>, 8> results;
 	std::vector<std::thread> threads;
 	for (int i = 0; i < 8; i++) {
 		threads.push_back(std::thread([&, i]() {
 			BlobStoreObject<int[4]> ptr =
 				store.New<int[4]>({ i * 8 + 1, i * 8 + 2, i * 8 + 3, i * 8 + 4 });
+			results[i] = ptr;
+			EXPECT_EQ(ptr->size(), 4);
+			EXPECT_EQ(ptr[0], i * 8 + 1);
+			EXPECT_EQ(ptr[1], i * 8 + 2);
+			EXPECT_EQ(ptr[2], i * 8 + 3);
+			EXPECT_EQ(ptr[3], i * 8 + 4);
+			//store.Drop(std::move(ptr));
+		}));
+	}
+	for (auto &thread : threads) {
+		thread.join();
+	}
+	// Iterate over the results and verify their contents.
+	for (int i = 0; i < 8; i++) {
+		EXPECT_EQ(results[i]->size(), 4);
+		EXPECT_EQ(results[i][0], i * 8 + 1);
+		EXPECT_EQ(results[i][1], i * 8 + 2);
+		EXPECT_EQ(results[i][2], i * 8 + 3);
+		EXPECT_EQ(results[i][3], i * 8 + 4);
+	}
+}
+
+TEST_F(BlobStoreTest, IntArrayConcurrentDrop) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	std::array<int, 4> arr = { 1, 2, 3, 4 };
+	std::array<BlobStoreObject<int[4]>, 8> results;
+	std::vector<std::thread> threads;
+	for (int i = 0; i < 8; i++) {
+		threads.push_back(std::thread([&, i]() {
+			BlobStoreObject<int[4]> ptr =
+				store.New<int[4]>({ i * 8 + 1, i * 8 + 2, i * 8 + 3, i * 8 + 4 });
+			results[i] = ptr;
 			EXPECT_EQ(ptr->size(), 4);
 			EXPECT_EQ(ptr[0], i * 8 + 1);
 			EXPECT_EQ(ptr[1], i * 8 + 2);
 			EXPECT_EQ(ptr[2], i * 8 + 3);
 			EXPECT_EQ(ptr[3], i * 8 + 4);
 			store.Drop(std::move(ptr));
-		}));
+			}));
 	}
-	for (auto &thread : threads) {
+	for (auto& thread : threads) {
 		thread.join();
 	}
 }

@@ -34,18 +34,6 @@ namespace {
 
 class BlobStore;
 
-class BlobStoreObserver {
-public:
-	// Indicates that memory has been reallocated either through compaction
-	// or buffer remapping. This means that any pointers to memory in the
-	// allocator are no longer valid.
-	virtual void OnMemoryReallocated() = 0;
-
-	// Indicates that a Blob with the given index has been removed from the store.
-	virtual void OnDroppedBlob(size_t index) = 0;
-};
-
-
 // BlobStoreObject is a wrapper around BlobStore that provides a safe way to access
 // objects stored in a BlobStore instance. It automatically updates its internal
 // pointer to the object whenever the memory in BlobStore is reallocated, ensuring
@@ -309,15 +297,11 @@ private:
 		}
 	}
 
-	struct ControlBlock : public BlobStoreObserver {
+	struct ControlBlock {
 	public:
 		ControlBlock(BlobStore* store, size_t index);
 
 		~ControlBlock() {
-			if (store_ != nullptr) {
-				store_->RemoveObserver(this);
-			}
-
 		}
 
 		void IncrementRefCount() {
@@ -355,24 +339,6 @@ private:
 		void UpdatePointer() {
 			ptr_ = store_->GetRaw<StorageType>(index_, &offset_);
 		}
-
-		// OnMemoryReallocated: Method from BlobStoreObserver interface that gets called
-		// when the memory in the BlobStore is reallocated. Updates the internal pointer
-		// to the object.
-		void OnMemoryReallocated() override {
-			UpdatePointer();
-		}
-
-		// OnDroppedBlob: Method from BlobStoreObserver interface that gets called when a blob
-		// is dropped from the BlobStore. If the dropped blob is the one that this object points to
-		// then it sets the internal pointer to nullptr.
-		void OnDroppedBlob(size_t index) override {
-			if (index == index_) {
-				index_ = BlobStore::InvalidIndex;
-				ptr_ = nullptr;
-			}
-		}
-
 	};
 
 	ControlBlock* control_block_;
@@ -508,12 +474,6 @@ public:
 	bool IsEmpty() const {
 		return GetSize() == 0;
 	}
-
-	// Adds a BlobStoreObserver.
-	void AddObserver(BlobStoreObserver* observer);
-
-	// Removes a BlobStoreObserver.
-	void RemoveObserver(BlobStoreObserver* observer);
 
 	// Iterator class for BlobStore
 	class Iterator {
@@ -665,7 +625,6 @@ private:
 	size_t GetFreeSlotCount() const;
 
 	void NotifyObserversOnMemoryReallocated();
-	void NotifyObserversOnDroppedBlob(size_t index);
 
 	// Gets the object of type T at the specified index as a raw pointer.
 	template<typename T>
@@ -805,7 +764,6 @@ private:
 
 	Allocator allocator_;
 	MetadataVector metadata_;
-	std::vector<BlobStoreObserver*> observers_;
 
 	template<typename T>
 	friend class BlobStoreObject;
@@ -881,9 +839,6 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(BlobStore* store
 	}
 	else {
 		success = store_->AcquireWriteLock(index_);
-	}
-	if (store_ != nullptr) {
-		store_->AddObserver(this);
 	}
 	// If we failed to acquire the lock, then the blob was deleted while we were constructing the object.
 	if (!success) {

@@ -45,28 +45,7 @@ void BlobStore::Drop(size_t index) {
         }
 
         allocator_.Deallocate(allocator_.ToPtr<char>(allocated_offset));
-        NotifyObserversOnDroppedBlob(index);
         return;
-    }
-}
-
-void BlobStore::AddObserver(BlobStoreObserver* observer) {
-    observers_.push_back(observer);
-}
-
-void BlobStore::RemoveObserver(BlobStoreObserver* observer) {
-    observers_.erase(std::remove(observers_.begin(), observers_.end(), observer), observers_.end());
-}
-
-void BlobStore::NotifyObserversOnMemoryReallocated() {
-    for (BlobStoreObserver* observer : observers_) {
-        observer->OnMemoryReallocated();
-    }
-}
-
-void BlobStore::NotifyObserversOnDroppedBlob(size_t index) {
-    for (BlobStoreObserver* observer : observers_) {
-        observer->OnDroppedBlob(index);
     }
 }
 
