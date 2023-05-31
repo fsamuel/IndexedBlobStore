@@ -208,10 +208,16 @@ private:
 
 template<typename KeyType, typename ValueType, size_t Order>
 bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key, const ValueType& value) {
-	BlobStoreObject<KeyType> key_ptr = blob_store_.New<KeyType>(key);
-	BlobStoreObject<ValueType> value_ptr = blob_store_.New<ValueType>(value);
-
-	return Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
+	while (true) {
+		Transaction txn(CreateTransaction());
+		BlobStoreObject<KeyType> key_ptr = txn.New<KeyType>(key);
+		BlobStoreObject<ValueType> value_ptr = txn.New<ValueType>(value);
+		txn.Insert(std::move(key_ptr).Downgrade(), std::move(value_ptr).Downgrade());
+		if (std::move(txn).Commit()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 template<typename KeyType, typename ValueType, size_t Order>

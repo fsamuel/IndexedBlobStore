@@ -329,16 +329,8 @@ private:
 		BlobStore* store_;				// Pointer to the BlobStore instance
 		size_t index_;					// Index of the object in the BlobStore
 		size_t offset_;                 // Offset of the object in the shared memory buffer.
-		StorageType* ptr_;						// Pointer to the object
+		StorageType* ptr_;				// Pointer to the object
 		std::atomic<size_t> ref_count_; // Number of smart pointers to this object.
-
-	private:
-
-		// UpdatePointer: Helper method to update the internal pointer to the object using
-		// the BlobStore's GetPointer method.
-		void UpdatePointer() {
-			ptr_ = store_->GetRaw<StorageType>(index_, &offset_);
-		}
 	};
 
 	ControlBlock* control_block_;
@@ -598,15 +590,15 @@ private:
 		BlobMetadata(const BlobMetadata& other) : size(other.size), offset(other.offset.load()), lock_state(0), next_free_index(other.next_free_index.load()) {}
 
 		bool is_deleted() const {
-			return next_free_index != -1;
+			return next_free_index.load() != -1;
 		}
 
 		bool is_tombstone() const {
-			return next_free_index == 0;
+			return next_free_index.load() == 0;
 		}
 
 		bool SetTombstone() {
-			ssize_t expected = next_free_index;
+			ssize_t expected = next_free_index.load();
 			// If the slot is already tombstoned, or on the free list then we don't need to do anything.
 			if (expected != -1) {
 				return false;
@@ -623,8 +615,6 @@ private:
 
 	// Returns the number of free slots in the metadata vector.
 	size_t GetFreeSlotCount() const;
-
-	void NotifyObserversOnMemoryReallocated();
 
 	// Gets the object of type T at the specified index as a raw pointer.
 	template<typename T>
@@ -842,9 +832,10 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(BlobStore* store
 	}
 	// If we failed to acquire the lock, then the blob was deleted while we were constructing the object.
 	if (!success) {
+		std::cout << "Failed to acquire lock." << std::endl;
 		index_ = BlobStore::InvalidIndex;
 		return;
 	}
-	UpdatePointer();
+	ptr_ = store_->GetRaw<StorageType>(index_, &offset_);
 }
 #endif  // BLOB_STORE_H_
