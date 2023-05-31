@@ -292,7 +292,6 @@ TEST_F(BlobStoreTest, IntArray) {
 // to it and verifying.
 TEST_F(BlobStoreTest, IntArrayConcurrent) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	std::array<int, 4> arr = { 1, 2, 3, 4 };
 	std::array<BlobStoreObject<int[4]>, 8> results;
 	std::vector<std::thread> threads;
 	for (int i = 0; i < 8; i++) {
@@ -323,7 +322,6 @@ TEST_F(BlobStoreTest, IntArrayConcurrent) {
 
 TEST_F(BlobStoreTest, IntArrayConcurrentDrop) {
 	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
-	std::array<int, 4> arr = { 1, 2, 3, 4 };
 	std::array<BlobStoreObject<int[4]>, 8> results;
 	std::vector<std::thread> threads;
 	for (int i = 0; i < 8; i++) {
@@ -355,5 +353,45 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDrop) {
 		EXPECT_EQ(results[i][3], i * 8 + 4);
 		// The size of the blob should be 0, since it's been dropped.
 		EXPECT_EQ(results[i].GetSize(), 0);
+	}
+}
+
+// Allocate some blobs, pass them to 8 threads, and verify that the contents are
+// the same as the original contents.
+TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	std::array<BlobStoreObject<int[4]>, 8> inputs;
+	// Allocate 8 blobs.
+	for (int i = 0; i < 8; i++) {
+		inputs[i] = store.New<int[4]>({ i * 8 + 1, i * 8 + 2, i * 8 + 3, i * 8 + 4 });
+		EXPECT_EQ(inputs[i].GetSize(), 16);
+	}
+	std::vector<std::thread> threads;
+	for (int i = 0; i < 8; i++) {
+		threads.push_back(std::thread([&, i]() {
+			// Iterate over the blobs and verify their contents.
+			for (int i = 0; i < 8; i++) {
+
+				BlobStoreObject<int[4]> ptr = inputs[i];
+				EXPECT_EQ(ptr->size(), 4);
+				EXPECT_EQ(ptr[0], i * 8 + 1);
+				EXPECT_EQ(ptr[1], i * 8 + 2);
+				EXPECT_EQ(ptr[2], i * 8 + 3);
+				EXPECT_EQ(ptr[3], i * 8 + 4);
+				store.Drop(std::move(ptr));
+			}
+			}));
+	}
+	for (auto& thread : threads) {
+		thread.join();
+	}
+	for (int i = 0; i < 8; i++) {
+		EXPECT_EQ(inputs[i]->size(), 4);
+		EXPECT_EQ(inputs[i][0], i * 8 + 1);
+		EXPECT_EQ(inputs[i][1], i * 8 + 2);
+		EXPECT_EQ(inputs[i][2], i * 8 + 3);
+		EXPECT_EQ(inputs[i][3], i * 8 + 4);
+		// The size of the blob should be 0, since it's been dropped.
+		EXPECT_EQ(inputs[i].GetSize(), 0);
 	}
 }

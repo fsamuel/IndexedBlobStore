@@ -611,7 +611,7 @@ private:
 			if (expected != -1) {
 				return false;
 			}
-			return next_free_index.compare_exchange_weak(expected, 0);
+			return next_free_index.compare_exchange_strong(expected, 0);
 		}
 	};
 
