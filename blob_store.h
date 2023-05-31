@@ -445,7 +445,7 @@ public:
 		
 		BlobMetadata* metadata = metadata_.at(index);
 		if (metadata == nullptr || metadata->is_deleted()) {
-			return false;
+			return 0;
 		}
 		
 		return metadata->size;

@@ -305,7 +305,6 @@ TEST_F(BlobStoreTest, IntArrayConcurrent) {
 			EXPECT_EQ(ptr[1], i * 8 + 2);
 			EXPECT_EQ(ptr[2], i * 8 + 3);
 			EXPECT_EQ(ptr[3], i * 8 + 4);
-			//store.Drop(std::move(ptr));
 		}));
 	}
 	for (auto &thread : threads) {
@@ -318,6 +317,7 @@ TEST_F(BlobStoreTest, IntArrayConcurrent) {
 		EXPECT_EQ(results[i][1], i * 8 + 2);
 		EXPECT_EQ(results[i][2], i * 8 + 3);
 		EXPECT_EQ(results[i][3], i * 8 + 4);
+		EXPECT_EQ(results[i].GetSize(), 16);
 	}
 }
 
@@ -341,5 +341,19 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDrop) {
 	}
 	for (auto& thread : threads) {
 		thread.join();
+	}
+	// Verify the contents of the results vector.
+	// Even though the blobs have been dropped, the contents should still be
+	// valid. This is because the blobs are tombstoned, and the data is still in
+	// the data buffer. The data is only deallocated once all BlobStoreObjects
+	// release their locks on the data.
+	for (int i = 0; i < 8; i++) {
+		EXPECT_EQ(results[i]->size(), 4);
+		EXPECT_EQ(results[i][0], i * 8 + 1);
+		EXPECT_EQ(results[i][1], i * 8 + 2);
+		EXPECT_EQ(results[i][2], i * 8 + 3);
+		EXPECT_EQ(results[i][3], i * 8 + 4);
+		// The size of the blob should be 0, since it's been dropped.
+		EXPECT_EQ(results[i].GetSize(), 0);
 	}
 }
