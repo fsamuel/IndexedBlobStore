@@ -60,7 +60,7 @@ size_t BlobStore::FindFreeSlot() {
         if (free_list_head.next_free_index.compare_exchange_weak(free_index, next_free_index)) {
             // Make sure the tombstone bit is not set for the recycled metadata.
             BlobMetadata& metadata = metadata_[free_index];
-            metadata.next_free_index = -1;
+            metadata.next_free_index.store(- 1);
 			return free_index;
 		}
     }

@@ -112,9 +112,8 @@ public:
 		return (*control_block_->ptr_)[i];
 	}
 
-	template <typename U = StorageType>
-	BlobStoreObject<typename std::remove_const<U>::type> Clone() const {
-		return control_block_->store_->Clone<U>(control_block_->index_);// .To<std::remove_const<V>::type >();
+	BlobStoreObject<typename std::remove_const<T>::type> Clone() const {
+		return control_block_->store_->Clone<T>(control_block_->index_);// .To<std::remove_const<V>::type >();
 	}
 
 	template<typename U>

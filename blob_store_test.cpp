@@ -395,3 +395,50 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
 		EXPECT_EQ(inputs[i].GetSize(), 0);
 	}
 }
+
+// Allocate a blob, pass it to 8 threads, have them all clone it, and store the clones
+// in a vector. After the threads are done, verify that the contents of the clones
+// are the same as the original.
+TEST_F(BlobStoreTest, IntArrayConcurrentClone) {
+	BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+	BlobStoreObject<int[4]> ptr = store.New<int[4]>({1, 2, 3, 4});
+	std::array<BlobStoreObject<int[4]>, 8> inputs;	
+	std::array<BlobStoreObject<int[4]>, 8> results;
+	// Populate inputs with copies of ptr.
+	for (int i = 0; i < 8; i++) {
+		inputs[i] = ptr;
+	}
+	std::vector<std::thread> threads;
+	for (int i = 0; i < 8; i++) {
+		threads.push_back(std::thread([&, i]() {
+			// Clone the blob 8 times.
+			for (int i = 0; i < 8; i++) {
+				results[i] = inputs[i].Clone();
+				EXPECT_EQ(results[i]->size(), 4);
+				EXPECT_EQ(results[i][0], 1);
+				EXPECT_EQ(results[i][1], 2);
+				EXPECT_EQ(results[i][2], 3);
+				EXPECT_EQ(results[i][3], 4);
+			}
+			}));
+	}
+	for (auto& thread : threads) {
+		thread.join();
+	}
+	// Verify the contents of the results vector.
+	for (int i = 0; i < 8; i++) {
+		EXPECT_EQ(results[i]->size(), 4);
+		EXPECT_EQ(results[i][0], 1);
+		EXPECT_EQ(results[i][1], 2);
+		EXPECT_EQ(results[i][2], 3);
+		EXPECT_EQ(results[i][3], 4);
+		// The size of the blob should be 16, since it's been cloned.
+		EXPECT_EQ(results[i].GetSize(), 16);
+		// Verify that no two clones refer to the same index.
+		for (int j = 0; j < 8; j++) {
+			if (i != j) {
+				EXPECT_NE(results[i].Index(), results[j].Index());
+			}
+		}
+	}
+}
