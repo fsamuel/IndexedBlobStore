@@ -65,7 +65,7 @@ TEST_F(SharedMemoryAllocatorTest, MultipleAllocations) {
 TEST_F(SharedMemoryAllocatorTest, MultipleAllocationsMultithreaded) {
 	std::vector<std::thread> threads;
     for (int thread_index = 0; thread_index < 8; ++thread_index) {
-        threads.push_back(std::thread([this, thread_index]() {
+        threads.push_back(std::thread([this]() {
 			char* ptr1 = shared_mem_allocator->Allocate(128);
 			EXPECT_NE(ptr1, nullptr);
 			char* ptr2 = shared_mem_allocator->Allocate(256);

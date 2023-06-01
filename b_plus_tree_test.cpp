@@ -387,7 +387,6 @@ TEST_F(BPlusTreeTest, InsertTransactionAbort) {
 	for (int i = 50; i < 55; i++) {
 		auto it = tree.Search(i);
 		auto value_ptr = it.GetValue();
-		int value = value_ptr == nullptr ? 0 : *value_ptr;
 		EXPECT_EQ(value_ptr, nullptr);
 	}
 	// Insert some more elements into the tree and verify that they are there.

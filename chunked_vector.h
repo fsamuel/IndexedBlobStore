@@ -183,7 +183,6 @@ template <typename T>
 template <typename... Args>
 std::size_t ChunkedVector<T>::emplace_back(Args&&... args) {
 	std::size_t old_size = size_->fetch_add(1);
-	std::size_t new_size = old_size + 1;
 
     std::size_t chunk_index;
     std::size_t byte_offset;
@@ -255,7 +254,6 @@ const T& ChunkedVector<T>::operator[](std::size_t index) const {
 
 template <typename T>
 void ChunkedVector<T>::reserve(std::size_t new_cap) {
-    std::size_t old_size = *size_;
     std::size_t current_cap = capacity();
     if (new_cap <= current_cap) {
         // current capacity is enough, nothing to do

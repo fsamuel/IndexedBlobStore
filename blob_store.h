@@ -203,7 +203,7 @@ public:
 			return BlobStoreObject<const T>();
 		}
 		control_block->DowngradeLock();
-		return BlobStoreObject<const T>(reinterpret_cast<BlobStoreObject<const T>::ControlBlock*>(control_block));
+		return BlobStoreObject<const T>(reinterpret_cast<typename BlobStoreObject<const T>::ControlBlock*>(control_block));
 	}
 
 	// Upgrades a const T BlobStoreObject to a non-const T BlobStoreObject.
@@ -817,7 +817,6 @@ typename std::enable_if<
 	std::is_trivially_copyable<typename StorageTraits<T>::StorageType>::value,
 	BlobStoreObject<T>
 >::type BlobStore::NewImpl(std::initializer_list<typename StorageTraits<T>::ElementType> initList) {
-	using StorageType = typename StorageTraits<T>::StorageType;
 	using ElementType = typename StorageTraits<T>::ElementType;
 	size_t index = FindFreeSlot();
 	size_t size = initList.size() * sizeof(ElementType);

@@ -19,8 +19,8 @@ struct InsertionBundle {
 	InsertionBundle(BlobStoreObject<NodeType> new_left_node,
                     BlobStoreObject<const KeyType> new_key,
                     BlobStoreObject<NodeType> new_right_node)
-		: new_left_node(new_left_node),
-          new_key(new_key),
+		: new_key(new_key),
+		  new_left_node(new_left_node),
           new_right_node(new_right_node) {}
 
 	BlobStoreObject<const KeyType> new_key;
@@ -718,7 +718,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const KeyType> BPlusTree<KeyType, ValueType, Order>::GetSuccessorKey(BlobStoreObject<const BaseNode> node, const KeyType& key) {
 	if (node->is_leaf()) {
 		BlobStoreObject<const KeyType> key_found;
-		size_t key_index = node->Search(&blob_store_, key, &key_found);
+		node->Search(&blob_store_, key, &key_found);
 		return key_found;
 	}
 	BlobStoreObject<const InternalNode> internal_node = std::move(node).To<InternalNode>();

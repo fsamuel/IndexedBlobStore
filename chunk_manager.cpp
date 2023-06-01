@@ -178,7 +178,7 @@ std::uint64_t ChunkManager::increment_num_chunks(std::uint64_t num_chunks_encode
 }
 
 std::uint64_t ChunkManager::decrement_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t value) const {
-   return (num_chunks_encoded & 0xFFFFFFFF00000000) | (num_chunks_encoded + value) & ((1ull << 32) - 1);
+   return (num_chunks_encoded & 0xFFFFFFFF00000000) | ((num_chunks_encoded + value) & ((1ull << 32) - 1));
 }
 
 std::uint64_t ChunkManager::set_num_chunks(std::uint64_t num_chunks_encoded, std::uint64_t num_chunks) const {

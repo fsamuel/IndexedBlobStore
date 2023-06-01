@@ -368,7 +368,7 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
 	}
 	std::vector<std::thread> threads;
 	for (int i = 0; i < 8; i++) {
-		threads.push_back(std::thread([&, i]() {
+		threads.push_back(std::thread([&]() {
 			// Iterate over the blobs and verify their contents.
 			for (int i = 0; i < 8; i++) {
 

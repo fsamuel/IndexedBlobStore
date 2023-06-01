@@ -203,8 +203,7 @@ T* SharedMemoryAllocator<T>::Allocate(std::size_t bytes_requested) {
 		std::size_t last_num_chunks = state()->num_chunks.load();
 		uint8_t* new_chunk_data;
 		std::size_t new_chunk_size;
-		std::size_t chunks_added = 0;
-		if (chunks_added = chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data, &new_chunk_size) > 0) {
+		if (chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data, &new_chunk_size) > 0) {
 			T* buffer = NewAllocatedNode(new_chunk_data, last_num_chunks, new_chunk_size);
 			GetNode(buffer)->version.store(1);
 			Deallocate(buffer);
