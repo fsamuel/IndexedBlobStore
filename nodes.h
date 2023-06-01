@@ -98,7 +98,10 @@ struct BaseNode {
 	size_t num_keys() const { return n; }
 
 	// Increments the number of keys in the node.
-	void increment_num_keys() { ++n; }
+	void increment_num_keys() {
+		++n;
+		assert(n < Order);
+	}
 
 	// Decrements the number of keys in the node.
 	void decrement_num_keys() { --n; }
@@ -120,6 +123,7 @@ struct BaseNode {
 		std::is_convertible<U, typename StorageTraits<KeyType>::SearchType>::value ||
 		std::is_same<U, typename StorageTraits<KeyType>::StorageType>::value,
 		size_t>::type Search(BlobStore* store, const U& search_key, BlobStoreObject<const KeyType>* key_in_node) const {
+		assert(num_keys() < Order);
 		auto it = std::lower_bound(keys.begin(), keys.begin() + num_keys(), search_key,
 			[store](size_t lhs, const U& rhs) {
 				return *store->Get<KeyType>(lhs) < rhs;

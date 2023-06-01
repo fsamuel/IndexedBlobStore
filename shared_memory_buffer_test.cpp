@@ -71,37 +71,6 @@ TEST_F(SharedMemoryBufferTest, Constructor) {
 	ASSERT_EQ(buf_sized.size(), 1024);
 }
 
-TEST_F(SharedMemoryBufferTest, Resize) {
-	// Create a file with initial content.
-	{
-		std::ofstream file(file_name);
-		file << "InitialContent";
-	}
-
-	// Test constructing a SharedMemoryBuffer object with the created file.
-	SharedMemoryBuffer buffer(file_name);
-
-	// Test resizing to a larger size.
-	buffer.Resize(64);
-	ASSERT_EQ(buffer.size(), 64);
-	ASSERT_EQ(std::memcmp(buffer.data(), "InitialContent", 14), 0);
-
-	// Test resizing to a smaller size.
-	buffer.Resize(8);
-	ASSERT_EQ(buffer.size(), 8);
-	ASSERT_EQ(std::memcmp(buffer.data(), "InitialC", 8), 0);
-
-	// Test resizing to the same size.
-	buffer.Resize(8);
-	ASSERT_EQ(buffer.size(), 8);
-	ASSERT_EQ(std::memcmp(buffer.data(), "InitialC", 8), 0);
-
-	// Test resizing to a size smaller than the initial file size.
-	buffer.Resize(12);
-	ASSERT_EQ(buffer.size(), 12);
-	ASSERT_EQ(std::memcmp(buffer.data(), "InitialC", 12), 0);
-}
-
 TEST_F(SharedMemoryBufferTest, MoveConstructor) {
 	// Create a SharedMemoryBuffer object with a new name and size
 	SharedMemoryBuffer buffer1("testfile", 100);

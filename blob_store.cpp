@@ -16,7 +16,7 @@ void BlobStore::Drop(size_t index) {
     if (index == BlobStore::InvalidIndex) {
 		return;
 	}
-
+    
     BlobMetadata& free_list_head = metadata_[0];
     while (true) {
         BlobMetadata* metadata = metadata_.at(index);
@@ -27,7 +27,7 @@ void BlobStore::Drop(size_t index) {
 		}
 
         // Check if a lock is held on the blob, and if so, return. It will be dropped when the lock is released.
-        if (metadata->lock_state != 0) {
+        if (metadata->lock_state.load() != 0) {
 			return;
 		}
         size_t allocated_offset = metadata->offset;
@@ -38,13 +38,14 @@ void BlobStore::Drop(size_t index) {
 			continue;
 		}
 
+        allocator_.Deallocate(allocator_.ToPtr<char>(allocated_offset));
+
         // If the head of the free list has changed, undo the change we made if possible and try again.
         if (!free_list_head.next_free_index.compare_exchange_weak(first_free_index, index)) {
-            metadata->next_free_index.compare_exchange_weak(first_free_index, tombstone);
+            metadata->next_free_index.compare_exchange_strong(first_free_index, tombstone);
             continue;
         }
 
-        allocator_.Deallocate(allocator_.ToPtr<char>(allocated_offset));
         return;
     }
 }

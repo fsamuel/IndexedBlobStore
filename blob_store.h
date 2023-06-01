@@ -1,6 +1,7 @@
 #ifndef BLOB_STORE_H_
 #define BLOB_STORE_H_
 
+#include <cassert>
 #include <cstdio>
 #include <sys/types.h>
 #include <string>
@@ -87,28 +88,40 @@ public:
 
 	// Arrow operator: Provides access to the object's methods.
 	StorageType* operator->() {
+		assert(control_block_ != nullptr);
+		assert(control_block_->ptr_ != nullptr);
 		return control_block_->ptr_;
 	}
 
 	const StorageType* operator->() const {
+		assert(control_block_ != nullptr);
+		assert(control_block_->ptr_ != nullptr);
 		return control_block_->ptr_;
 	}
 
 	// Dereference operator: Provides access to the object itself.
 	StorageType& operator*() {
+		assert(control_block_ != nullptr);
+		assert(control_block_->ptr_ != nullptr);
 		return *control_block_->ptr_;
 	}
 
 	const StorageType& operator*() const {
+		assert(control_block_ != nullptr);
+		assert(control_block_->ptr_ != nullptr);
 		return *control_block_->ptr_;
 	}
 
 	ElementType& operator[](size_t i) {
+		assert(control_block_ != nullptr);
+		assert(control_block_->ptr_ != nullptr);
 		return (*control_block_->ptr_)[i];
 	}
 
 	
 	const ElementType& operator[](size_t i) const {
+		assert(control_block_ != nullptr);
+		assert(control_block_->ptr_ != nullptr);
 		return (*control_block_->ptr_)[i];
 	}
 
@@ -304,11 +317,12 @@ private:
 		}
 
 		void IncrementRefCount() {
-			++ref_count_;
+			ref_count_.fetch_add(1);
 		}
 
 		bool DecrementRefCount() {
-			if (--ref_count_ == 0) {
+			size_t prev_ref_count = ref_count_.fetch_sub(1);
+			if (prev_ref_count == 1) {
 				store_->Unlock(index_);
 				return true;
 			}
@@ -317,12 +331,12 @@ private:
 
 		void DowngradeLock() {
 			store_->DowngradeWriteLock(index_);
-			--ref_count_;
+			ref_count_.fetch_sub(1);
 		}
 
 		void UpgradeLock() {
 			store_->UpgradeReadLock(index_);
-			--ref_count_;
+			ref_count_.fetch_sub(1);
 		}
 
 		BlobStore* store_;				// Pointer to the BlobStore instance
@@ -410,6 +424,8 @@ public:
 		BlobMetadata& clone_metadata = metadata_[clone_index];
 		clone_metadata.size = metadata.size;
 		clone_metadata.offset = allocator_.ToIndex(ptr);
+		assert(clone_metadata.offset != SharedMemoryAllocator<char>::InvalidIndex);
+
 		clone_metadata.lock_state = 0;
 		clone_metadata.next_free_index = -1;
 		return BlobStoreObject<typename std::remove_const<T>::type>(this, clone_index);
@@ -606,7 +622,6 @@ private:
 		}
 	};
 
-	using BlobMetadataAllocator = SharedMemoryAllocator<BlobMetadata>;
 	using MetadataVector = ChunkedVector<BlobMetadata>;
 
 	// Returns the index of the first free slot in the metadata vector.
@@ -700,7 +715,7 @@ private:
 			SpinWait();
 		}
 		// Check if the blob was tombstoned and is now ready to be reused.
-		if (metadata->is_tombstone() && metadata->lock_state == 0) {
+		if (metadata->is_tombstone() && metadata->lock_state.load() == 0) {
 			Drop(index);
 		}
 	}
@@ -790,6 +805,7 @@ typename std::enable_if<
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
 	metadata.offset = allocator_.ToIndex(ptr);
+	assert(metadata.offset != SharedMemoryAllocator<char>::InvalidIndex);
 	metadata.lock_state = 0;
 	metadata.next_free_index = -1;
 	return BlobStoreObject<T>(this, index);
@@ -810,6 +826,7 @@ typename std::enable_if<
 	BlobMetadata& metadata = metadata_[index];
 	metadata.size = size;
 	metadata.offset = allocator_.ToIndex(ptr);
+	assert(metadata.offset != SharedMemoryAllocator<char>::InvalidIndex);
 	metadata.lock_state = 0;
 	metadata.next_free_index = -1;
 	return BlobStoreObject<T>(this, index);

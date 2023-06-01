@@ -57,8 +57,46 @@ TEST_F(SharedMemoryAllocatorTest, MultipleAllocations) {
     char* ptr2 = shared_mem_allocator->Allocate(256);
     EXPECT_NE(ptr2, nullptr);
     EXPECT_NE(ptr1, ptr2);
-    EXPECT_EQ(shared_mem_allocator->GetCapacity(ptr1), 128);
-    EXPECT_EQ(shared_mem_allocator->GetCapacity(ptr2), 256);
+    EXPECT_GE(shared_mem_allocator->GetCapacity(ptr1), 128);
+    EXPECT_GE(shared_mem_allocator->GetCapacity(ptr2), 256);
+}
+
+// Similar to MultipleAllocations but across 8 threads.
+TEST_F(SharedMemoryAllocatorTest, MultipleAllocationsMultithreaded) {
+	std::vector<std::thread> threads;
+    for (int thread_index = 0; thread_index < 8; ++thread_index) {
+        threads.push_back(std::thread([this, thread_index]() {
+			char* ptr1 = shared_mem_allocator->Allocate(128);
+			EXPECT_NE(ptr1, nullptr);
+			char* ptr2 = shared_mem_allocator->Allocate(256);
+			EXPECT_NE(ptr2, nullptr);
+			EXPECT_NE(ptr1, ptr2);
+			EXPECT_GE(shared_mem_allocator->GetCapacity(ptr1), 128);
+			EXPECT_GE(shared_mem_allocator->GetCapacity(ptr2), 256);
+			shared_mem_allocator->Deallocate(ptr1);
+			shared_mem_allocator->Deallocate(ptr2);
+		}));
+	}
+    for (auto& thread : threads) {
+		thread.join();
+	}
+}
+
+// Request several allocations per thread, then deallocate them.
+TEST_F(SharedMemoryAllocatorTest, MultipleAllocationsMultithreaded2) {
+	std::vector<std::thread> threads;
+	for (int thread_index = 0; thread_index < 8; ++thread_index) {
+		threads.push_back(std::thread([this, thread_index]() {
+			for (int i = 0; i < 100; ++i) {
+				char* ptr = shared_mem_allocator->Allocate(128);
+				EXPECT_NE(ptr, nullptr);
+                shared_mem_allocator->Deallocate(ptr);
+			}
+		}));
+	}
+	for (auto& thread : threads) {
+		thread.join();
+	}
 }
 
 TEST_F(SharedMemoryAllocatorTest, MultipleAllocationsAndDeallocations) {

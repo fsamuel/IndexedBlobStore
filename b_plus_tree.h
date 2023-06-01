@@ -34,7 +34,7 @@ private:
 	using BaseNode = BaseNode<Order>;
 	using InternalNode = InternalNode<Order>;
 	using LeafNode = LeafNode<Order>;
-	using Transaction = BPlusTreeBase::Transaction;
+	using Transaction = BPlusTreeBase<KeyType, ValueType, Order>::Transaction;
 
 	using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
 	using Iterator = TreeIterator<KeyType, ValueType, Order>;
