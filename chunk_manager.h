@@ -39,7 +39,7 @@ public:
     void remove_chunk();
 
     // Returns the number of chunks that the ChunkManager is managing.
-    std::size_t num_chunks() const;
+    std::uint64_t num_chunks() const;
 
     // Returns a pointer to the specified index in the ChunkManager.
     const uint8_t* at(std::uint64_t index) const;

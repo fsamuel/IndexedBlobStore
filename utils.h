@@ -6,7 +6,9 @@
 #include <initializer_list>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h> // For Windows
 #else
 #include <unistd.h> // For Linux

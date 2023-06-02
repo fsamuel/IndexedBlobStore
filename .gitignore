@@ -397,3 +397,7 @@ FodyWeavers.xsd
 /chunked_vector_test_13
 /chunked_vector_test_12
 /chunked_vector_test_11
+/bazel-bin
+/bazel-bplustree
+/bazel-out
+/bazel-testlogs

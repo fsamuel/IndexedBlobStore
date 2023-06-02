@@ -217,9 +217,20 @@ T* ShmAllocator<T>::Allocate(std::size_t bytes_requested) {
 
 	while (true) {
 		T* data = AllocateFromFreeList(bytes_needed);
+		
+
 		// TODO(fsamuel): Decide if we want to split a node here.
 		if (data != nullptr) {
-			GetNode(data)->version.fetch_add(1);
+			Node* allocated_node = GetNode(data);
+			allocated_node->version.fetch_add(1);
+			if (allocated_node->size > bytes_needed + sizeof(Node)) {
+				std::size_t bytes_remaining = allocated_node->size - bytes_needed;
+				T* buffer = NewAllocatedNode(reinterpret_cast<uint8_t*>(allocated_node) + bytes_needed, allocated_node->index + bytes_needed, bytes_remaining);
+				GetNode(buffer)->version.store(1);
+				Deallocate(buffer);
+				allocated_node->size = bytes_needed;
+			}
+			
 			return data;
 		}
 		// No block of sufficient size was found, resize the buffer and allocate a new block.
@@ -317,9 +328,9 @@ std::uint64_t ShmAllocator<T>::ToIndexImpl(U* ptr, std::false_type) const {
 
 template<typename T>
 T* ShmAllocator<T>::AllocateFromFreeList(std::size_t bytes_needed) {
-	Node* right_node;
-	std::size_t right_node_next_index;
-	Node* left_node;
+	Node* right_node = nullptr;
+	std::size_t right_node_next_index = InvalidIndex;;
+	Node* left_node = nullptr;
 	do {
 		right_node = SearchBySize(bytes_needed, &left_node);
 		if (right_node == nullptr) {
@@ -334,7 +345,7 @@ T* ShmAllocator<T>::AllocateFromFreeList(std::size_t bytes_needed) {
 			}
 		}
 	} while (true); /*B4*/
-	std::size_t right_node_index;
+	std::size_t right_node_index = right_node == nullptr ? InvalidIndex : right_node->index;
 	if (left_node == nullptr) {
 		if (!state()->free_list_index.compare_exchange_weak(right_node_index, right_node_next_index)) {
 			SearchBySize(right_node->size, &left_node);

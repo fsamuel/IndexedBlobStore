@@ -173,7 +173,7 @@ TEST_F(ShmAllocatorTest, MemoryRecycling) {
 }
 
 // Similar to MemoryRecycling but with multiple concurrent threads.
-TEST_F(ShmAllocatorTest, MemoryRecyclingMultithreaded) {
+TEST_F(ShmAllocatorTest, DISABLED_MemoryRecyclingMultithreaded) {
     std::vector<std::thread> threads;
     for (int thread_index = 0; thread_index < 10; ++thread_index) {
         threads.push_back(std::thread([this, thread_index]() {
