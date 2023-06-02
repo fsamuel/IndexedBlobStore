@@ -60,6 +60,9 @@
     <ClInclude Include="chunk_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shm_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="shared_memory_buffer.cpp">

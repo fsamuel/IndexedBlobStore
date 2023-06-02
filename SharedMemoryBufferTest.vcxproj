@@ -67,6 +67,7 @@
     <ClCompile Include="b_plus_tree_test.cpp" />
     <ClCompile Include="shared_memory_buffer_test.cpp" />
     <ClCompile Include="shared_memory_allocator_test.cpp" />
+    <ClCompile Include="shm_allocator_test.cpp" />
     <ClCompile Include="string_slice.cpp" />
     <ClCompile Include="string_slice_test.cpp" />
     <ClCompile Include="utils.cpp" />

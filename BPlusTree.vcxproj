@@ -134,6 +134,7 @@
     <ClInclude Include="chunk_manager.h" />
     <ClInclude Include="fixed_string.h" />
     <ClInclude Include="nodes.h" />
+    <ClInclude Include="shm_allocator.h" />
     <ClInclude Include="storage_traits.h" />
     <ClInclude Include="string_slice.h" />
     <ClInclude Include="Main.h" />

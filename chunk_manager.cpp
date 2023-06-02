@@ -108,7 +108,7 @@ const uint8_t* ChunkManager::at(std::uint64_t index) const {
 }
 
 uint8_t* ChunkManager::at(std::uint64_t index) {
-    std::size_t chunk_index = index >> 56;
+    std::size_t chunk_index = this->chunk_index(index);
     std::size_t offset = index & ((1ull << 56) - 1);
     return at(chunk_index, offset);
 }
@@ -141,11 +141,13 @@ std::size_t ChunkManager::capacity() const {
 }
 
 std::uint64_t ChunkManager::encode_index(std::size_t chunk_index, std::size_t offset_in_chunk) const {
-    return (static_cast<std::uint64_t>(chunk_index) << 56) | offset_in_chunk;
+    return (static_cast<std::uint64_t>(chunk_index & 0x7F) << 56) | offset_in_chunk;
 }
 
 std::size_t ChunkManager::chunk_index(std::uint64_t encoded_index) const {
-    return encoded_index >> 56;
+    // Clear the topmost bit as it's reserved for other uses.
+    // We can never have more than 128 chunks. That's a massive amount of memory/storage.
+    return (encoded_index & 0x7FFFFFFFFFFFFFFF) >> 56;
 }
 
 std::size_t ChunkManager::load_chunks_if_necessary() {
