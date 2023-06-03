@@ -1,7 +1,7 @@
+#include <algorithm>
 #include <iostream>
 #include <vector>
-#include <algorithm>
 
 int main() {
-    return 0;
+  return 0;
 }

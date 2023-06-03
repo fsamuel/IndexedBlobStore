@@ -1,0 +1,25 @@
+# .bazelrc
+
+# Set the target architecture to 64-bit x86 (x86_64)
+#build --cpu=x86_64
+
+# Use the default Bazel C++ toolchain to build the tools used during the
+# build.
+
+#build:clang_config --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+build -c opt --verbose_failures
+
+startup --windows_enable_symlinks
+build --enable_runfiles
+
+#build --client_env=CC=clang
+#build --copt=-DGRPC_BAZEL_BUILD
+#build --host_copt=-DGRPC_BAZEL_BUILD
+#build --action_env=GRPC_BAZEL_RUNTIME=1
+#build --define=use_fast_cpp_protos=true
+#build:opt --compilation_mode=opt
+#build:opt --copt=-Wframe-larger-than=16384
+
+build:coverage --copt=-fprofile-instr-generate
+build:coverage --copt=-fcoverage-mapping
+build:coverage --linkopt=-fprofile-instr-generate

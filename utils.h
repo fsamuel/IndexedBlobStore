@@ -9,29 +9,26 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h> // For Windows
+#include <windows.h>  // For Windows
 #else
-#include <unistd.h> // For Linux
+#include <unistd.h>  // For Linux
 #endif
 
 namespace utils {
 
-template<typename U, typename... Args>
-void Construct(U* p, Args&&... args)
-{
-	new (p) U(std::forward<Args>(args)...);
+template <typename U, typename... Args>
+void Construct(U* p, Args&&... args) {
+  new (p) U(std::forward<Args>(args)...);
 }
 
-template<typename T, std::size_t N>
-void Construct(std::array<T, N>* p, std::initializer_list<T> ilist)
-{
-	*p = ilist;
+template <typename T, std::size_t N>
+void Construct(std::array<T, N>* p, std::initializer_list<T> ilist) {
+  *p = ilist;
 }
 
-template<typename U>
-void Destroy(U* p)
-{
-	p->~U();
+template <typename U>
+void Destroy(U* p) {
+  p->~U();
 }
 
 size_t GetPageSize();
