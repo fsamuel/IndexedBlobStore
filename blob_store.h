@@ -124,8 +124,7 @@ class BlobStoreObject {
   }
 
   BlobStoreObject<typename std::remove_const<T>::type> Clone() const {
-    return control_block_->store_->Clone<T>(
-        control_block_->index_);  // .To<std::remove_const<V>::type >();
+    return control_block_->store_->Clone<T>(control_block_->index_);
   }
 
   template <typename U>

@@ -146,8 +146,8 @@ class ShmAllocator {
 
   template <typename U>
   std::uint64_t ToIndexImpl(U* ptr, std::false_type) const {
-      Node* allocated_node = GetNode(ptr);
-      return ToIndexImpl(allocated_node, std::true_type{}) + sizeof(Node);
+    Node* allocated_node = GetNode(ptr);
+    return ToIndexImpl(allocated_node, std::true_type{}) + sizeof(Node);
   }
 
   // Allocates space from a free node that can fit the requested size.

@@ -77,7 +77,8 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
     assert(node != right_node);
 
     std::size_t right_node_index = ToIndex(right_node);
-    // node might still be in the free list and marked. Keep it marked just in case.
+    // node might still be in the free list and marked. Keep it marked just in
+    // case.
     // TODO(fsamuel): Can we leak free nodes here?
     node->next_index.store(get_marked_reference(right_node_index));
     if (left_node == nullptr) {
@@ -90,7 +91,7 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
     } else {
       if (left_node->next_index.compare_exchange_strong(right_node_index,
                                                         node->index)) {
-          node->next_index.store(get_unmarked_reference(right_node_index));
+        node->next_index.store(get_unmarked_reference(right_node_index));
 
         return true;
       }
