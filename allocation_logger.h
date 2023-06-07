@@ -9,48 +9,49 @@
 #include "shm_allocator.h"
 
 class AllocationLogger {
-public:
-    using Node = ShmAllocator::Node;
+ public:
+  using Node = ShmAllocator::Node;
 
-    AllocationLogger();
+  AllocationLogger();
 
-    // Pushes an allocation operation onto the operations vector.
-    void RecordAllocation(const Node& node);
+  // Pushes an allocation operation onto the operations vector.
+  void RecordAllocation(const Node& node);
 
-    // Pushes a deallocation operation onto the operations vector.
-    void RecordDeallocation(const Node& node);
-    
-    // Pushes a search operation onto the operations vector.
-    void RecordSearch(const Node& node);
+  // Pushes a deallocation operation onto the operations vector.
+  void RecordDeallocation(const Node& node);
 
-private:
-    enum class OperationType { Allocate, Deallocate, Search };
+  // Pushes a search operation onto the operations vector.
+  void RecordSearch(const Node& node);
 
-    std::string OperationTypeToString(OperationType type) const;
+ private:
+  enum class OperationType { Allocate, Deallocate, Search };
 
-    struct Operation {
-        Operation(OperationType type, const ShmAllocator::Node& node);
+  std::string OperationTypeToString(OperationType type) const;
 
-        std::thread::id thread_id;
-        OperationType type;
-        std::size_t index;
-        std::size_t size;
-        std::size_t version;
-        std::size_t next_index;
-        bool marked;
-    };
+  struct Operation {
+    Operation(OperationType type, const ShmAllocator::Node& node);
 
-    void PrintOperation(const Operation& operation) const;
+    std::thread::id thread_id;
+    OperationType type;
+    std::size_t index;
+    std::size_t size;
+    std::size_t version;
+    std::size_t next_index;
+    bool marked;
+  };
 
-    // Prints the last 100 operations performed on the allocator.
-    void PrintLastOperations() const;
+  void PrintOperation(const Operation& operation) const;
 
-    // Prints the history of an operation with a particular index. 
-    void PrintIndexHistory(std::size_t index) const;
+  // Prints the last 100 operations performed on the allocator.
+  void PrintLastOperations() const;
 
-    thread_local static std::map<const AllocationLogger*, std::set<std::size_t>> skipped_nodes_;
-	mutable std::mutex log_mutex_;
-	ChunkedVector<Operation> operations_;
+  // Prints the history of an operation with a particular index.
+  void PrintIndexHistory(std::size_t index) const;
+
+  thread_local static std::map<const AllocationLogger*, std::set<std::size_t>>
+      skipped_nodes_;
+  mutable std::mutex log_mutex_;
+  ChunkedVector<Operation> operations_;
 };
 
 #endif  // ALLOCATION_LOGGER_H_

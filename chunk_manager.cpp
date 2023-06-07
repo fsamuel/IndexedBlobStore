@@ -172,7 +172,7 @@ std::size_t ChunkManager::chunk_index(std::uint64_t encoded_index) {
 }
 
 std::size_t ChunkManager::offset_in_chunk(std::uint64_t encoded_index) {
-    return encoded_index & ((1ull << 56) - 1);
+  return encoded_index & ((1ull << 56) - 1);
 }
 
 std::size_t ChunkManager::load_chunks_if_necessary() {

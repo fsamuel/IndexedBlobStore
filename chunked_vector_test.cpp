@@ -296,11 +296,11 @@ TEST_F(ChunkedVectorTest, PushIntegers) {
   ChunkedVector<int> vec("chunked_vector_test", 16);
   constexpr int kNumIntegers = 100000;
   for (int i = 0; i < kNumIntegers; i++) {
-	vec.push_back(i);
+    vec.push_back(i);
   }
   EXPECT_EQ(vec.size(), kNumIntegers);
   for (int i = 0; i < kNumIntegers; i++) {
-	EXPECT_EQ(vec[i], i);
+    EXPECT_EQ(vec[i], i);
   }
 }
 
@@ -309,41 +309,40 @@ TEST_F(ChunkedVectorTest, PushIntegers) {
 // that the integers are in the correct order for each thread id.
 TEST_F(ChunkedVectorTest, PushIntegersMultiThreaded) {
   struct ThreadInt {
-      std::thread::id thread_id;
-      int value;
-      uint8_t padding[48 - sizeof(thread_id) - sizeof(value)];
+    std::thread::id thread_id;
+    int value;
+    uint8_t padding[48 - sizeof(thread_id) - sizeof(value)];
   };
   const int num_threads = 10;
   const int num_pushes = 10000;
   ChunkedVector<ThreadInt> vec("chunked_vector_test", 16);
 
   auto push_func = [&vec, num_pushes](int thread_id) {
-      for (int i = 0; i < num_pushes; ++i) {
-          vec.emplace_back(ThreadInt{ std::this_thread::get_id(), i });
-	}
+    for (int i = 0; i < num_pushes; ++i) {
+      vec.emplace_back(ThreadInt{std::this_thread::get_id(), i});
+    }
   };
 
   std::vector<std::thread> threads;
   for (int i = 0; i < num_threads; ++i) {
-	threads.emplace_back(push_func, i);
+    threads.emplace_back(push_func, i);
   }
 
   for (auto& thread : threads) {
-	thread.join();
+    thread.join();
   }
 
   EXPECT_EQ(vec.size(), num_threads * num_pushes);
   // Store the last seen value for each thread id.
   std::unordered_map<std::thread::id, int> last_seen;
   for (int i = 0; i < num_threads * num_pushes; ++i) {
-      auto& thread_int = vec[i];
-      auto it = last_seen.find(thread_int.thread_id);
-      if (it == last_seen.end()) {
-		  last_seen[thread_int.thread_id] = thread_int.value;
-      }
-      else {
-		  EXPECT_EQ(it->second + 1, thread_int.value);
-		  it->second = thread_int.value;
-	  }
+    auto& thread_int = vec[i];
+    auto it = last_seen.find(thread_int.thread_id);
+    if (it == last_seen.end()) {
+      last_seen[thread_int.thread_id] = thread_int.value;
+    } else {
+      EXPECT_EQ(it->second + 1, thread_int.value);
+      it->second = thread_int.value;
+    }
   }
 }
