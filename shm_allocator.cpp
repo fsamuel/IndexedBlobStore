@@ -4,14 +4,12 @@
 #include <set>
 
 ShmAllocator::ShmAllocator(ChunkManager&& chunk_manager)
-    : chunk_manager_(std::move(chunk_manager)),
-      operations_("operations", 1024) {
+    : chunk_manager_(std::move(chunk_manager)) {
   InitializeAllocatorStateIfNecessary();
 }
 
 ShmAllocator::ShmAllocator(ShmAllocator&& other)
-    : chunk_manager_(std::move(other.chunk_manager_)),
-      operations_(std::move(other.operations_)) {}
+    : chunk_manager_(std::move(other.chunk_manager_)) {}
 
 uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
   // Calculate the number of bytes needed for the memory block
@@ -24,19 +22,19 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
     if (data != nullptr) {
       Node* allocated_node = GetNode(data);
       allocated_node->version.fetch_add(1);
-      // allocated_node->next_index.store(InvalidIndex);
 
+      // If we have enough space to split the node then split it.
       if (allocated_node->size > bytes_needed + sizeof(Node)) {
         std::size_t bytes_remaining = allocated_node->size - bytes_needed;
         uint8_t* buffer = NewAllocatedNode(
             reinterpret_cast<uint8_t*>(allocated_node) + bytes_needed,
             allocated_node->index + bytes_needed, bytes_remaining);
+
         Deallocate(buffer);
         Node* left_node = nullptr;
         SearchBySize(allocated_node->size, allocated_node->index, &left_node);
         allocated_node->size = bytes_needed;
       }
-      operations_.emplace_back(OperationType::Allocate, *allocated_node);
       return data;
     }
     // No block of sufficient size was found. We need to request a new chunk,
@@ -76,29 +74,23 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
 
   do {
     right_node = SearchBySize(node->size, node->index, &left_node);
-    // assert(node != right_node);
-    if ((right_node != nullptr) && (right_node->index == node->index)) {
-      operations_.emplace_back(OperationType::Deallocate, *node);
-      // Acquire a lock
-      std::lock_guard<std::mutex> lock(log_mutex);
-      PrintIndexHistory(node->index);
+    assert(node != right_node);
 
-      node->next_index.store(get_unmarked_reference(node->next_index.load()));
-      // Double free?
-      return true;
-    }
     std::size_t right_node_index = ToIndex(right_node);
-    node->next_index.store(right_node_index);
+    // node might still be in the free list and marked. Keep it marked just in case.
+    // TODO(fsamuel): Can we leak free nodes here?
+    node->next_index.store(get_marked_reference(right_node_index));
     if (left_node == nullptr) {
       if (state()->free_list_index.compare_exchange_strong(right_node_index,
                                                            node->index)) {
-        operations_.emplace_back(OperationType::Deallocate, *node);
+        node->next_index.store(get_unmarked_reference(right_node_index));
+
         return true;
       }
     } else {
       if (left_node->next_index.compare_exchange_strong(right_node_index,
                                                         node->index)) {
-        operations_.emplace_back(OperationType::Deallocate, *node);
+          node->next_index.store(get_unmarked_reference(right_node_index));
 
         return true;
       }
@@ -184,15 +176,6 @@ uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t bytes_needed) {
       if ((right_node->next_index.compare_exchange_strong(
               right_node_next_index,
               get_marked_reference(right_node_next_index)))) {
-        /*
-                {
-                    std::lock_guard<std::mutex> lock(log_mutex);
-                    std::cout << "Allocated node(" <<
-           chunk_manager_.chunk_index(right_node->index) << "," <<
-           chunk_manager_.offset_in_chunk(right_node->index) << ") with size "
-           << right_node->size << std::endl;
-                }
-                */
         break;
       }
     }
@@ -222,9 +205,6 @@ search_again:
   do {
     Node* current_node = nullptr;
     std::size_t current_node_next_index = state()->free_list_index.load();
-    std::set<std::size_t> skipped_nodes;
-    std::vector<Operation> operations;
-    bool printed = false;
     /* 1: Find left_node and right_node */
     while (true) {
       if (!is_marked_reference(current_node_next_index)) {
@@ -241,19 +221,6 @@ search_again:
           (current_node->size >= size && current_node->index >= index)) {
         break;
       }
-      if (skipped_nodes.insert(current_node_next_index).second) {
-        operations.emplace_back(OperationType::Search, *current_node);
-      } else if (!printed) {
-        operations.emplace_back(OperationType::Search, *current_node);
-        // PrintLastOperations();
-        /*
-        std::lock_guard<std::mutex> lock(log_mutex);
-        for (const auto& operation : operations) {
-           PrintIndexHistory(operation.index);
-           PrintOperation(operation);
-        }*/
-        printed = true;
-      }
     }
     right_node = current_node;
     std::size_t right_node_index =
@@ -268,8 +235,6 @@ search_again:
       }
     }
     /* 3: Remove one or more marked nodes */
-    // std::size_t right_node_index = right_node == nullptr ? InvalidIndex :
-    // right_node->index;
     if ((*left_node) != nullptr) {
       if ((*left_node)
               ->next_index.compare_exchange_strong(left_node_next_index,

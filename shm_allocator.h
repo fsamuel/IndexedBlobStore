@@ -12,8 +12,6 @@
 
 class AllocationLogger;
 
-static std::mutex log_mutex;
-
 // A simple allocator that allocates memory from a shared memory buffer. The
 // allocator maintains a free list of available blocks of memory. When a block
 // is allocated, it is removed from the free list. When a block is freed, it is
@@ -177,82 +175,8 @@ class ShmAllocator {
   // size of the left node < size, and the size of the right node >= size.
   Node* SearchBySize(std::size_t size, std::size_t index, Node** left_node);
 
-  enum class OperationType { Allocate, Deallocate, Search };
-  std::string OperationTypeToString(OperationType type) const {
-    switch (type) {
-      case OperationType::Allocate:
-        return "Allocate";
-      case OperationType::Deallocate:
-        return "Deallocate";
-      case OperationType::Search:
-        return "Search";
-    }
-    return "Unknown";
-  }
-
-  struct Operation {
-    Operation(OperationType type, const Node& node)
-        : thread_id(std::this_thread::get_id()),
-          type(type),
-          index(node.index),
-          size(node.size.load()),
-          version(node.version.load()),
-          next_index(node.next_index.load()),
-          marked(is_marked_reference(node.next_index)) {}
-    std::thread::id thread_id;
-    OperationType type;
-    std::size_t index;
-    std::size_t size;
-    std::size_t version;
-    std::size_t next_index;
-    bool marked;
-  };
-
-  void PrintOperation(const Operation& operation) const {
-    std::cout << "ThreadId(" << operation.thread_id
-              << "): " << OperationTypeToString(operation.type) << "("
-              << chunk_manager_.chunk_index(operation.index) << ", "
-              << chunk_manager_.offset_in_chunk(operation.index) << "), Next("
-              << chunk_manager_.chunk_index(operation.next_index) << ", "
-              << chunk_manager_.offset_in_chunk(operation.next_index)
-              << "), size=" << operation.size
-              << ", version=" << operation.version
-              << ", marked = " << std::boolalpha << operation.marked
-              << std::endl;
-  }
-
-  // Prints the last 100 operations performed on the allocator.
-  void PrintLastOperations() const {
-    std::lock_guard<std::mutex> lock(log_mutex);
-    std::cout << "Last 200 operations performed on the allocator:" << std::endl;
-    std::size_t op_size = operations_.size();
-    for (int i = std::max<uint8_t>(0, op_size - 200); i < op_size; ++i) {
-      PrintOperation(operations_[i]);
-    }
-  }
-
-  // Prints the history of an operation with a particular index.
-  void PrintIndexHistory(std::size_t index) const {
-    std::size_t input_chunk_index = chunk_manager_.chunk_index(index);
-    std::size_t input_offset_in_chunk = chunk_manager_.offset_in_chunk(index);
-    std::cout << "History of index " << input_chunk_index << ", "
-              << input_offset_in_chunk << ":" << std::endl;
-    std::size_t op_size = operations_.size();
-    for (int i = std::max<int>(0, op_size - 2000); i < op_size; ++i) {
-      const Operation& operation = operations_[i];
-      std::size_t op_chunk_index = chunk_manager_.chunk_index(operation.index);
-      std::size_t op_offset_in_chunk =
-          chunk_manager_.offset_in_chunk(operation.index);
-      if ((op_chunk_index == input_chunk_index) &&
-          (op_offset_in_chunk == input_offset_in_chunk)) {
-        PrintOperation(operation);
-      }
-    }
-  }
-
  private:
   // Reference to the shared memory buffer used for allocation
-  ChunkedVector<Operation> operations_;
   ChunkManager chunk_manager_;
 
   friend class AllocationLogger;
