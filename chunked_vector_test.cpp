@@ -3,7 +3,6 @@
 
 #include "chunked_vector.h"
 #include "gtest/gtest.h"
-#include "shared_memory_allocator.h"
 #include "utils.h"
 
 class ChunkedVectorTest : public ::testing::Test {

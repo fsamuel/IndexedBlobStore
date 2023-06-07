@@ -152,13 +152,6 @@ std::uint64_t ShmAllocator::ToIndexImpl(Node* ptr, std::true_type) const {
   return ptr->index;
 }
 
-// Implementation of ToIndex for other types
-template <typename U>
-std::uint64_t ShmAllocator::ToIndexImpl(U* ptr, std::false_type) const {
-  Node* allocated_node = GetNode(ptr);
-  return ToIndexImpl(allocated_node, std::true_type{}) + sizeof(Node);
-}
-
 uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t bytes_needed) {
   Node* right_node = nullptr;
   std::size_t right_node_next_index = InvalidIndex;

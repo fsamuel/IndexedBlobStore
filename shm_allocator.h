@@ -43,7 +43,7 @@ class ShmAllocator {
   template <typename U>
   typename std::enable_if<!std::is_same<U, uint8_t>::value, bool>::type
   Deallocate(U* ptr) {
-    return Deallocate(reinterpret_cast<uin8_t*>(ptr));
+    return Deallocate(reinterpret_cast<uint8_t*>(ptr));
   }
 
   // Returns the size of the allocated block at the given index.
@@ -145,7 +145,10 @@ class ShmAllocator {
   std::uint64_t ToIndexImpl(Node* ptr, std::true_type) const;
 
   template <typename U>
-  std::uint64_t ToIndexImpl(U* ptr, std::false_type) const;
+  std::uint64_t ToIndexImpl(U* ptr, std::false_type) const {
+      Node* allocated_node = GetNode(ptr);
+      return ToIndexImpl(allocated_node, std::true_type{}) + sizeof(Node);
+  }
 
   // Allocates space from a free node that can fit the requested size.
   //	Returns nullptr if no free node is found.

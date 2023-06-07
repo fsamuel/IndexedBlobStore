@@ -139,7 +139,6 @@
     <ClInclude Include="storage_traits.h" />
     <ClInclude Include="string_slice.h" />
     <ClInclude Include="Main.h" />
-    <ClInclude Include="shared_memory_allocator.h" />
     <ClInclude Include="shared_memory_buffer.h" />
     <ClInclude Include="transaction.h" />
     <ClInclude Include="tree_iterator.h" />

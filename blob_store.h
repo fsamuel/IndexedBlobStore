@@ -10,7 +10,7 @@
 #include <type_traits>
 
 #include "chunked_vector.h"
-#include "shared_memory_allocator.h"
+#include "shm_allocator.h"
 #include "storage_traits.h"
 #include "string_slice.h"
 #include "utils.h"
@@ -353,7 +353,7 @@ class BlobStoreObject {
 // objects while maintaining a compact memory footprint.
 class BlobStore {
  public:
-  using Allocator = SharedMemoryAllocator<char>;
+  using Allocator = ShmAllocator;
 
   static constexpr std::size_t InvalidIndex =
       std::numeric_limits<std::size_t>::max();
@@ -421,7 +421,7 @@ class BlobStore {
     // This is only safe if the calling object is holding a read or write lock.
     BlobMetadata& metadata = metadata_[index];
     size_t clone_index = FindFreeSlot();
-    char* ptr = allocator_.Allocate(metadata.size);
+    uint8_t* ptr = allocator_.Allocate(metadata.size);
     size_t offset;
     const T* obj = GetRaw<T>(index, &offset);
     // Blobs are trivially copyable and standard layout so memcpy should be
@@ -430,7 +430,7 @@ class BlobStore {
     BlobMetadata& clone_metadata = metadata_[clone_index];
     clone_metadata.size = metadata.size;
     clone_metadata.offset = allocator_.ToIndex(ptr);
-    assert(clone_metadata.offset != SharedMemoryAllocator<char>::InvalidIndex);
+    assert(clone_metadata.offset != ShmAllocator::InvalidIndex);
 
     clone_metadata.lock_state = 0;
     clone_metadata.next_free_index = -1;
@@ -810,13 +810,13 @@ BlobStore::NewImpl(Args&&... args) {
   using StorageType = typename StorageTraits<T>::StorageType;
   size_t index = FindFreeSlot();
   size_t size = StorageTraits<T>::size(std::forward<Args>(args)...);
-  char* ptr = allocator_.Allocate(size);
+  uint8_t* ptr = allocator_.Allocate(size);
   utils::Construct(reinterpret_cast<StorageType*>(ptr),
                    std::forward<Args>(args)...);
   BlobMetadata& metadata = metadata_[index];
   metadata.size = size;
   metadata.offset = allocator_.ToIndex(ptr);
-  assert(metadata.offset != SharedMemoryAllocator<char>::InvalidIndex);
+  assert(metadata.offset != ShmAllocator::InvalidIndex);
   metadata.lock_state = 0;
   metadata.next_free_index = -1;
   return BlobStoreObject<T>(this, index);
@@ -833,13 +833,13 @@ BlobStore::NewImpl(
   using ElementType = typename StorageTraits<T>::ElementType;
   size_t index = FindFreeSlot();
   size_t size = initList.size() * sizeof(ElementType);
-  char* ptr = allocator_.Allocate(size);
+  uint8_t* ptr = allocator_.Allocate(size);
   std::uninitialized_copy(initList.begin(), initList.end(),
                           reinterpret_cast<ElementType*>(ptr));
   BlobMetadata& metadata = metadata_[index];
   metadata.size = size;
   metadata.offset = allocator_.ToIndex(ptr);
-  assert(metadata.offset != SharedMemoryAllocator<char>::InvalidIndex);
+  assert(metadata.offset != ShmAllocator::InvalidIndex);
   metadata.lock_state = 0;
   metadata.next_free_index = -1;
   return BlobStoreObject<T>(this, index);
