@@ -11,7 +11,7 @@ class ShmAllocatorTest : public ::testing::Test {
     RemoveChunkFiles();
     // The initial chunk size must be at least the size of the allocator header.
     ChunkManager manager("test_buffer", 32);
-    shared_mem_allocator = new ShmAllocator<char>(std::move(manager));
+    shared_mem_allocator = new ShmAllocator(std::move(manager));
   }
 
   virtual void TearDown() {
@@ -29,7 +29,7 @@ class ShmAllocatorTest : public ::testing::Test {
     }
   }
 
-  ShmAllocator<char>* shared_mem_allocator;
+  ShmAllocator* shared_mem_allocator;
 };
 
 TEST_F(ShmAllocatorTest, AllocateMemory) {
@@ -38,7 +38,7 @@ TEST_F(ShmAllocatorTest, AllocateMemory) {
 }
 
 TEST_F(ShmAllocatorTest, FreeMemory) {
-  char* ptr = shared_mem_allocator->Allocate(128);
+  uint8_t* ptr = shared_mem_allocator->Allocate(128);
   EXPECT_NE(ptr, nullptr);
 
   shared_mem_allocator->Deallocate(ptr);
@@ -52,9 +52,9 @@ TEST_F(ShmAllocatorTest, FreeNullPointer) {
 }
 
 TEST_F(ShmAllocatorTest, MultipleAllocations) {
-  char* ptr1 = shared_mem_allocator->Allocate(128);
+  uint8_t* ptr1 = shared_mem_allocator->Allocate(128);
   EXPECT_NE(ptr1, nullptr);
-  char* ptr2 = shared_mem_allocator->Allocate(256);
+  uint8_t* ptr2 = shared_mem_allocator->Allocate(256);
   EXPECT_NE(ptr2, nullptr);
   EXPECT_NE(ptr1, ptr2);
   EXPECT_GE(shared_mem_allocator->GetCapacity(ptr1), 128);
@@ -66,9 +66,9 @@ TEST_F(ShmAllocatorTest, MultipleAllocationsMultithreaded) {
   std::vector<std::thread> threads;
   for (int thread_index = 0; thread_index < 8; ++thread_index) {
     threads.push_back(std::thread([this]() {
-      char* ptr1 = shared_mem_allocator->Allocate(128);
+      uint8_t* ptr1 = shared_mem_allocator->Allocate(128);
       EXPECT_NE(ptr1, nullptr);
-      char* ptr2 = shared_mem_allocator->Allocate(256);
+      uint8_t* ptr2 = shared_mem_allocator->Allocate(256);
       EXPECT_NE(ptr2, nullptr);
       EXPECT_NE(ptr1, ptr2);
       EXPECT_GE(shared_mem_allocator->GetCapacity(ptr1), 128);
@@ -88,7 +88,7 @@ TEST_F(ShmAllocatorTest, MultipleAllocationsMultithreaded2) {
   for (int thread_index = 0; thread_index < 8; ++thread_index) {
     threads.push_back(std::thread([this, thread_index]() {
       for (int i = 0; i < 100; ++i) {
-        char* ptr = shared_mem_allocator->Allocate(128);
+        uint8_t* ptr = shared_mem_allocator->Allocate(128);
         EXPECT_NE(ptr, nullptr);
         shared_mem_allocator->Deallocate(ptr);
       }
@@ -100,9 +100,9 @@ TEST_F(ShmAllocatorTest, MultipleAllocationsMultithreaded2) {
 }
 
 TEST_F(ShmAllocatorTest, MultipleAllocationsAndDeallocations) {
-  char* ptr1 = shared_mem_allocator->Allocate(128);
+  uint8_t* ptr1 = shared_mem_allocator->Allocate(128);
   EXPECT_NE(ptr1, nullptr);
-  char* ptr2 = shared_mem_allocator->Allocate(256);
+  uint8_t* ptr2 = shared_mem_allocator->Allocate(256);
   EXPECT_NE(ptr2, nullptr);
   EXPECT_NE(ptr1, ptr2);
   shared_mem_allocator->Deallocate(ptr1);
@@ -110,45 +110,45 @@ TEST_F(ShmAllocatorTest, MultipleAllocationsAndDeallocations) {
 }
 
 TEST_F(ShmAllocatorTest, AllocateMoreThanAvailable) {
-  char* ptr1 = shared_mem_allocator->Allocate(1024);
+  uint8_t* ptr1 = shared_mem_allocator->Allocate(1024);
   EXPECT_NE(ptr1, nullptr);
   // This should cause the buffer to resize.
-  char* ptr2 = shared_mem_allocator->Allocate(1);
+  uint8_t* ptr2 = shared_mem_allocator->Allocate(1);
   EXPECT_NE(ptr2, nullptr);
 }
 
 TEST_F(ShmAllocatorTest, AllocateMoreThanAvailableAndDeallocate) {
-  char* ptr1 = shared_mem_allocator->Allocate(1024);
+  uint8_t* ptr1 = shared_mem_allocator->Allocate(1024);
   EXPECT_NE(ptr1, nullptr);
   // This should cause the buffer to resize.
-  char* ptr2 = shared_mem_allocator->Allocate(1);
+  uint8_t* ptr2 = shared_mem_allocator->Allocate(1);
   EXPECT_NE(ptr2, nullptr);
   shared_mem_allocator->Deallocate(ptr1);
   shared_mem_allocator->Deallocate(ptr2);
 }
 
 TEST_F(ShmAllocatorTest, MemoryRecycling) {
-  char* ptr1 = shared_mem_allocator->Allocate(1024);
+  uint8_t* ptr1 = shared_mem_allocator->Allocate(1024);
   EXPECT_NE(ptr1, nullptr);
   for (int i = 0; i < 1024; i++) {
     ptr1[i] = 'a';
   }
   shared_mem_allocator->Deallocate(ptr1);
 
-  char* ptr2 = shared_mem_allocator->Allocate(256);
+  uint8_t* ptr2 = shared_mem_allocator->Allocate(256);
   EXPECT_NE(ptr2, nullptr);
   for (int i = 0; i < 256; i++) {
     ptr2[i] = 'b';
   }
 
-  char* ptr3 = shared_mem_allocator->Allocate(256);
+  uint8_t* ptr3 = shared_mem_allocator->Allocate(256);
   EXPECT_NE(ptr3, nullptr);
   for (int i = 0; i < 256; i++) {
     ptr3[i] = 'c';
   }
   EXPECT_TRUE(ptr3 > ptr2 + 256 || ptr3 < ptr2 - 256);
 
-  char* ptr4 = shared_mem_allocator->Allocate(256);
+  uint8_t* ptr4 = shared_mem_allocator->Allocate(256);
   EXPECT_NE(ptr4, nullptr);
   for (int i = 0; i < 256; i++) {
     ptr4[i] = 'd';
@@ -173,31 +173,31 @@ TEST_F(ShmAllocatorTest, MemoryRecycling) {
 }
 
 // Similar to MemoryRecycling but with multiple concurrent threads.
-TEST_F(ShmAllocatorTest, DISABLED_MemoryRecyclingMultithreaded) {
+TEST_F(ShmAllocatorTest, MemoryRecyclingMultithreaded) {
   std::vector<std::thread> threads;
   for (int thread_index = 0; thread_index < 10; ++thread_index) {
     threads.push_back(std::thread([this, thread_index]() {
-      char* ptr1 = shared_mem_allocator->Allocate(256);
+      uint8_t* ptr1 = shared_mem_allocator->Allocate(256);
       EXPECT_NE(ptr1, nullptr);
       for (int i = 0; i < 256; i++) {
         ptr1[i] = 'a';
       }
       shared_mem_allocator->Deallocate(ptr1);
 
-      char* ptr2 = shared_mem_allocator->Allocate(256);
+      uint8_t* ptr2 = shared_mem_allocator->Allocate(256);
       EXPECT_NE(ptr2, nullptr);
       for (int i = 0; i < 256; i++) {
         ptr2[i] = 'b';
       }
 
-      char* ptr3 = shared_mem_allocator->Allocate(256);
+      uint8_t* ptr3 = shared_mem_allocator->Allocate(256);
       EXPECT_NE(ptr3, nullptr);
       for (int i = 0; i < 256; i++) {
         ptr3[i] = 'c';
       }
       EXPECT_TRUE(ptr3 > ptr2 + 256 || ptr3 < ptr2 - 256);
 
-      char* ptr4 = shared_mem_allocator->Allocate(256);
+      uint8_t* ptr4 = shared_mem_allocator->Allocate(256);
       EXPECT_NE(ptr4, nullptr);
       for (int i = 0; i < 256; i++) {
         ptr4[i] = 'd';

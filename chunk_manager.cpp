@@ -164,14 +164,14 @@ std::uint64_t ChunkManager::encode_index(std::size_t chunk_index,
          offset_in_chunk;
 }
 
-std::size_t ChunkManager::chunk_index(std::uint64_t encoded_index) const {
+std::size_t ChunkManager::chunk_index(std::uint64_t encoded_index) {
   // Clear the topmost bit as it's reserved for other uses.
   // We can never have more than 128 chunks. That's a massive amount of
   // memory/storage.
   return (encoded_index & 0x7FFFFFFFFFFFFFFF) >> 56;
 }
 
-std::size_t ChunkManager::offset_in_chunk(std::uint64_t encoded_index) const {
+std::size_t ChunkManager::offset_in_chunk(std::uint64_t encoded_index) {
     return encoded_index & ((1ull << 56) - 1);
 }
 

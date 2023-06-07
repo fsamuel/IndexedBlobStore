@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="allocation_logger.h" />
     <ClInclude Include="blob_store.h" />
     <ClInclude Include="b_plus_tree.h" />
     <ClInclude Include="b_plus_tree_base.h" />
@@ -145,12 +146,14 @@
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="allocation_logger.cpp" />
     <ClCompile Include="blob_store.cpp" />
     <ClCompile Include="chunk_manager.cpp" />
     <ClCompile Include="fixed_string.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="nodes.cpp" />
     <ClCompile Include="shared_memory_buffer.cpp" />
+    <ClCompile Include="shm_allocator.cpp" />
     <ClCompile Include="string_slice.cpp" />
     <ClCompile Include="utils.cpp" />
   </ItemGroup>

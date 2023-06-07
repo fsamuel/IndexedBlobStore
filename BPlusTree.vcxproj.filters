@@ -63,6 +63,9 @@
     <ClInclude Include="shm_allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="allocation_logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="shared_memory_buffer.cpp">
@@ -87,6 +90,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="chunk_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shm_allocator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="allocation_logger.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

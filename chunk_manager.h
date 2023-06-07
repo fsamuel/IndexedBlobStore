@@ -66,10 +66,10 @@ class ChunkManager {
                              std::size_t offset_in_chunk) const;
 
   // Returns the chunk index from the encoded index.
-  std::size_t chunk_index(std::uint64_t encoded_index) const;
+  static std::size_t chunk_index(std::uint64_t encoded_index);
 
   // Returns the offset in the chunk from the encoded index.
-  std::size_t offset_in_chunk(std::uint64_t encoded_index) const;
+  static std::size_t offset_in_chunk(std::uint64_t encoded_index);
 
  private:
   // Loads the number of chunks from the first chunk and adds any necessary

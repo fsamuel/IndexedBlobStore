@@ -311,6 +311,7 @@ TEST_F(ChunkedVectorTest, PushIntegersMultiThreaded) {
   struct ThreadInt {
       std::thread::id thread_id;
       int value;
+      uint8_t padding[48 - sizeof(thread_id) - sizeof(value)];
   };
   const int num_threads = 10;
   const int num_pushes = 10000;
