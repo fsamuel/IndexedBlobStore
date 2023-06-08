@@ -51,7 +51,7 @@ TEST_F(BPlusTreeTest, BasicTree) {
 // Sanity check concurrent version of BasicTree.  Spawns 10 threads, each of
 // which inserts 10 elements into the tree.  Then, verifies that all 100
 // elements are in the tree.
-TEST_F(BPlusTreeTest, DISABLED_BasicTreeConcurrent) {
+TEST_F(BPlusTreeTest, BasicTreeConcurrent) {
   BPlusTree<int, int, 4> tree(*blob_store);
   std::vector<std::thread> threads;
   for (int i = 0; i < 10; ++i) {
