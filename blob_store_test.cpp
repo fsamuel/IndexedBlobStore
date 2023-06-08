@@ -407,6 +407,9 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
 // Allocate a blob, pass it to 8 threads, have them all clone it, and store the
 // clones in a vector. After the threads are done, verify that the contents of
 // the clones are the same as the original.
+// TODO(fsamuel): This vector occasionally crashes trying to access the results
+// vector. In one case, in seems like the lhs expression string is -1. Is this a
+// gtest bug? Is it some kind of buffer overrun clobbering other data?
 TEST_F(BlobStoreTest, IntArrayConcurrentClone) {
   BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
   BlobStoreObject<int[4]> ptr = store.New<int[4]>({1, 2, 3, 4});
