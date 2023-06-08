@@ -19,6 +19,26 @@ class AllocationLogger;
 // adjacent free blocks. The allocator is designed to be lock-free by using
 // atomic operations to update the allocator state: size of a free block, or the
 // head of the free list.
+//
+// This Allocator implements the Harris Lock-Free Linked List as the free list.
+// The paper can be found here: https://timharris.uk/papers/2001-disc.pdf
+// Note that this makes a few minor changes. Firstly, it's delete operation
+// (allocation) differs from Harris' in that it allows for greater than or equal
+// to the requested key. This implementation is not strictly linearizable but it
+// does (as far as I can tell) ensure that allocations and deallocations
+// complete correctly and the data structure remains in a consistent state.
+// Furthermore, Harris assumes that each allocation is fresh and we don't reuse
+// nodes. This is not a correct assumption when implementing an allocator as the
+// same nodes can be freed and allocated at any time even in the middle of
+// another operation. This implementation leaves an allocated node's next
+// pointer intact while it is being deallocated allowing other threads/processes
+// to follow the next pointer to the next free node.
+//
+// TODO(fsamuel): One thing we can do in the future is on deallocation, we can
+// look at the node adjacent to the right, and if it's also free (by looking at
+// the next pointer), we can remove it from the free list (by marking the next
+// pointer), then changing the size of the currently allocated node, before
+// deallocating it.
 class ShmAllocator {
  public:
   static constexpr std::size_t InvalidIndex =
