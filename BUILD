@@ -15,6 +15,7 @@ cc_library(
         "fixed_string.cpp",
         "nodes.cpp",
         "shared_memory_buffer.cpp",
+        "shm_allocator.cpp",
         "string_slice.cpp",
         "utils.cpp"
     ],
@@ -26,7 +27,6 @@ cc_library(
         "chunked_vector.h",
         "fixed_string.h",
         "nodes.h",
-        "shared_memory_allocator.h",
         "shared_memory_buffer.h",
         "shm_allocator.h",
         "storage_traits.h",
@@ -47,7 +47,6 @@ cc_test(
         "chunked_vector_test.cpp",
         "fixed_string_test.cpp",
         "nodes_test.cpp",
-        "shared_memory_allocator_test.cpp",
         "shared_memory_buffer_test.cpp",
         "shm_allocator_test.cpp",
         "string_slice_test.cpp"

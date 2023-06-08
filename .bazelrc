@@ -12,13 +12,18 @@ build -c opt --verbose_failures
 startup --windows_enable_symlinks
 build --enable_runfiles
 
-#build --client_env=CC=clang
+build --client_env=CC=clang
 #build --copt=-DGRPC_BAZEL_BUILD
 #build --host_copt=-DGRPC_BAZEL_BUILD
 #build --action_env=GRPC_BAZEL_RUNTIME=1
 #build --define=use_fast_cpp_protos=true
 #build:opt --compilation_mode=opt
 #build:opt --copt=-Wframe-larger-than=16384
+build --compiler=clang-cl 
+build --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+build --action_env=CC=clang
+build --action_env=CXX=clang++
+#build --action_env=BAZEL_LLVM=PATH_TO_YOUR_LLVM_FOLDER
 
 build:coverage --copt=-fprofile-instr-generate
 build:coverage --copt=-fcoverage-mapping
