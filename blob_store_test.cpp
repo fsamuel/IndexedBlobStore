@@ -410,6 +410,8 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
 // TODO(fsamuel): This vector occasionally crashes trying to access the results
 // vector. In one case, in seems like the lhs expression string is -1. Is this a
 // gtest bug? Is it some kind of buffer overrun clobbering other data?
+// In another case, it seems like the control_block_ of BlobStoreObject is being
+// double freed on operator=.
 TEST_F(BlobStoreTest, IntArrayConcurrentClone) {
   BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
   BlobStoreObject<int[4]> ptr = store.New<int[4]>({1, 2, 3, 4});

@@ -63,8 +63,6 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
   // was inserted, false if the key already existed in the tree or there was a
   // conflicting operation in progress.
   bool Insert(const KeyType& key, const ValueType& value);
-  bool Insert(BlobStoreObject<const KeyType> key,
-              BlobStoreObject<const ValueType> value);
 
   // Deletes a key-value pair from the tree. Returns true if the operation was
   // successful, false if there was a conflicting operation in progress. If
@@ -216,15 +214,6 @@ bool BPlusTree<KeyType, ValueType, Order>::Insert(const KeyType& key,
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::Insert(
-    BlobStoreObject<const KeyType> key,
-    BlobStoreObject<const ValueType> value) {
-  Transaction txn(CreateTransaction());
-  txn.Insert(std::move(key), std::move(value));
-  return std::move(txn).Commit();
-}
-
-template <typename KeyType, typename ValueType, size_t Order>
 void BPlusTree<KeyType, ValueType, Order>::Insert(
     Transaction* transaction,
     BlobStoreObject<const KeyType> key,
@@ -296,27 +285,28 @@ typename BPlusTree<KeyType, ValueType, Order>::InsertionBundle
 BPlusTree<KeyType, ValueType, Order>::SplitLeafNode(
     Transaction* transaction,
     BlobStoreObject<LeafNode> left_node) {
+  // Create a new right node tracked by the provided transaction.
   BlobStoreObject<LeafNode> new_right_node = transaction->New<LeafNode>();
 
+  // Find the middle key.
   size_t middle_key_index = (left_node->num_keys() - 1) / 2;
   BlobStoreObject<const KeyType> middle_key;
   GetKey(left_node, middle_key_index, &middle_key);
 
+  // Copy the middle keys/values onward to the right node.
   new_right_node->set_num_keys(left_node->num_keys() - middle_key_index);
   for (int i = 0; i < new_right_node->num_keys(); ++i) {
     new_right_node->set_key(i, left_node->get_key(middle_key_index + i));
+    new_right_node->values[i] = left_node->values[middle_key_index + i];
     left_node->set_key(middle_key_index + i, BlobStore::InvalidIndex);
+    left_node->values[middle_key_index + i] = BlobStore::InvalidIndex;
   }
-  auto new_leaf_node = new_right_node.To<LeafNode>();
-  auto child_leaf_node = left_node.To<LeafNode>();
-  for (int i = 0; i < new_right_node->num_keys(); ++i) {
-    new_leaf_node->values[i] = child_leaf_node->values[middle_key_index + i];
-    child_leaf_node->values[middle_key_index + i] = BlobStore::InvalidIndex;
-  }
-  child_leaf_node->values[middle_key_index] = BlobStore::InvalidIndex;
-
+  left_node->values[middle_key_index] = BlobStore::InvalidIndex;
+  
+  // Update the key count of the left_node.
   left_node->set_num_keys(middle_key_index);
   left_node->set_key(middle_key_index, BlobStore::InvalidIndex);
+
   return InsertionBundle(left_node.To<BaseNode>(), middle_key,
                          new_right_node.To<BaseNode>());
 }
@@ -336,17 +326,16 @@ BPlusTree<KeyType, ValueType, Order>::SplitInternalNode(
   new_right_node->set_num_keys(left_node->num_keys() - middle_key_index - 1);
   for (int i = 0; i < new_right_node->num_keys(); ++i) {
     new_right_node->set_key(i, left_node->get_key(middle_key_index + i + 1));
+    new_right_node->children[i] =
+        left_node->children[middle_key_index + i + 1];
     left_node->set_key(middle_key_index + i + 1, BlobStore::InvalidIndex);
-  }
-
-  auto new_internal_node = new_right_node.To<InternalNode>();
-  auto child_internal_node = left_node.To<InternalNode>();
-  for (int i = 0; i <= new_right_node->num_keys(); ++i) {
-    new_internal_node->children[i] =
-        child_internal_node->children[middle_key_index + i + 1];
-    child_internal_node->children[middle_key_index + i + 1] =
+    left_node->children[middle_key_index + i + 1] =
         BlobStore::InvalidIndex;
   }
+  new_right_node->children[new_right_node->num_keys()] =
+      left_node->children[middle_key_index + new_right_node->num_keys() + 1];
+  left_node->children[middle_key_index + new_right_node->num_keys() + 1] =
+      BlobStore::InvalidIndex;
 
   left_node->set_num_keys(middle_key_index);
   left_node->set_key(middle_key_index, BlobStore::InvalidIndex);
