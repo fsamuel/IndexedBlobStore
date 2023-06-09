@@ -159,7 +159,7 @@ std::size_t ChunkManager::capacity() const {
 }
 
 std::uint64_t ChunkManager::encode_index(std::size_t chunk_index,
-                                         std::size_t offset_in_chunk) const {
+                                         std::size_t offset_in_chunk) {
   return (static_cast<std::uint64_t>(chunk_index & 0x7F) << 56) |
          offset_in_chunk;
 }
@@ -196,8 +196,7 @@ std::size_t ChunkManager::load_chunks_if_necessary() {
   return num_chunks_loaded;
 }
 
-std::uint64_t ChunkManager::decode_num_chunks(
-    uint64_t num_chunks_encoded) const {
+std::uint64_t ChunkManager::decode_num_chunks(uint64_t num_chunks_encoded) {
   // The first 32-bits of num_chunks_encoded are the number of increments.
   // The next 32-bits of num_chunks_encoded are the number of decrements.
   // The number of chunks is the number of increments minus the number of
@@ -207,20 +206,20 @@ std::uint64_t ChunkManager::decode_num_chunks(
 
 std::uint64_t ChunkManager::increment_num_chunks(
     std::uint64_t num_chunks_encoded,
-    std::uint64_t value) const {
+    std::uint64_t value) {
   return ((num_chunks_encoded + (value << 32)) & 0xFFFFFFFF00000000) |
          (num_chunks_encoded & ((1ull << 32) - 1));
 }
 
 std::uint64_t ChunkManager::decrement_num_chunks(
     std::uint64_t num_chunks_encoded,
-    std::uint64_t value) const {
+    std::uint64_t value) {
   return (num_chunks_encoded & 0xFFFFFFFF00000000) |
          ((num_chunks_encoded + value) & ((1ull << 32) - 1));
 }
 
 std::uint64_t ChunkManager::set_num_chunks(std::uint64_t num_chunks_encoded,
-                                           std::uint64_t num_chunks) const {
+                                           std::uint64_t num_chunks) {
   uint64_t num_chunks_decoded = decode_num_chunks(num_chunks_encoded);
   if (num_chunks_decoded > num_chunks) {
     uint64_t decrement_count = num_chunks_decoded - num_chunks;

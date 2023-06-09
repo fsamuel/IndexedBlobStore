@@ -131,7 +131,6 @@ class ShmAllocator {
     std::atomic<std::size_t> size;
     // index of the next free block in the free list
     std::atomic<std::size_t> next_index;
-    std::size_t signature;
 
     bool is_allocated() const { return !is_free(); }
 
@@ -140,16 +139,6 @@ class ShmAllocator {
 
   // Given a pointer, returns the Node.
   Node* GetNode(uint8_t* ptr) const { return reinterpret_cast<Node*>(ptr) - 1; }
-
-  // Returns the first free node in the free list, or nullptr if there are no
-  // free nodes.
-  Node* FirstFreeNode() { return ToPtr<Node>(state()->free_list_index.load()); }
-
-  // Returns the next node in the free list, or nullptr if there are no more
-  // nodes.
-  Node* NextFreeNode(Node* node) {
-    return ToPtr<Node>(node->next_index.load());
-  }
 
   void InitializeAllocatorStateIfNecessary();
 

@@ -334,11 +334,16 @@ class BlobStoreObject {
       ref_count_.fetch_sub(1);
     }
 
-    BlobStore* store_;  // Pointer to the BlobStore instance
-    size_t index_;      // Index of the object in the BlobStore
-    size_t offset_;     // Offset of the object in the shared memory buffer.
-    StorageType* ptr_;  // Pointer to the object
-    std::atomic<size_t> ref_count_;  // Number of smart pointers to this object.
+    // Pointer to the BlobStore instance
+    BlobStore* const store_;
+    // Index of the object in the BlobStore
+    size_t index_;
+    // Offset of the object in the shared memory buffer.
+    size_t offset_;
+    // Pointer to the object
+    StorageType* ptr_;
+    // Number of smart pointers to this object.
+    std::atomic<size_t> ref_count_;
   };
 
   ControlBlock* control_block_;
@@ -492,12 +497,6 @@ class BlobStore {
   // Iterator class for BlobStore
   class Iterator {
    public:
-    using iterator_category = std::bidirectional_iterator_tag;
-    using value_type = char;
-    using difference_type = std::ptrdiff_t;
-    using pointer = const value_type*;
-    using reference = const value_type&;
-
     Iterator(BlobStore* store, size_t index) : store_(store), index_(index) {
       AdvanceToValidIndex();
     }
@@ -569,12 +568,6 @@ class BlobStore {
   Iterator begin() { return Iterator(this, 1); }
 
   Iterator end() { return Iterator(this, metadata_.size()); }
-
-  Iterator cbegin() const { return Iterator(const_cast<BlobStore*>(this), 1); }
-
-  Iterator cend() const {
-    return Iterator(const_cast<BlobStore*>(this), metadata_.size());
-  }
 
  private:
   struct BlobMetadata {
@@ -864,7 +857,6 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(
   // If we failed to acquire the lock, then the blob was deleted while we were
   // constructing the object.
   if (!success) {
-    std::cout << "Failed to acquire lock." << std::endl;
     index_ = BlobStore::InvalidIndex;
     return;
   }

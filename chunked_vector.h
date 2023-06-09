@@ -242,14 +242,23 @@ void ChunkedVector<T>::pop_back() {
 
 template <typename T>
 T* ChunkedVector<T>::at(std::size_t index) {
-  if (index >= size()) {
-    return nullptr;
-  }
-  std::size_t chunk_index, byte_offset;
-  chunk_index_and_offset(index, &chunk_index, &byte_offset);
-  std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-  return reinterpret_cast<T*>(
-      reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
+    while (true) {
+        if (index >= size()) {
+            // It's possible that even if this index existed earlier, it's no
+            // longer there due to a pop on another thread.
+            return nullptr;
+        }
+        std::size_t chunk_index, byte_offset;
+        chunk_index_and_offset(index, &chunk_index, &byte_offset);
+        std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
+        if (chunk_index >= chunks_.size()) {
+            // It can take time for the chunks vector to catch up with the size
+            // in shared memory.
+            continue;
+        }
+        return reinterpret_cast<T*>(
+            reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
+    }
 }
 
 template <typename T>

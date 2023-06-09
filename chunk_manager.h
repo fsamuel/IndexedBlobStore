@@ -63,7 +63,7 @@ class ChunkManager {
   // and offset in the chunk. The chunk index is stored in the upper 32 bits,
   // and the offset in the chunk is stored in the lower 32 bits.
   std::uint64_t encode_index(std::size_t chunk_index,
-                             std::size_t offset_in_chunk) const;
+                             std::size_t offset_in_chunk);
 
   // Returns the chunk index from the encoded index.
   static std::size_t chunk_index(std::uint64_t encoded_index);
@@ -79,23 +79,23 @@ class ChunkManager {
   // num_chunks consists of two 32-bit quantities: the number of increments and
   // the number of decrements. 32-bit quantities into a single number that
   // represents the number of chunks.
-  std::uint64_t decode_num_chunks(uint64_t num_chunks_encoded) const;
+  static std::uint64_t decode_num_chunks(uint64_t num_chunks_encoded);
 
   // Increments the first quantity of the encoded num_chunks.
-  std::uint64_t increment_num_chunks(std::uint64_t num_chunks_encoded,
-                                     std::uint64_t value = 1ull) const;
+  static std::uint64_t increment_num_chunks(std::uint64_t num_chunks_encoded,
+                                     std::uint64_t value = 1ull);
 
   // Increments the second quanity of the encoded num_chunks.
-  std::uint64_t decrement_num_chunks(std::uint64_t num_chunks_encoded,
-                                     std::uint64_t value = 1ull) const;
+  static std::uint64_t decrement_num_chunks(std::uint64_t num_chunks_encoded,
+                                     std::uint64_t value = 1ull);
 
   // Sets the num_chunks to the specified value. If the specified value is less
   // than the current value, then the function increments the second quantity of
   // the encoded num_chunks. If the specified value is greater than the current
   // value, then the function increments the first quantity of the encoded
   // num_chunks.
-  std::uint64_t set_num_chunks(std::uint64_t num_chunks_encoded,
-                               std::uint64_t num_chunks) const;
+  static std::uint64_t set_num_chunks(std::uint64_t num_chunks_encoded,
+                               std::uint64_t num_chunks);
 
   // Prefix for the names of the shared memory buffers.
   std::string name_prefix_;

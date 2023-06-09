@@ -31,17 +31,23 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
             allocated_node->index + bytes_needed, bytes_remaining);
 
         Deallocate(buffer);
-        Node* left_node = nullptr;
-        SearchBySize(allocated_node->size, allocated_node->index, &left_node);
         allocated_node->size = bytes_needed;
       }
       return data;
     }
     // No block of sufficient size was found. We need to request a new chunk,
-    // add it to the free list, and try again.
+    // add it to the free list, and try again. Every new chunk is double the
+    // size of the previous chunk. Regardless of the initial chunk size, we'll
+    // keep allocating chunks until we can satisfy the request above.
+    // TODO(fsamuel): A more resilient allocator would specify an upperbound to
+    // allocation size and fail an allocation beyond that upper bound.
     std::size_t last_num_chunks = state()->num_chunks.load();
     uint8_t* new_chunk_data;
     std::size_t new_chunk_size;
+    // Only one thread/process will end up creating a new chunk so only one new
+    // free node will be added as a result of this code path. All other
+    // threads/processes will not get a new chunk and will try to grab an
+    // allocation from the free list again.
     if (chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data,
                                            &new_chunk_size) > 0) {
       uint8_t* buffer = NewAllocatedNode(
@@ -63,6 +69,8 @@ bool ShmAllocator::Deallocate(std::size_t index) {
 
 bool ShmAllocator::Deallocate(uint8_t* ptr) {
   Node* node = GetNode(ptr);
+  // The version counter on every node ensures we don't accidentally double
+  // free.
   if (node == nullptr || !node->is_allocated()) {
     // The pointer is not a valid allocation.
     return false;
@@ -142,7 +150,6 @@ uint8_t* ShmAllocator::NewAllocatedNode(uint8_t* buffer,
   allocated_node->index = index;
   allocated_node->next_index.store(InvalidIndex);
   allocated_node->version.store(1);
-  allocated_node->signature = 0xbeefcafe;
   return reinterpret_cast<uint8_t*>(allocated_node + 1);
 }
 
