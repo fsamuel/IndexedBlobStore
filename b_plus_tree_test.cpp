@@ -116,9 +116,9 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
 
 // Attempts to delete an element from the B+ tree that doesn't exist.
 TEST_F(BPlusTreeTest, DeleteElementThatDoesNotExist) {
-    BPlusTree<int, int, 16> tree(*blob_store);
-    BlobStoreObject<const int> deleted = tree.Delete(100);
-    EXPECT_EQ(deleted, nullptr);
+  BPlusTree<int, int, 16> tree(*blob_store);
+  BlobStoreObject<const int> deleted = tree.Delete(100);
+  EXPECT_EQ(deleted, nullptr);
 }
 
 // Builds a B+ tree with 100 elements, randomly deletes some of them, and then
@@ -163,41 +163,41 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
   }
 }
 
-// Inserts 100 elements, then spawns off 8 threads and deletes 40 (5 per thread).
-// Verifies that the remaining 60 elements are intact.
+// Inserts 100 elements, then spawns off 8 threads and deletes 40 (5 per
+// thread). Verifies that the remaining 60 elements are intact.
 TEST_F(BPlusTreeTest, DeleteAndVerifyConcurrent) {
-    BPlusTree<int, int, 16> tree(*blob_store);
-    for (int i = 0; i < 100; i++) {
-        tree.Insert(i, i * 100);
-    }
-    for (int i = 0; i < 100; i++) {
-        auto it = tree.Search(i);
-        auto value_ptr = it.GetValue();
-        int value = value_ptr == nullptr ? 0 : *value_ptr;
-        EXPECT_NE(value_ptr, nullptr);
-        EXPECT_EQ(value, i * 100);
-    }
-    std::vector<std::thread> threads;
-    for (int i = 0; i < 8; ++i) {
-        threads.push_back(std::thread([&tree, i]() {
-            for (int j = 0; j < 5; ++j) {
-                tree.Delete(i * 5 + j);
-            }
-            }));
-    }
-    for (auto& thread : threads) {
-        thread.join();
-    }
-    auto it = tree.Search(std::numeric_limits<int>::min());
-    int last_key = 39;
-    while (it.GetKey() != nullptr) {
-        int key = *it.GetKey();
-        int value = *it.GetValue();
-        ASSERT_EQ(value, key * 100);
-        ASSERT_EQ(key, last_key + 1);
-        last_key = key;
-        ++it;
-    }  
+  BPlusTree<int, int, 16> tree(*blob_store);
+  for (int i = 0; i < 100; i++) {
+    tree.Insert(i, i * 100);
+  }
+  for (int i = 0; i < 100; i++) {
+    auto it = tree.Search(i);
+    auto value_ptr = it.GetValue();
+    int value = value_ptr == nullptr ? 0 : *value_ptr;
+    EXPECT_NE(value_ptr, nullptr);
+    EXPECT_EQ(value, i * 100);
+  }
+  std::vector<std::thread> threads;
+  for (int i = 0; i < 8; ++i) {
+    threads.push_back(std::thread([&tree, i]() {
+      for (int j = 0; j < 5; ++j) {
+        tree.Delete(i * 5 + j);
+      }
+    }));
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+  auto it = tree.Search(std::numeric_limits<int>::min());
+  int last_key = 39;
+  while (it.GetKey() != nullptr) {
+    int key = *it.GetKey();
+    int value = *it.GetValue();
+    ASSERT_EQ(value, key * 100);
+    ASSERT_EQ(key, last_key + 1);
+    last_key = key;
+    ++it;
+  }
 }
 
 // Populate a B+ tree with 100 elements. Search for an element in the middle
