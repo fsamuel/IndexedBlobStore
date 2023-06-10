@@ -105,15 +105,20 @@ TEST_F(BPlusTreeTest, BasicTreeWithDelete) {
     EXPECT_EQ(value, i * 100);
   }
   for (int i = 0; i < 100; i++) {
-    BlobStoreObject<const int> deleted;
-    bool success = tree.Delete(i, &deleted);
-    EXPECT_TRUE(success);
+    BlobStoreObject<const int> deleted = tree.Delete(i);
     EXPECT_EQ(*deleted, i * 100);
     auto it = tree.Search(i);
     if (it.GetKey() != nullptr) {
       EXPECT_GT(*it.GetKey(), i);
     }
   }
+}
+
+// Attempts to delete an element from the B+ tree that doesn't exist.
+TEST_F(BPlusTreeTest, DeleteElementThatDoesNotExist) {
+    BPlusTree<int, int, 16> tree(*blob_store);
+    BlobStoreObject<const int> deleted = tree.Delete(100);
+    EXPECT_EQ(deleted, nullptr);
 }
 
 // Builds a B+ tree with 100 elements, randomly deletes some of them, and then
@@ -141,10 +146,7 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
     while (inserted.count(val) == 0) {
       val = rand() % 50;
     }
-    BlobStoreObject<const int> deleted;
-    bool success = tree.Delete(val, &deleted);
-
-    EXPECT_TRUE(success);
+    BlobStoreObject<const int> deleted = tree.Delete(val);
     EXPECT_EQ(*deleted, val * 100);
     inserted.erase(val);
   }
@@ -159,6 +161,43 @@ TEST_F(BPlusTreeTest, DeleteAndVerify) {
       EXPECT_EQ(*it.GetValue(), i * 100);
     }
   }
+}
+
+// Inserts 100 elements, then spawns off 8 threads and deletes 40 (5 per thread).
+// Verifies that the remaining 60 elements are intact.
+TEST_F(BPlusTreeTest, DeleteAndVerifyConcurrent) {
+    BPlusTree<int, int, 16> tree(*blob_store);
+    for (int i = 0; i < 100; i++) {
+        tree.Insert(i, i * 100);
+    }
+    for (int i = 0; i < 100; i++) {
+        auto it = tree.Search(i);
+        auto value_ptr = it.GetValue();
+        int value = value_ptr == nullptr ? 0 : *value_ptr;
+        EXPECT_NE(value_ptr, nullptr);
+        EXPECT_EQ(value, i * 100);
+    }
+    std::vector<std::thread> threads;
+    for (int i = 0; i < 8; ++i) {
+        threads.push_back(std::thread([&tree, i]() {
+            for (int j = 0; j < 5; ++j) {
+                tree.Delete(i * 5 + j);
+            }
+            }));
+    }
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    auto it = tree.Search(std::numeric_limits<int>::min());
+    int last_key = 39;
+    while (it.GetKey() != nullptr) {
+        int key = *it.GetKey();
+        int value = *it.GetValue();
+        ASSERT_EQ(value, key * 100);
+        ASSERT_EQ(key, last_key + 1);
+        last_key = key;
+        ++it;
+    }  
 }
 
 // Populate a B+ tree with 100 elements. Search for an element in the middle
@@ -210,9 +249,7 @@ TEST_F(BPlusTreeTest, BPlusTreeInsertionDeletion) {
     int val = rand() % kNumElements;
     while (deleted.count(val) > 0) {
       val = rand() % kNumElements;
-      BlobStoreObject<const int> deleted_value;
-      bool success = tree.Delete(i, &deleted_value);
-      EXPECT_TRUE(success);
+      BlobStoreObject<const int> deleted_value = tree.Delete(i);
       EXPECT_EQ(*deleted_value, i * 100);
       std::cout << "Deleted key: " << i << ", value: " << *deleted_value
                 << std::endl;
@@ -239,9 +276,7 @@ TEST_F(BPlusTreeTest, DeleteNonExistentKey) {
   for (int i = 0; i < 100; i++) {
     tree.Insert(i, i * 100);
   }
-  BlobStoreObject<const int> deleted;
-  bool success = tree.Delete(1000, &deleted);
-  EXPECT_TRUE(success);
+  BlobStoreObject<const int> deleted = tree.Delete(1000);
   EXPECT_EQ(deleted, nullptr);
 }
 
@@ -423,12 +458,10 @@ TEST_F(BPlusTreeTest, StringInsertion) {
     EXPECT_EQ(value_output, value);
   }
   for (int i = 0; i < 100; i++) {
-    BlobStoreObject<const std::string> deleted;
     std::string key = "K" + std::to_string(i);
     std::string value = "V" + std::to_string(i * 100);
 
-    bool success = tree.Delete(key, &deleted);
-    EXPECT_TRUE(success);
+    BlobStoreObject<const std::string> deleted = tree.Delete(key);
     EXPECT_EQ(*deleted, value);
   }
 }

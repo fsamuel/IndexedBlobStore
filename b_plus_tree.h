@@ -67,8 +67,7 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
   // Deletes a key-value pair from the tree. Returns true if the operation was
   // successful, false if there was a conflicting operation in progress. If
   // deleted_value is not null, the deleted value is stored in deleted_value.
-  bool Delete(const KeyType& key,
-              BlobStoreObject<const ValueType>* deleted_value);
+  BlobStoreObject<const ValueType> Delete(const KeyType& key);
 
   // Prints the tree in a human-readable format in breadth-first order.
   void Print(size_t version = std::numeric_limits<size_t>::max());
@@ -493,17 +492,15 @@ BPlusTree<KeyType, ValueType, Order>::Insert(
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
-bool BPlusTree<KeyType, ValueType, Order>::Delete(
-    const KeyType& key,
-    BlobStoreObject<const ValueType>* deleted_value) {
-  Transaction txn(CreateTransaction());
-  BlobStoreObject<const ValueType> deleted = txn.Delete(key);
-  if (std::move(txn).Commit()) {
-    *deleted_value = deleted;
-    return true;
-  }
-  *deleted_value = BlobStoreObject<const ValueType>();
-  return false;
+BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(
+    const KeyType& key) {
+    while (true) {
+        Transaction txn(CreateTransaction());
+        BlobStoreObject<const ValueType> deleted = txn.Delete(key);
+        if (std::move(txn).Commit()) {
+            return deleted;
+        }
+    }
 }
 
 template <typename KeyType, typename ValueType, size_t Order>
