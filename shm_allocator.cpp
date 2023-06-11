@@ -88,19 +88,21 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
     // node might still be in the free list and marked. Keep it marked just in
     // case.
     // TODO(fsamuel): Can we leak free nodes here?
-    node->next_index.store(get_marked_reference(right_node_index));
+    std::size_t right_node_index_marked =
+        get_marked_reference(right_node_index);
+    node->next_index.store(right_node_index_marked);
     if (left_node == nullptr) {
       if (state()->free_list_index.compare_exchange_strong(right_node_index,
                                                            node->index)) {
-        node->next_index.store(get_unmarked_reference(right_node_index));
-
+        node->next_index.compare_exchange_strong(
+            right_node_index_marked, get_unmarked_reference(right_node_index));
         return true;
       }
     } else {
       if (left_node->next_index.compare_exchange_strong(right_node_index,
                                                         node->index)) {
-        node->next_index.store(get_unmarked_reference(right_node_index));
-
+        node->next_index.compare_exchange_strong(
+            right_node_index_marked, get_unmarked_reference(right_node_index));
         return true;
       }
     }
