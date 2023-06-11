@@ -106,6 +106,8 @@ class ShmAllocator {
   }
 
  private:
+  class NodePtr;
+
   // Header for the allocator state in the shared memory buffer
   struct AllocatorStateHeader {
     // Magic number for verifying the allocator state header.
@@ -122,6 +124,9 @@ class ShmAllocator {
 
   // Header for a free/allocated node in the allocator
   struct Node {
+    // Reference count for the node. This is used to determine when the node can
+    // be coalesced.
+    std::atomic<std::uint32_t> ref_count;
     // Version number for detecting state changes in the node.
     std::atomic<std::uint32_t> version;
     // The index of the chunk in the chunk manager. This is necessary to convert
@@ -161,7 +166,7 @@ class ShmAllocator {
 
   // Allocates space from a free node that can fit the requested size.
   //	Returns nullptr if no free node is found.
-  uint8_t* AllocateFromFreeList(std::size_t bytes_needed);
+  uint8_t* AllocateFromFreeList(std::size_t min_bytes_needed, std::size_t min_index);
 
   // Returns whether the highest bit in a 64-bit size_t is marked.
   static bool is_marked_reference(size_t value) {
@@ -185,9 +190,83 @@ class ShmAllocator {
 
   // Given a size, returns the left node and right node, such that the
   // size of the left node < size, and the size of the right node >= size.
-  Node* SearchBySize(std::size_t size, std::size_t index, Node** left_node);
+  NodePtr SearchBySize(std::size_t size, std::size_t index, NodePtr* left_node);
 
  private:
+    class NodePtr {
+    public:
+        explicit NodePtr(Node* ptr = nullptr) : ptr_(ptr) {
+            if (ptr_) {
+                ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
+        NodePtr(const NodePtr& other) : ptr_(other.ptr_) {
+            if (ptr_) {
+                ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+
+        NodePtr& operator=(const NodePtr& other) {
+            if (this != &other) {
+                reset();
+                ptr_ = other.ptr_;
+                if (ptr_) {
+                    ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+            return *this;
+        }
+
+        ~NodePtr() {
+            reset();
+        }
+
+        void reset() {
+            if (ptr_) {
+                if (ptr_->ref_count.fetch_sub(1, std::memory_order_release) == 1) {
+                    std::atomic_thread_fence(std::memory_order_acquire);
+                }
+                ptr_ = nullptr;
+            }
+        }
+
+        Node* get() const {
+            return ptr_;
+        }
+
+        Node& operator*() const {
+            return *ptr_;
+        }
+
+        Node* operator->() const {
+            return ptr_;
+        }
+
+        operator bool() const {
+            return ptr_ != nullptr;
+        }
+
+        bool operator==(std::nullptr_t) const {
+            return ptr_ == nullptr;
+        }
+
+        bool operator!=(std::nullptr_t) const {
+            return ptr_ != nullptr;
+        }
+
+        bool operator==(const NodePtr& other) const {
+            return ptr_ == other.ptr_;
+        }
+
+        bool operator!=(const NodePtr& other) const {
+            return ptr_ != other.ptr_;
+        }
+
+    private:
+        Node* ptr_;
+    };
+
   // Reference to the shared memory buffer used for allocation
   ChunkManager chunk_manager_;
 

@@ -16,7 +16,7 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
   std::size_t bytes_needed = CalculateBytesNeeded(bytes_requested);
 
   while (true) {
-    uint8_t* data = AllocateFromFreeList(bytes_needed);
+    uint8_t* data = AllocateFromFreeList(bytes_needed, 0);
 
     // TODO(fsamuel): Decide if we want to split a node here.
     if (data != nullptr) {
@@ -68,7 +68,7 @@ bool ShmAllocator::Deallocate(std::size_t index) {
 }
 
 bool ShmAllocator::Deallocate(uint8_t* ptr) {
-  Node* node = GetNode(ptr);
+  NodePtr node = NodePtr(GetNode(ptr));
   // The version counter on every node ensures we don't accidentally double
   // free.
   if (node == nullptr || !node->is_allocated()) {
@@ -77,17 +77,20 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
   }
   node->version.fetch_add(1);
 
-  Node* left_node = nullptr;
-  Node* right_node = nullptr;
+  NodePtr left_node;
+  NodePtr right_node;
 
   do {
     right_node = SearchBySize(node->size, node->index, &left_node);
     assert(node != right_node);
 
-    std::size_t right_node_index = ToIndex(right_node);
+    std::size_t right_node_index = ToIndex(right_node.get());
     // node might still be in the free list and marked. Keep it marked just in
     // case.
-    // TODO(fsamuel): Can we leak free nodes here?
+    // TODO(fsamuel): Can we leak free nodes here? Is it possible that
+    // SearchBySize would swing a pointer earlier in the free list after node,
+    // removing the node from the free list? The only way to do that is if
+    // left_node's next index has changed (since we known it's unmarked).
     std::size_t right_node_index_marked =
         get_marked_reference(right_node_index);
     node->next_index.store(right_node_index_marked);
@@ -162,13 +165,13 @@ std::uint64_t ShmAllocator::ToIndexImpl(Node* ptr, std::true_type) const {
   return ptr->index;
 }
 
-uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t bytes_needed) {
-  Node* right_node = nullptr;
+uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t min_bytes_needed, std::size_t min_index) {
+  NodePtr right_node;
   std::size_t right_node_next_index = InvalidIndex;
   ;
-  Node* left_node = nullptr;
+  NodePtr left_node;
   do {
-    right_node = SearchBySize(bytes_needed, 0, &left_node);
+    right_node = SearchBySize(min_bytes_needed, min_index, &left_node);
     if (right_node == nullptr) {
       return nullptr;
     }
@@ -196,17 +199,17 @@ uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t bytes_needed) {
       SearchBySize(right_node->size, right_node->index, &left_node);
     }
   }
-  return reinterpret_cast<uint8_t*>(right_node + 1);
+  return reinterpret_cast<uint8_t*>(right_node.get() + 1);
 }
 
-typename ShmAllocator::Node* ShmAllocator::SearchBySize(std::size_t size,
+typename ShmAllocator::NodePtr ShmAllocator::SearchBySize(std::size_t size,
                                                         std::size_t index,
-                                                        Node** left_node) {
+                                                        NodePtr* left_node) {
   std::size_t left_node_next_index = InvalidIndex;
-  Node* right_node = nullptr;
+  NodePtr right_node;
 search_again:
   do {
-    Node* current_node = nullptr;
+    NodePtr current_node;
     std::size_t current_node_next_index = state()->free_list_index.load();
     /* 1: Find left_node and right_node */
     while (true) {
@@ -215,7 +218,7 @@ search_again:
         left_node_next_index = current_node_next_index;
       }
       current_node =
-          ToPtr<Node>(get_unmarked_reference(current_node_next_index));
+          NodePtr(ToPtr<Node>(get_unmarked_reference(current_node_next_index)));
       if (current_node == nullptr) {
         break;
       }
