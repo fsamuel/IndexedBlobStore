@@ -301,7 +301,7 @@ BPlusTree<KeyType, ValueType, Order>::SplitLeafNode(
     left_node->values[middle_key_index + i] = BlobStore::InvalidIndex;
   }
   left_node->values[middle_key_index] = BlobStore::InvalidIndex;
-  
+
   // Update the key count of the left_node.
   left_node->set_num_keys(middle_key_index);
   left_node->set_key(middle_key_index, BlobStore::InvalidIndex);
@@ -325,11 +325,9 @@ BPlusTree<KeyType, ValueType, Order>::SplitInternalNode(
   new_right_node->set_num_keys(left_node->num_keys() - middle_key_index - 1);
   for (int i = 0; i < new_right_node->num_keys(); ++i) {
     new_right_node->set_key(i, left_node->get_key(middle_key_index + i + 1));
-    new_right_node->children[i] =
-        left_node->children[middle_key_index + i + 1];
+    new_right_node->children[i] = left_node->children[middle_key_index + i + 1];
     left_node->set_key(middle_key_index + i + 1, BlobStore::InvalidIndex);
-    left_node->children[middle_key_index + i + 1] =
-        BlobStore::InvalidIndex;
+    left_node->children[middle_key_index + i + 1] = BlobStore::InvalidIndex;
   }
   new_right_node->children[new_right_node->num_keys()] =
       left_node->children[middle_key_index + new_right_node->num_keys() + 1];
@@ -494,13 +492,13 @@ BPlusTree<KeyType, ValueType, Order>::Insert(
 template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(
     const KeyType& key) {
-    while (true) {
-        Transaction txn(CreateTransaction());
-        BlobStoreObject<const ValueType> deleted = txn.Delete(key);
-        if (std::move(txn).Commit()) {
-            return deleted;
-        }
+  while (true) {
+    Transaction txn(CreateTransaction());
+    BlobStoreObject<const ValueType> deleted = txn.Delete(key);
+    if (std::move(txn).Commit()) {
+      return deleted;
     }
+  }
 }
 
 template <typename KeyType, typename ValueType, size_t Order>

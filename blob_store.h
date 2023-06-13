@@ -197,9 +197,11 @@ class BlobStoreObject {
       return BlobStoreObject<const T>();
     }
     control_block->DowngradeLock();
-    return BlobStoreObject<const T>(
+    BlobStoreObject<const T> downgraded_obj = BlobStoreObject<const T>(
         reinterpret_cast<typename BlobStoreObject<const T>::ControlBlock*>(
             control_block));
+    control_block->ref_count_.fetch_sub(1);
+    return downgraded_obj;
   }
 
   // Upgrades a const T BlobStoreObject to a non-const T BlobStoreObject.
@@ -214,9 +216,11 @@ class BlobStoreObject {
       return BlobStoreObject<non_const_T>();
     }
     control_block->UpgradeLock();
-    return BlobStoreObject<non_const_T>(
+    BlobStoreObject<non_const_T> upgraded_object = BlobStoreObject<non_const_T>(
         reinterpret_cast<BlobStoreObject<non_const_T>::ControlBlock*>(
             control_block));
+    control_block->ref_count_.fetch_sub(1);
+    return upgraded_object;
   }
 
   BlobStoreObject& operator=(const BlobStoreObject& other) {
@@ -234,6 +238,8 @@ class BlobStoreObject {
 
   BlobStoreObject& operator=(BlobStoreObject&& other) {
     if (this != &other) {
+      // TODO(fsamuel): It seems there are occasional cases where we double
+      // delete control_block_.
       if (control_block_ && control_block_->DecrementRefCount()) {
         delete control_block_;
       }
@@ -324,15 +330,9 @@ class BlobStoreObject {
       return false;
     }
 
-    void DowngradeLock() {
-      store_->DowngradeWriteLock(index_);
-      ref_count_.fetch_sub(1);
-    }
+    void DowngradeLock() { store_->DowngradeWriteLock(index_); }
 
-    void UpgradeLock() {
-      store_->UpgradeReadLock(index_);
-      ref_count_.fetch_sub(1);
-    }
+    void UpgradeLock() { store_->UpgradeReadLock(index_); }
 
     // Pointer to the BlobStore instance
     BlobStore* const store_;

@@ -16,18 +16,18 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
   std::size_t bytes_needed = CalculateBytesNeeded(bytes_requested);
 
   while (true) {
-    uint8_t* data = AllocateFromFreeList(bytes_needed, 0);
+    uint8_t* data = AllocateFromFreeList(bytes_needed, 0, false);
 
     // TODO(fsamuel): Decide if we want to split a node here.
     if (data != nullptr) {
-      Node* allocated_node = GetNode(data);
+      NodePtr allocated_node = GetNode(data);
       allocated_node->version.fetch_add(1);
 
       // If we have enough space to split the node then split it.
       if (allocated_node->size > bytes_needed + sizeof(Node)) {
         std::size_t bytes_remaining = allocated_node->size - bytes_needed;
         uint8_t* buffer = NewAllocatedNode(
-            reinterpret_cast<uint8_t*>(allocated_node) + bytes_needed,
+            reinterpret_cast<uint8_t*>(allocated_node.get()) + bytes_needed,
             allocated_node->index + bytes_needed, bytes_remaining);
 
         Deallocate(buffer);
@@ -41,23 +41,7 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
     // keep allocating chunks until we can satisfy the request above.
     // TODO(fsamuel): A more resilient allocator would specify an upperbound to
     // allocation size and fail an allocation beyond that upper bound.
-    std::size_t last_num_chunks = state()->num_chunks.load();
-    uint8_t* new_chunk_data;
-    std::size_t new_chunk_size;
-    // Only one thread/process will end up creating a new chunk so only one new
-    // free node will be added as a result of this code path. All other
-    // threads/processes will not get a new chunk and will try to grab an
-    // allocation from the free list again.
-    if (chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data,
-                                           &new_chunk_size) > 0) {
-      uint8_t* buffer = NewAllocatedNode(
-          new_chunk_data, chunk_manager_.encode_index(last_num_chunks, 0),
-          new_chunk_size);
-      Deallocate(buffer);
-      bool success = state()->num_chunks.compare_exchange_strong(
-          last_num_chunks, last_num_chunks + 1);
-      assert(success);
-    }
+    RequestNewFreeNodeFromChunkManager();
   }
 }
 
@@ -68,14 +52,43 @@ bool ShmAllocator::Deallocate(std::size_t index) {
 }
 
 bool ShmAllocator::Deallocate(uint8_t* ptr) {
-  NodePtr node = NodePtr(GetNode(ptr));
+  NodePtr node = GetNode(ptr);
   // The version counter on every node ensures we don't accidentally double
   // free.
   if (node == nullptr || !node->is_allocated()) {
     // The pointer is not a valid allocation.
     return false;
   }
+
+  // Ref-count might not be zero if the node is still accessible from the free
+  // list.
   node->version.fetch_add(1);
+
+  std::size_t encoded_node_index = node->index;
+  std::size_t chunk_index = ChunkManager::chunk_index(encoded_node_index);
+  std::size_t chunk_size = chunk_manager_.chunk_size_at_index(chunk_index);
+  std::size_t offset = ChunkManager::offset_in_chunk(encoded_node_index);
+  std::size_t node_size = node->size;
+  if (offset + node_size < chunk_size) {
+    // See if the adjacent node is on the free list. If it is allocate it.
+    NodePtr adjacent_node = GetNode(ptr + node_size);
+    if (adjacent_node != nullptr && adjacent_node->is_free()) {
+      // Allocate the adjacent node to make sure no other thread will try to
+      // allocate it.
+      uint8_t* data =
+          AllocateFromFreeList(adjacent_node->size, adjacent_node->index, true);
+      // If we successfully allocated the adjacent node, then we need to wait
+      // until
+      if (data != nullptr) {
+        uint32_t num_spins = 0;
+        while (adjacent_node->ref_count.load() > 1) {
+          // Spin until the adjacent node is no longer in use.
+          ++num_spins;
+        }
+        node->size += adjacent_node->size;
+      }
+    }
+  }
 
   NodePtr left_node;
   NodePtr right_node;
@@ -109,7 +122,7 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
         return true;
       }
     }
-  } while (true); /*B3*/
+  } while (true);  // B3
 }
 
 std::size_t ShmAllocator::GetCapacity(std::size_t index) const {
@@ -126,8 +139,8 @@ std::size_t ShmAllocator::GetCapacity(uint8_t* ptr) {
   if (ptr == nullptr) {
     return 0;
   }
-  Node* curent_node = GetNode(ptr);
-  return curent_node->size - sizeof(Node);
+  NodePtr current_node = GetNode(ptr);
+  return current_node->size - sizeof(Node);
 }
 
 void ShmAllocator::InitializeAllocatorStateIfNecessary() {
@@ -155,6 +168,7 @@ uint8_t* ShmAllocator::NewAllocatedNode(uint8_t* buffer,
   allocated_node->index = index;
   allocated_node->next_index.store(InvalidIndex);
   allocated_node->version.store(1);
+  allocated_node->ref_count.store(0);
   return reinterpret_cast<uint8_t*>(allocated_node + 1);
 }
 
@@ -165,14 +179,18 @@ std::uint64_t ShmAllocator::ToIndexImpl(Node* ptr, std::true_type) const {
   return ptr->index;
 }
 
-uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t min_bytes_needed, std::size_t min_index) {
+uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t min_bytes_needed,
+                                            std::size_t min_index,
+                                            bool exact_match) {
   NodePtr right_node;
   std::size_t right_node_next_index = InvalidIndex;
   ;
   NodePtr left_node;
   do {
     right_node = SearchBySize(min_bytes_needed, min_index, &left_node);
-    if (right_node == nullptr) {
+    if (right_node == nullptr ||
+        exact_match && (right_node->size != min_bytes_needed ||
+                        right_node->index != min_index)) {
       return nullptr;
     }
 
@@ -202,19 +220,40 @@ uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t min_bytes_needed, std::s
   return reinterpret_cast<uint8_t*>(right_node.get() + 1);
 }
 
+void ShmAllocator::RequestNewFreeNodeFromChunkManager() {
+  std::size_t last_num_chunks = state()->num_chunks.load();
+  uint8_t* new_chunk_data;
+  std::size_t new_chunk_size;
+  // Only one thread/process will end up creating a new chunk so only one new
+  // free node will be added as a result of this code path. All other
+  // threads/processes will not get a new chunk and will try to grab an
+  // allocation from the free list again.
+  if (chunk_manager_.get_or_create_chunk(last_num_chunks, &new_chunk_data,
+                                         &new_chunk_size) == 0) {
+    return;
+  }
+  uint8_t* buffer = NewAllocatedNode(
+      new_chunk_data, chunk_manager_.encode_index(last_num_chunks, 0),
+      new_chunk_size);
+  Deallocate(buffer);
+  bool success = state()->num_chunks.compare_exchange_strong(
+      last_num_chunks, last_num_chunks + 1);
+  assert(success);
+}
+
 typename ShmAllocator::NodePtr ShmAllocator::SearchBySize(std::size_t size,
-                                                        std::size_t index,
-                                                        NodePtr* left_node) {
+                                                          std::size_t index,
+                                                          NodePtr* left_node) {
   std::size_t left_node_next_index = InvalidIndex;
   NodePtr right_node;
 search_again:
   do {
     NodePtr current_node;
     std::size_t current_node_next_index = state()->free_list_index.load();
-    /* 1: Find left_node and right_node */
+    // 1: Find left_node and right_node
     while (true) {
       if (!is_marked_reference(current_node_next_index)) {
-        *left_node = current_node;
+        *left_node = std::move(current_node);
         left_node_next_index = current_node_next_index;
       }
       current_node =
@@ -228,19 +267,19 @@ search_again:
         break;
       }
     }
-    right_node = current_node;
+    right_node = std::move(current_node);
     std::size_t right_node_index =
         right_node == nullptr ? InvalidIndex : right_node->index;
-    /* 2: Check nodes are adjacent */
+    // 2: Check nodes are adjacent
     if (left_node_next_index == right_node_index) {
       if ((right_node != nullptr) &&
           is_marked_reference(right_node->next_index.load())) {
-        goto search_again; /*G1*/
+        goto search_again;  // G1
       } else {
-        return right_node; /*R1*/
+        return right_node;  // R1
       }
     }
-    /* 3: Remove one or more marked nodes */
+    // 3: Remove one or more marked nodes
     if ((*left_node) != nullptr) {
       if ((*left_node)
               ->next_index.compare_exchange_strong(left_node_next_index,

@@ -143,7 +143,9 @@ class ShmAllocator {
   };
 
   // Given a pointer, returns the Node.
-  Node* GetNode(uint8_t* ptr) const { return reinterpret_cast<Node*>(ptr) - 1; }
+  NodePtr GetNode(uint8_t* ptr) const {
+    return NodePtr(ptr == nullptr ? nullptr : reinterpret_cast<Node*>(ptr) - 1);
+  }
 
   void InitializeAllocatorStateIfNecessary();
 
@@ -160,13 +162,19 @@ class ShmAllocator {
 
   template <typename U>
   std::uint64_t ToIndexImpl(U* ptr, std::false_type) const {
-    Node* allocated_node = GetNode(ptr);
-    return ToIndexImpl(allocated_node, std::true_type{}) + sizeof(Node);
+    NodePtr allocated_node = GetNode(ptr);
+    return ToIndexImpl(allocated_node.get(), std::true_type{}) + sizeof(Node);
   }
 
   // Allocates space from a free node that can fit the requested size.
-  //	Returns nullptr if no free node is found.
-  uint8_t* AllocateFromFreeList(std::size_t min_bytes_needed, std::size_t min_index);
+  // Returns nullptr if no free node is found.
+  uint8_t* AllocateFromFreeList(std::size_t min_bytes_needed,
+                                std::size_t min_index,
+                                bool exact_match);
+
+  // Requests a new chunk from the ChunkManager, and places a free node in the
+  // free list corresponding to the new chunk.
+  void RequestNewFreeNodeFromChunkManager();
 
   // Returns whether the highest bit in a 64-bit size_t is marked.
   static bool is_marked_reference(size_t value) {
@@ -193,79 +201,75 @@ class ShmAllocator {
   NodePtr SearchBySize(std::size_t size, std::size_t index, NodePtr* left_node);
 
  private:
-    class NodePtr {
-    public:
-        explicit NodePtr(Node* ptr = nullptr) : ptr_(ptr) {
-            if (ptr_) {
-                ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
-            }
-        }
+  class NodePtr {
+   public:
+    explicit NodePtr(Node* ptr = nullptr) : ptr_(ptr) {
+      if (ptr_) {
+        ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
 
-        NodePtr(const NodePtr& other) : ptr_(other.ptr_) {
-            if (ptr_) {
-                ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
-            }
-        }
+    NodePtr(const NodePtr& other) : ptr_(other.ptr_) {
+      if (ptr_) {
+        ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
 
-        NodePtr& operator=(const NodePtr& other) {
-            if (this != &other) {
-                reset();
-                ptr_ = other.ptr_;
-                if (ptr_) {
-                    ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-            return *this;
-        }
+    // Move constructor: saves the cost of a refcount increment.
+    NodePtr(NodePtr&& other) noexcept : ptr_(other.ptr_) {
+      other.ptr_ = nullptr;
+    }
 
-        ~NodePtr() {
-            reset();
+    NodePtr& operator=(const NodePtr& other) {
+      if (this != &other) {
+        reset();
+        ptr_ = other.ptr_;
+        if (ptr_) {
+          ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
         }
+      }
+      return *this;
+    }
 
-        void reset() {
-            if (ptr_) {
-                if (ptr_->ref_count.fetch_sub(1, std::memory_order_release) == 1) {
-                    std::atomic_thread_fence(std::memory_order_acquire);
-                }
-                ptr_ = nullptr;
-            }
+    NodePtr& operator=(NodePtr&& other) {
+      if (this != &other) {
+        reset();
+        ptr_ = other.ptr_;
+      }
+      other.ptr_ = nullptr;
+      return *this;
+    }
+
+    ~NodePtr() { reset(); }
+
+    void reset() {
+      if (ptr_) {
+        if (ptr_->ref_count.fetch_sub(1, std::memory_order_release) == 1) {
+          std::atomic_thread_fence(std::memory_order_acquire);
         }
+        ptr_ = nullptr;
+      }
+    }
 
-        Node* get() const {
-            return ptr_;
-        }
+    Node* get() const { return ptr_; }
 
-        Node& operator*() const {
-            return *ptr_;
-        }
+    Node& operator*() const { return *ptr_; }
 
-        Node* operator->() const {
-            return ptr_;
-        }
+    Node* operator->() const { return ptr_; }
 
-        operator bool() const {
-            return ptr_ != nullptr;
-        }
+    operator bool() const { return ptr_ != nullptr; }
 
-        bool operator==(std::nullptr_t) const {
-            return ptr_ == nullptr;
-        }
+    bool operator==(std::nullptr_t) const { return ptr_ == nullptr; }
 
-        bool operator!=(std::nullptr_t) const {
-            return ptr_ != nullptr;
-        }
+    bool operator!=(std::nullptr_t) const { return ptr_ != nullptr; }
 
-        bool operator==(const NodePtr& other) const {
-            return ptr_ == other.ptr_;
-        }
+    bool operator==(const NodePtr& other) const { return ptr_ == other.ptr_; }
 
-        bool operator!=(const NodePtr& other) const {
-            return ptr_ != other.ptr_;
-        }
+    bool operator!=(const NodePtr& other) const { return ptr_ != other.ptr_; }
 
-    private:
-        Node* ptr_;
-    };
+   private:
+    Node* ptr_;
+  };
 
   // Reference to the shared memory buffer used for allocation
   ChunkManager chunk_manager_;

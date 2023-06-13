@@ -73,7 +73,7 @@ class ChunkManager {
 
   // Given a chunk_index, returns the size of the chunk at that index.
   std::size_t chunk_size_at_index(std::size_t chunk_index) const {
-	return chunk_size_ * (1ull << chunk_index);
+    return chunk_size_ * (1ull << chunk_index);
   }
 
  private:
@@ -88,11 +88,11 @@ class ChunkManager {
 
   // Increments the first quantity of the encoded num_chunks.
   static std::uint64_t increment_num_chunks(std::uint64_t num_chunks_encoded,
-                                     std::uint64_t value = 1ull);
+                                            std::uint64_t value = 1ull);
 
   // Increments the second quanity of the encoded num_chunks.
   static std::uint64_t decrement_num_chunks(std::uint64_t num_chunks_encoded,
-                                     std::uint64_t value = 1ull);
+                                            std::uint64_t value = 1ull);
 
   // Sets the num_chunks to the specified value. If the specified value is less
   // than the current value, then the function increments the second quantity of
@@ -100,7 +100,7 @@ class ChunkManager {
   // value, then the function increments the first quantity of the encoded
   // num_chunks.
   static std::uint64_t set_num_chunks(std::uint64_t num_chunks_encoded,
-                               std::uint64_t num_chunks);
+                                      std::uint64_t num_chunks);
 
   // Prefix for the names of the shared memory buffers.
   std::string name_prefix_;
