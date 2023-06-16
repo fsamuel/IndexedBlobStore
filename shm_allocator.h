@@ -54,16 +54,10 @@ class ShmAllocator {
   // object
   uint8_t* Allocate(std::size_t bytes_requested);
 
-  // Deallocate memory at the given pointer index
-  bool Deallocate(std::size_t index);
-
   // Deallocate memory at the given pointer.
-  bool Deallocate(uint8_t* ptr);
-
   template <typename U>
-  typename std::enable_if<!std::is_same<U, uint8_t>::value, bool>::type
-  Deallocate(U* ptr) {
-    return Deallocate(reinterpret_cast<uint8_t*>(ptr));
+  bool Deallocate(U* ptr) {
+    return DeallocateNode(GetNode(reinterpret_cast<uint8_t*>(ptr)));
   }
 
   // Returns the size of the allocated block at the given index.
@@ -154,9 +148,12 @@ class ShmAllocator {
     return std::max<std::size_t>(sizeof(Node) + bytes, sizeof(Node));
   }
 
-  uint8_t* NewAllocatedNode(uint8_t* buffer,
-                            std::size_t index,
-                            std::size_t size);
+  NodePtr NewAllocatedNode(uint8_t* buffer,
+                           std::size_t index,
+                           std::size_t size);
+
+  bool DeallocateNode(NodePtr node);
+
 
   std::uint64_t ToIndexImpl(Node* ptr, std::true_type) const;
 
@@ -189,7 +186,7 @@ class ShmAllocator {
     return value & 0x7FFFFFFFFFFFFFFF;
   }
 
-  // Sets the topmost bit in size_t
+  // Sets the topmost bit in size_tCoalesceWithRightNodeIfPossible
   static size_t get_marked_reference(size_t value) {
     size_t mask = static_cast<size_t>(1)
                   << (sizeof(size_t) * 8 - 1);  // shift 1 to the leftmost bit
@@ -200,18 +197,25 @@ class ShmAllocator {
   // size of the left node < size, and the size of the right node >= size.
   NodePtr SearchBySize(std::size_t size, std::size_t index, NodePtr* left_node);
 
+  // Returns whether the node with the provided index is reachable in the free list.
+  bool IsNodeReachable(std::size_t index);
+
+  // Coalesces the provided node with the free node to the right of it if available.
+  // Returns the coalesced node.
+  NodePtr CoalesceWithRightNodeIfPossible(NodePtr node);
+
  private:
   class NodePtr {
    public:
     explicit NodePtr(Node* ptr = nullptr) : ptr_(ptr) {
       if (ptr_) {
-        ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+          ptr_->ref_count.fetch_add(1);
       }
     }
 
-    NodePtr(const NodePtr& other) : ptr_(other.ptr_) {
+    explicit NodePtr(const NodePtr& other) : ptr_(other.ptr_) {
       if (ptr_) {
-        ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+        ptr_->ref_count.fetch_add(1);
       }
     }
 
@@ -221,22 +225,22 @@ class ShmAllocator {
     }
 
     NodePtr& operator=(const NodePtr& other) {
-      if (this != &other) {
+      if (ptr_ != other.ptr_) {
         reset();
         ptr_ = other.ptr_;
         if (ptr_) {
-          ptr_->ref_count.fetch_add(1, std::memory_order_relaxed);
+          ptr_->ref_count.fetch_add(1);
         }
       }
       return *this;
     }
-
+    
     NodePtr& operator=(NodePtr&& other) {
-      if (this != &other) {
+      if (ptr_ != other.ptr_) {
         reset();
         ptr_ = other.ptr_;
+        other.ptr_ = nullptr;
       }
-      other.ptr_ = nullptr;
       return *this;
     }
 
@@ -244,9 +248,7 @@ class ShmAllocator {
 
     void reset() {
       if (ptr_) {
-        if (ptr_->ref_count.fetch_sub(1, std::memory_order_release) == 1) {
-          std::atomic_thread_fence(std::memory_order_acquire);
-        }
+        ptr_->ref_count.fetch_sub(1);
         ptr_ = nullptr;
       }
     }

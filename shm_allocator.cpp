@@ -18,19 +18,20 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
   while (true) {
     uint8_t* data = AllocateFromFreeList(bytes_needed, 0, false);
 
-    // TODO(fsamuel): Decide if we want to split a node here.
     if (data != nullptr) {
       NodePtr allocated_node = GetNode(data);
       allocated_node->version.fetch_add(1);
 
       // If we have enough space to split the node then split it.
-      if (allocated_node->size > bytes_needed + sizeof(Node)) {
+      bool should_split_node =
+          (allocated_node->size > bytes_needed + sizeof(Node));
+      if (should_split_node) {
         std::size_t bytes_remaining = allocated_node->size - bytes_needed;
-        uint8_t* buffer = NewAllocatedNode(
+        NodePtr node = NewAllocatedNode(
             reinterpret_cast<uint8_t*>(allocated_node.get()) + bytes_needed,
             allocated_node->index + bytes_needed, bytes_remaining);
 
-        Deallocate(buffer);
+        DeallocateNode(std::move(node));
         allocated_node->size = bytes_needed;
       }
       return data;
@@ -45,14 +46,55 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
   }
 }
 
-// Deallocate memory at the given pointer index
-bool ShmAllocator::Deallocate(std::size_t index) {
-  uint8_t* ptr = ToPtr<uint8_t>(index);
-  return Deallocate(ptr);
+std::size_t ShmAllocator::GetCapacity(std::size_t index) const {
+  if (index < 0) {
+    return 0;
+  }
+  std::size_t node_header_index = index - sizeof(Node);
+  const Node* current_node = ToPtr<Node>(node_header_index);
+  return current_node->size.load() - sizeof(Node);
 }
 
-bool ShmAllocator::Deallocate(uint8_t* ptr) {
-  NodePtr node = GetNode(ptr);
+// Returns the size of the allocated block at the given pointer.
+std::size_t ShmAllocator::GetCapacity(uint8_t* ptr) {
+  if (ptr == nullptr) {
+    return 0;
+  }
+  NodePtr current_node = GetNode(ptr);
+  return current_node->size - sizeof(Node);
+}
+
+void ShmAllocator::InitializeAllocatorStateIfNecessary() {
+  // Check if the allocator state header has already been initialized
+  AllocatorStateHeader* state_header_ptr = state();
+  if (state_header_ptr->magic_number != 0x12345678) {
+    // Initialize the allocator state header
+    state_header_ptr->magic_number = 0x12345678;
+    state_header_ptr->free_list_index = InvalidIndex;
+    state_header_ptr->num_chunks = 1;
+
+    uint8_t* data = chunk_manager_.at(sizeof(AllocatorStateHeader));
+    NodePtr node = NewAllocatedNode(
+        data, chunk_manager_.encode_index(0, sizeof(AllocatorStateHeader)),
+        chunk_manager_.capacity() - sizeof(AllocatorStateHeader));
+    DeallocateNode(std::move(node));
+  }
+}
+
+ShmAllocator::NodePtr ShmAllocator::NewAllocatedNode(uint8_t* buffer,
+                                                     std::size_t index,
+                                                     std::size_t size) {
+  Node* allocated_node = reinterpret_cast<Node*>(buffer);
+  allocated_node->size = size;
+  allocated_node->index = index;
+  allocated_node->next_index.store(InvalidIndex);
+  allocated_node->version.store(1);
+  allocated_node->ref_count.store(0);
+  NodePtr node(allocated_node);
+  return node;
+}
+
+bool ShmAllocator::DeallocateNode(NodePtr node) {
   // The version counter on every node ensures we don't accidentally double
   // free.
   if (node == nullptr || !node->is_allocated()) {
@@ -60,35 +102,10 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
     return false;
   }
 
-  // Ref-count might not be zero if the node is still accessible from the free
-  // list.
-  node->version.fetch_add(1);
+  // TODO(fsamuel): This is currently broken.
+  //node = CoalesceWithRightNodeIfPossible(std::move(node));
 
-  std::size_t encoded_node_index = node->index;
-  std::size_t chunk_index = ChunkManager::chunk_index(encoded_node_index);
-  std::size_t chunk_size = chunk_manager_.chunk_size_at_index(chunk_index);
-  std::size_t offset = ChunkManager::offset_in_chunk(encoded_node_index);
-  std::size_t node_size = node->size;
-  if (offset + node_size < chunk_size) {
-    // See if the adjacent node is on the free list. If it is allocate it.
-    NodePtr adjacent_node = GetNode(ptr + node_size);
-    if (adjacent_node != nullptr && adjacent_node->is_free()) {
-      // Allocate the adjacent node to make sure no other thread will try to
-      // allocate it.
-      uint8_t* data =
-          AllocateFromFreeList(adjacent_node->size, adjacent_node->index, true);
-      // If we successfully allocated the adjacent node, then we need to wait
-      // until
-      if (data != nullptr) {
-        uint32_t num_spins = 0;
-        while (adjacent_node->ref_count.load() > 1) {
-          // Spin until the adjacent node is no longer in use.
-          ++num_spins;
-        }
-        node->size += adjacent_node->size;
-      }
-    }
-  }
+  node->version.fetch_add(1);
 
   NodePtr left_node;
   NodePtr right_node;
@@ -125,53 +142,6 @@ bool ShmAllocator::Deallocate(uint8_t* ptr) {
   } while (true);  // B3
 }
 
-std::size_t ShmAllocator::GetCapacity(std::size_t index) const {
-  if (index < 0) {
-    return 0;
-  }
-  std::size_t node_header_index = index - sizeof(Node);
-  const Node* current_node = ToPtr<Node>(node_header_index);
-  return current_node->size.load() - sizeof(Node);
-}
-
-// Returns the size of the allocated block at the given pointer.
-std::size_t ShmAllocator::GetCapacity(uint8_t* ptr) {
-  if (ptr == nullptr) {
-    return 0;
-  }
-  NodePtr current_node = GetNode(ptr);
-  return current_node->size - sizeof(Node);
-}
-
-void ShmAllocator::InitializeAllocatorStateIfNecessary() {
-  // Check if the allocator state header has already been initialized
-  AllocatorStateHeader* state_header_ptr = state();
-  if (state_header_ptr->magic_number != 0x12345678) {
-    // Initialize the allocator state header
-    state_header_ptr->magic_number = 0x12345678;
-    state_header_ptr->free_list_index = InvalidIndex;
-    state_header_ptr->num_chunks = 1;
-
-    uint8_t* data = chunk_manager_.at(sizeof(AllocatorStateHeader));
-    uint8_t* buffer = NewAllocatedNode(
-        data, chunk_manager_.encode_index(0, sizeof(AllocatorStateHeader)),
-        chunk_manager_.capacity() - sizeof(AllocatorStateHeader));
-    Deallocate(buffer);
-  }
-}
-
-uint8_t* ShmAllocator::NewAllocatedNode(uint8_t* buffer,
-                                        std::size_t index,
-                                        std::size_t size) {
-  Node* allocated_node = reinterpret_cast<Node*>(buffer);
-  allocated_node->size = size;
-  allocated_node->index = index;
-  allocated_node->next_index.store(InvalidIndex);
-  allocated_node->version.store(1);
-  allocated_node->ref_count.store(0);
-  return reinterpret_cast<uint8_t*>(allocated_node + 1);
-}
-
 std::uint64_t ShmAllocator::ToIndexImpl(Node* ptr, std::true_type) const {
   if (ptr == nullptr) {
     return InvalidIndex;
@@ -184,13 +154,13 @@ uint8_t* ShmAllocator::AllocateFromFreeList(std::size_t min_bytes_needed,
                                             bool exact_match) {
   NodePtr right_node;
   std::size_t right_node_next_index = InvalidIndex;
-  ;
+
   NodePtr left_node;
   do {
     right_node = SearchBySize(min_bytes_needed, min_index, &left_node);
     if (right_node == nullptr ||
-        exact_match && (right_node->size != min_bytes_needed ||
-                        right_node->index != min_index)) {
+        (exact_match && (right_node->size != min_bytes_needed ||
+                         right_node->index != min_index))) {
       return nullptr;
     }
 
@@ -232,10 +202,10 @@ void ShmAllocator::RequestNewFreeNodeFromChunkManager() {
                                          &new_chunk_size) == 0) {
     return;
   }
-  uint8_t* buffer = NewAllocatedNode(
+  NodePtr node = NewAllocatedNode(
       new_chunk_data, chunk_manager_.encode_index(last_num_chunks, 0),
       new_chunk_size);
-  Deallocate(buffer);
+  DeallocateNode(std::move(node));
   bool success = state()->num_chunks.compare_exchange_strong(
       last_num_chunks, last_num_chunks + 1);
   assert(success);
@@ -303,4 +273,69 @@ search_again:
       }
     }
   } while (true);
+}
+
+bool ShmAllocator::IsNodeReachable(std::size_t index) {
+  std::size_t first_free_node_index = state()->free_list_index.load();
+  NodePtr current_node =
+      first_free_node_index == InvalidIndex
+          ? NodePtr(nullptr)
+          : NodePtr(ToPtr<Node>(get_unmarked_reference(first_free_node_index)));
+
+  while (current_node != nullptr) {
+    if (current_node->index == index) {
+      return true;
+    }
+    std::size_t current_node_next_index = current_node->next_index.load();
+    current_node =
+        NodePtr(ToPtr<Node>(get_unmarked_reference(current_node_next_index)));
+  }
+
+  return false;
+}
+
+ShmAllocator::NodePtr ShmAllocator::CoalesceWithRightNodeIfPossible(
+    NodePtr node) {
+    // node's refcount > 1 if it's not removed from the free list but just marked
+    // for removal. We cannot resize it in this case.
+    while (true) {
+        bool reachable = IsNodeReachable(node->index);
+        if (!reachable && node->ref_count.load() == 1) {
+            break;
+        }
+    }
+
+  std::size_t encoded_node_index = node->index;
+  std::size_t chunk_index = ChunkManager::chunk_index(encoded_node_index);
+  std::size_t chunk_size = chunk_manager_.chunk_size_at_index(chunk_index);
+  std::size_t offset = ChunkManager::offset_in_chunk(encoded_node_index);
+  std::size_t node_size = node->size;
+  // Check to see if there's a node to the right of this one.
+  if (offset + node_size >= chunk_size) {
+    return node;
+  }
+  // See if the adjacent node is on the free list. If it is allocate it.
+  NodePtr adjacent_node = GetNode(reinterpret_cast<uint8_t*>(node.get()) +
+                                  node_size + sizeof(Node));
+  if (adjacent_node == nullptr || !adjacent_node->is_free()) {
+    return node;
+  }
+
+  // Allocate the adjacent node to make sure no other thread will try to
+  // allocate it.
+  uint8_t* data =
+      AllocateFromFreeList(adjacent_node->size, adjacent_node->index, true);
+  if (data == nullptr) {
+    return node;
+  }
+  while (true) {
+    bool reachable = IsNodeReachable(adjacent_node->index);
+    if (!reachable && adjacent_node->ref_count.load() == 1) {
+      break;
+    }
+  }
+  std::size_t node_ref_count = node->ref_count.load();
+
+  node->size.fetch_add(adjacent_node->size);
+  return node;
 }

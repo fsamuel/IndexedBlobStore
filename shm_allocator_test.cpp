@@ -48,7 +48,7 @@ TEST_F(ShmAllocatorTest, FreeMemory) {
 }
 
 TEST_F(ShmAllocatorTest, FreeNullPointer) {
-  EXPECT_FALSE(shared_mem_allocator->Deallocate(nullptr));
+  EXPECT_FALSE(shared_mem_allocator->Deallocate<uint8_t>(nullptr));
 }
 
 TEST_F(ShmAllocatorTest, MultipleAllocations) {
