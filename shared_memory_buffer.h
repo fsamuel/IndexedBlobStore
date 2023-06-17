@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <string>
 
+#include "buffer.h"
+
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -16,7 +18,7 @@
 #include <unistd.h>
 #endif
 
-class SharedMemoryBuffer {
+class SharedMemoryBuffer : public Buffer {
  public:
   // Move constructor
   SharedMemoryBuffer(SharedMemoryBuffer&& other) noexcept;
@@ -41,16 +43,16 @@ class SharedMemoryBuffer {
   void Resize(std::size_t new_size);
 
   // Return the name of the memory-mapped file
-  const std::string& name() const { return name_; }
+  const std::string& GetName() const override { return name_; }
 
   // Return the size of the memory-mapped file
-  std::size_t size() const { return size_; }
+  std::size_t GetSize() const override { return size_; }
 
   // Return a pointer to the start of the memory-mapped file
-  void* data() { return data_; }
+  void* GetData() override { return data_; }
 
   // Return a const pointer to the start of the memory-mapped file
-  const void* data() const { return data_; }
+  const void* GetData() const override { return data_; }
 
   // Flush the memory-mapped buffer to disk
   void flush();

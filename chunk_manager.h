@@ -8,7 +8,7 @@
 #include <shared_mutex>
 #include <vector>
 
-#include "shared_memory_buffer.h"
+#include "buffer_factory.h"
 
 // ChunkManager is a data structure that manages chunks of shared memory.
 // Each chunk is double the size of the previous chunk.
@@ -21,7 +21,9 @@ class ChunkManager {
   // memory buffers. Each SharedMemoryBuffer will be named as name_prefix_i,
   // where i is the chunk index. Reads the number of chunks from the first chunk
   // and adds any necessary chunks.
-  ChunkManager(const std::string& name_prefix, std::size_t initial_chunk_size);
+  ChunkManager(BufferFactory* buffer_factory,
+               const std::string& name_prefix,
+               std::size_t initial_chunk_size);
 
   ChunkManager(ChunkManager&& other);
   ChunkManager& operator=(ChunkManager&& other);
@@ -109,13 +111,14 @@ class ChunkManager {
   // Vector of SharedMemoryBuffers that store the chunks of the ChunkManager.
   // This is mutable because the vector is modified when a new chunk is added or
   // removed which can happen even when just reading from the ChunkManager.
-  std::vector<SharedMemoryBuffer> chunks_;
+  std::vector<std::unique_ptr<Buffer>> chunks_;
   // The number of chunks in the ChunkManager, cached from the first chunk for
   // performance.
   std::atomic<std::uint64_t>* num_chunks_encoded_;
   // Mutex for protecting the chunks vector. This is needed because the vector
   // is modified when a new chunk is added or removed.
   mutable std::shared_mutex chunks_rw_mutex_;
+  BufferFactory* buffer_factory_;
 };
 
 #endif  // CHUNK_MANAGER_H_

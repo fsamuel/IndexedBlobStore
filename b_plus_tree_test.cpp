@@ -1,6 +1,7 @@
 #include "b_plus_tree.h"
 #include "chunk_manager.h"
 #include "gtest/gtest.h"
+#include "shared_memory_buffer_factory.h"
 #include "utils.h"
 
 class BPlusTreeTest : public ::testing::Test {
@@ -8,7 +9,8 @@ class BPlusTreeTest : public ::testing::Test {
   virtual void SetUp() {
     RemoveChunkFiles();
     SharedMemoryBuffer metadataBuffer("MetadataBuffer", utils::GetPageSize());
-    ChunkManager dataBuffer("DataBuffer", 4 * utils::GetPageSize());
+    ChunkManager dataBuffer(SharedMemoryBufferFactory::Get(), "DataBuffer",
+                            4 * utils::GetPageSize());
     blob_store =
         new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
   }

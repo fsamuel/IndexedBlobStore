@@ -33,26 +33,25 @@ class AllocationLogger {
   mutable std::mutex log_mutex_;
   ChunkedVector<Operation> operations_;
 
-public:
-    static AllocationLogger* Get();
+ public:
+  static AllocationLogger* Get();
 
-    // Pushes an allocation operation onto the operations vector.
-    void RecordAllocation(const ShmNode& node);
+  // Pushes an allocation operation onto the operations vector.
+  void RecordAllocation(const ShmNode& node);
 
-    // Pushes a deallocation operation onto the operations vector.
-    void RecordDeallocation(const ShmNode& node);
+  // Pushes a deallocation operation onto the operations vector.
+  void RecordDeallocation(const ShmNode& node);
 
-    // Pushes a search operation onto the operations vector.
-    void RecordSearch(const ShmNode& node);
+  // Pushes a search operation onto the operations vector.
+  void RecordSearch(const ShmNode& node);
 
-    void PrintOperation(const Operation& operation) const;
+  void PrintOperation(const Operation& operation) const;
 
-    // Prints the last 100 operations performed on the allocator.
-    void PrintLastOperations() const;
+  // Prints the last 100 operations performed on the allocator.
+  void PrintLastOperations() const;
 
-    // Prints the history of an operation with a particular index.
-    void PrintIndexHistory(std::size_t index) const;
-
+  // Prints the history of an operation with a particular index.
+  void PrintIndexHistory(std::size_t index) const;
 };
 
 #endif  // ALLOCATION_LOGGER_H_

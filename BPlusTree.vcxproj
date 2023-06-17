@@ -131,12 +131,15 @@
   <ItemGroup>
     <ClInclude Include="allocation_logger.h" />
     <ClInclude Include="blob_store.h" />
+    <ClInclude Include="buffer.h" />
     <ClInclude Include="b_plus_tree.h" />
     <ClInclude Include="b_plus_tree_base.h" />
     <ClInclude Include="chunked_vector.h" />
     <ClInclude Include="chunk_manager.h" />
     <ClInclude Include="fixed_string.h" />
+    <ClInclude Include="buffer_factory.h" />
     <ClInclude Include="nodes.h" />
+    <ClInclude Include="shared_memory_buffer_factory.h" />
     <ClInclude Include="shm_allocator.h" />
     <ClInclude Include="shm_node.h" />
     <ClInclude Include="storage_traits.h" />

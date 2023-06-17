@@ -1,4 +1,5 @@
 #include "chunk_manager.h"
+#include "buffer_factory.h"
 
 static std::size_t next_power_of_two(std::size_t v) {
   v--;
@@ -12,14 +13,16 @@ static std::size_t next_power_of_two(std::size_t v) {
   return v;
 }
 
-ChunkManager::ChunkManager(const std::string& name_prefix,
+ChunkManager::ChunkManager(BufferFactory* buffer_factory,
+                           const std::string& name_prefix,
                            std::size_t initial_chunk_size)
     : name_prefix_(name_prefix),
-      chunk_size_(next_power_of_two(initial_chunk_size)) {
-  chunks_.emplace_back(name_prefix_ + "_0",
-                       chunk_size_ + sizeof(std::uint64_t));
+      chunk_size_(next_power_of_two(initial_chunk_size)),
+      buffer_factory_(buffer_factory) {
+  chunks_.emplace_back(buffer_factory_->CreateBuffer(
+      name_prefix_ + "_0", chunk_size_ + sizeof(std::uint64_t)));
   num_chunks_encoded_ =
-      reinterpret_cast<std::atomic<std::uint64_t>*>(chunks_[0].data());
+      reinterpret_cast<std::atomic<std::uint64_t>*>(chunks_[0]->GetData());
   load_chunks_if_necessary();
 }
 
@@ -27,13 +30,15 @@ ChunkManager::ChunkManager(ChunkManager&& other)
     : name_prefix_(std::move(other.name_prefix_)),
       chunk_size_(other.chunk_size_),
       chunks_(std::move(other.chunks_)),
-      num_chunks_encoded_(other.num_chunks_encoded_) {}
+      num_chunks_encoded_(other.num_chunks_encoded_),
+      buffer_factory_(other.buffer_factory_) {}
 
 ChunkManager& ChunkManager::operator=(ChunkManager&& other) {
   name_prefix_ = std::move(other.name_prefix_);
   chunk_size_ = std::move(other.chunk_size_);
   chunks_ = std::move(other.chunks_);
   num_chunks_encoded_ = other.num_chunks_encoded_;
+  buffer_factory_ = other.buffer_factory_;
   return *this;
 }
 
@@ -47,8 +52,8 @@ std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index,
       std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
       if (chunk_index < chunks_.size()) {
         std::size_t offset = chunk_index == 0 ? sizeof(std::uint64_t) : 0;
-        *data =
-            reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + offset;
+        *data = reinterpret_cast<uint8_t*>(chunks_[chunk_index]->GetData()) +
+                offset;
         *chunk_size =
             chunk_size_ * (static_cast<std::size_t>(1) << chunk_index);
         return 0;
@@ -62,7 +67,7 @@ std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index,
       std::size_t num_chunks_loaded = load_chunks_if_necessary();
       std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
       if (chunk_index < chunks_.size()) {
-        *data = reinterpret_cast<uint8_t*>(chunks_[chunk_index].data());
+        *data = reinterpret_cast<uint8_t*>(chunks_[chunk_index]->GetData());
         *chunk_size =
             chunk_size_ * (static_cast<std::size_t>(1) << chunk_index);
         return num_chunks_loaded;
@@ -82,7 +87,7 @@ uint8_t* ChunkManager::get_chunk_start(std::size_t chunk_index) {
     return nullptr;
   }
   std::size_t offset = chunk_index == 0 ? sizeof(std::uint64_t) : 0;
-  return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) + offset;
+  return reinterpret_cast<uint8_t*>(chunks_[chunk_index]->GetData()) + offset;
 }
 
 void ChunkManager::remove_chunk() {
@@ -139,10 +144,10 @@ uint8_t* ChunkManager::at(std::size_t chunk_index,
     offset_in_chunk += sizeof(std::uint64_t);
   }
   if (chunk_index >= chunks_.size() ||
-      offset_in_chunk >= chunks_[chunk_index].size()) {
+      offset_in_chunk >= chunks_[chunk_index]->GetSize()) {
     return nullptr;
   }
-  return reinterpret_cast<uint8_t*>(chunks_[chunk_index].data()) +
+  return reinterpret_cast<uint8_t*>(chunks_[chunk_index]->GetData()) +
          offset_in_chunk;
 }
 
@@ -189,8 +194,9 @@ std::size_t ChunkManager::load_chunks_if_necessary() {
   std::uint64_t num_chunks_loaded = 0;
   uint64_t num_chunks = decode_num_chunks(num_chunks_encoded);
   while (chunks_.size() < num_chunks) {
-    chunks_.emplace_back(name_prefix_ + "_" + std::to_string(chunks_.size()),
-                         chunk_size_ << chunks_.size());
+    chunks_.emplace_back(buffer_factory_->CreateBuffer(
+        name_prefix_ + "_" + std::to_string(chunks_.size()),
+        chunk_size_ << chunks_.size()));
     ++num_chunks_loaded;
   }
   return num_chunks_loaded;

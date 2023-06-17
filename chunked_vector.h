@@ -32,11 +32,11 @@ class ChunkedVector {
         chunk_size_(std::move(other.chunk_size_)) {}
 
   explicit ChunkedVector(SharedMemoryBuffer&& first_buffer)
-      : name_prefix_(first_buffer.name()),
-        chunk_size_((first_buffer.size() - sizeof(std::size_t)) / ElementSize *
-                    ElementSize) {
+      : name_prefix_(first_buffer.GetName()),
+        chunk_size_((first_buffer.GetSize() - sizeof(std::size_t)) /
+                    ElementSize * ElementSize) {
     chunks_.emplace_back(std::move(first_buffer));
-    size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
+    size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].GetData());
     load_chunks();
   }
 
@@ -130,7 +130,7 @@ ChunkedVector<T>::ChunkedVector(const std::string& name_prefix,
   chunks_.emplace_back(name_prefix_ + "_0", chunk_size_ + sizeof(std::size_t));
 
   // Read the size from the first chunk
-  size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].data());
+  size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].GetData());
 
   load_chunks();
 }
@@ -221,7 +221,7 @@ std::size_t ChunkedVector<T>::emplace_back(Args&&... args) {
     break;
   }
   T* element_ptr = reinterpret_cast<T*>(
-      reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
+      reinterpret_cast<char*>(chunks_[chunk_index].GetData()) + byte_offset);
   new (element_ptr) T(std::forward<Args>(args)...);
 
   return old_size;
@@ -257,7 +257,7 @@ T* ChunkedVector<T>::at(std::size_t index) {
       continue;
     }
     return reinterpret_cast<T*>(
-        reinterpret_cast<char*>(chunks_[chunk_index].data()) + byte_offset);
+        reinterpret_cast<char*>(chunks_[chunk_index].GetData()) + byte_offset);
   }
 }
 

@@ -3,8 +3,8 @@
 #include <iostream>
 #include <set>
 
-#include "shm_node.h"
 #include "allocation_logger.h"
+#include "shm_node.h"
 
 ShmAllocator::ShmAllocator(ChunkManager&& chunk_manager)
     : chunk_manager_(std::move(chunk_manager)) {
@@ -12,8 +12,7 @@ ShmAllocator::ShmAllocator(ChunkManager&& chunk_manager)
 }
 
 ShmAllocator::ShmAllocator(ShmAllocator&& other)
-    : chunk_manager_(std::move(other.chunk_manager_)) {
-}
+    : chunk_manager_(std::move(other.chunk_manager_)) {}
 
 uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
   // Calculate the number of bytes needed for the memory block
@@ -110,7 +109,7 @@ bool ShmAllocator::DeallocateNode(ShmNodePtr node) {
   AllocationLogger::Get()->RecordDeallocation(*node);
 
   // TODO(fsamuel): This is currently broken.
-  node = CoalesceWithRightNodeIfPossible(std::move(node));
+  // node = CoalesceWithRightNodeIfPossible(std::move(node));
 
   node->version.fetch_add(1);
 
