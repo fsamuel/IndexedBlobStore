@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <cstddef>
 
-#include "shared_memory_buffer_factory.h"
+#include "test_memory_buffer_factory.h"
 
 class ChunkManagerTest : public ::testing::Test {
  protected:
@@ -22,7 +22,7 @@ class ChunkManagerTest : public ::testing::Test {
 };
 
 TEST_F(ChunkManagerTest, AddChunkAndRemoveChunk) {
-  ChunkManager manager(SharedMemoryBufferFactory::Get(), "test_chunk", 64);
+  ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk", 64);
 
   // Initially, there should be 1 chunk
   EXPECT_EQ(manager.num_chunks(), 1);
@@ -50,7 +50,7 @@ TEST_F(ChunkManagerTest, AddChunkAndRemoveChunk) {
 }
 
 TEST_F(ChunkManagerTest, AccessChunkAndOffset) {
-  ChunkManager manager(SharedMemoryBufferFactory::Get(), "test_chunk", 64);
+  ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk", 64);
 
   // Add 3 more chunks
   uint8_t* chunk;
@@ -78,7 +78,7 @@ TEST_F(ChunkManagerTest, AccessChunkAndOffset) {
 
 TEST_F(ChunkManagerTest, TotalCapacity) {
   std::size_t chunk_size = 64;
-  ChunkManager manager(SharedMemoryBufferFactory::Get(), "test_chunk",
+  ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk",
                        chunk_size);
 
   // The total capacity should match the chunk size initially
@@ -105,7 +105,7 @@ TEST_F(ChunkManagerTest, TotalCapacity) {
 // if the chunk already exists and that it can create multiple chunks to get
 // to the desired chunk.
 TEST_F(ChunkManagerTest, GetOrCreateChunk) {
-  ChunkManager manager(SharedMemoryBufferFactory::Get(), "test_chunk", 64);
+  ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk", 64);
 
   // Initially, there should be 1 chunk
   EXPECT_EQ(manager.num_chunks(), 1);
@@ -122,7 +122,7 @@ TEST_F(ChunkManagerTest, GetOrCreateChunk) {
 }
 TEST_F(ChunkManagerTest, ConcurrentAccess) {
   const std::size_t chunk_size = 64;
-  ChunkManager manager(SharedMemoryBufferFactory::Get(), "test_chunk",
+  ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk",
                        chunk_size);
   const std::size_t num_threads = 8;
   const std::size_t iterations = chunk_size;

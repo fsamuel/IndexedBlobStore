@@ -4,7 +4,7 @@
 #include "chunk_manager.h"
 #include "fixed_string.h"
 #include "nodes.h"
-#include "shared_memory_buffer_factory.h"
+#include "test_memory_buffer_factory.h"
 
 class BlobStoreTest : public ::testing::Test {
  protected:
@@ -12,7 +12,7 @@ class BlobStoreTest : public ::testing::Test {
     RemoveChunkFiles();
     // create a shared memory allocator
     dataBuffer =
-        new ChunkManager(SharedMemoryBufferFactory::Get(), "DataBuffer", 4096);
+        new ChunkManager(TestMemoryBufferFactory::Get(), "DataBuffer", 4096);
     metadataBuffer = new SharedMemoryBuffer("MetadataBuffer", 4096);
   }
 
