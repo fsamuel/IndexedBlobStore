@@ -2,7 +2,7 @@
 
 #include "chunk_manager.h"
 #include "gtest/gtest.h"
-#include "shared_memory_buffer_factory.h"
+#include "test_memory_buffer_factory.h"
 #include "shm_allocator.h"
 
 class ShmAllocatorTest : public ::testing::Test {
@@ -11,7 +11,8 @@ class ShmAllocatorTest : public ::testing::Test {
     // create a shared memory allocator
     RemoveChunkFiles();
     // The initial chunk size must be at least the size of the allocator header.
-    ChunkManager manager(SharedMemoryBufferFactory::Get(), "test_buffer", 32);
+    // This will not work if the size of the first chunk is less than 64 bytes.
+    ChunkManager manager(TestMemoryBufferFactory::Get(), "test_buffer", 64);
     shared_mem_allocator = new ShmAllocator(std::move(manager));
   }
 
