@@ -18,13 +18,13 @@ void BlobStore::Drop(size_t index) {
   // Set a tombstone on the blob to ensure that no new locks are acquired on
   // it. We cannot drop a blob that is on the free list.
   if (metadata == nullptr || !metadata->SetTombstone()) {
-      return;
+    return;
   }
 
   // Check if a lock is held on the blob, and if so, return. It will be
   // dropped when the lock is released.
   if (metadata->lock_state.load() != 0) {
-      return;
+    return;
   }
   size_t allocated_offset = metadata->offset;
 
@@ -36,7 +36,6 @@ void BlobStore::Drop(size_t index) {
                                                          first_free_index)) {
       continue;
     }
-
 
     // If the head of the free list has changed, undo the change we made if
     // possible and try again.

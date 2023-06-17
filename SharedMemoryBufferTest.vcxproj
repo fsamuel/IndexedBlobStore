@@ -43,6 +43,7 @@
     <IncludePath>C:\Users\fadys\source\repos\BPlusTree;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
+    <ClInclude Include="allocation_logger.h" />
     <ClInclude Include="chunked_vector.h" />
     <ClInclude Include="chunk_manager.h" />
     <ClInclude Include="fixed_string.h" />
@@ -54,6 +55,7 @@
     <ClInclude Include="string_slice.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="allocation_logger.cpp" />
     <ClCompile Include="chunked_vector_test.cpp" />
     <ClCompile Include="chunk_manager.cpp" />
     <ClCompile Include="chunk_manager_test.cpp" />

@@ -4,22 +4,26 @@
 thread_local std::map<const AllocationLogger*, std::set<std::size_t>>
     AllocationLogger::skipped_nodes_;
 
+AllocationLogger* AllocationLogger::Get() {
+  static AllocationLogger logger;
+  return &logger;
+}
+
 AllocationLogger::AllocationLogger() : operations_("operations", 1024) {}
 
-void AllocationLogger::RecordAllocation(const Node& node) {
+void AllocationLogger::RecordAllocation(const ShmNode& node) {
   operations_.emplace_back(OperationType::Allocate, node);
 }
 
-void AllocationLogger::RecordDeallocation(const Node& node) {
+void AllocationLogger::RecordDeallocation(const ShmNode& node) {
   operations_.emplace_back(OperationType::Deallocate, node);
 }
 
-void AllocationLogger::RecordSearch(const Node& node) {
+void AllocationLogger::RecordSearch(const ShmNode& node) {
   operations_.emplace_back(OperationType::Search, node);
 }
 
-AllocationLogger::Operation::Operation(OperationType type,
-                                       const ShmAllocator::Node& node)
+AllocationLogger::Operation::Operation(OperationType type, const ShmNode& node)
     : thread_id(std::this_thread::get_id()),
       type(type),
       index(node.index),

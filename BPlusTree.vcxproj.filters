@@ -63,6 +63,9 @@
     <ClInclude Include="allocation_logger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shm_node.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="shared_memory_buffer.cpp">

@@ -7,10 +7,10 @@
 #include <iostream>
 #include <vector>
 
+#include "allocation_logger.h"
 #include "chunk_manager.h"
 #include "chunked_vector.h"
-
-class AllocationLogger;
+#include "shm_node.h"
 
 // A simple allocator that allocates memory from a shared memory buffer. The
 // allocator maintains a free list of available blocks of memory. When a block
@@ -73,7 +73,7 @@ class ShmAllocator {
 
   template <typename U>
   std::uint64_t ToIndex(U* ptr) const {
-    return ToIndexImpl(ptr, typename std::is_same<U, Node>::type{});
+    return ToIndexImpl(ptr, typename std::is_same<U, ShmNode>::type{});
   }
 
   // Helper method to convert an index relative to the start of the buffer to a
@@ -100,8 +100,6 @@ class ShmAllocator {
   }
 
  private:
-  class NodePtr;
-
   // Header for the allocator state in the shared memory buffer
   struct AllocatorStateHeader {
     // Magic number for verifying the allocator state header.
@@ -116,51 +114,32 @@ class ShmAllocator {
     return reinterpret_cast<AllocatorStateHeader*>(chunk_manager_.at(0, 0));
   }
 
-  // Header for a free/allocated node in the allocator
-  struct Node {
-    // Reference count for the node. This is used to determine when the node can
-    // be coalesced.
-    std::atomic<std::uint32_t> ref_count;
-    // Version number for detecting state changes in the node.
-    std::atomic<std::uint32_t> version;
-    // The index of the chunk in the chunk manager. This is necessary to convert
-    // the pointer to an index relative to the start of the chunk.
-    std::size_t index;
-    // Size of the block, including the header
-    std::atomic<std::size_t> size;
-    // index of the next free block in the free list
-    std::atomic<std::size_t> next_index;
-
-    bool is_allocated() const { return !is_free(); }
-
-    bool is_free() const { return (version.load() & 0x1) == 0; }
-  };
-
-  // Given a pointer, returns the Node.
-  NodePtr GetNode(uint8_t* ptr) const {
-    return NodePtr(ptr == nullptr ? nullptr : reinterpret_cast<Node*>(ptr) - 1);
+  // Given a pointer, returns the ShmNode.
+  ShmNodePtr GetNode(uint8_t* ptr) const {
+    return ShmNodePtr(ptr == nullptr ? nullptr
+                                     : reinterpret_cast<ShmNode*>(ptr) - 1);
   }
 
   void InitializeAllocatorStateIfNecessary();
 
   static std::size_t CalculateBytesNeeded(std::size_t bytes) {
     // Calculate the number of bytes needed for the memory block
-    return std::max<std::size_t>(sizeof(Node) + bytes, sizeof(Node));
+    return std::max<std::size_t>(sizeof(ShmNode) + bytes, sizeof(ShmNode));
   }
 
-  NodePtr NewAllocatedNode(uint8_t* buffer,
-                           std::size_t index,
-                           std::size_t size);
+  ShmNodePtr NewAllocatedNode(uint8_t* buffer,
+                              std::size_t index,
+                              std::size_t size);
 
-  bool DeallocateNode(NodePtr node);
+  bool DeallocateNode(ShmNodePtr node);
 
-
-  std::uint64_t ToIndexImpl(Node* ptr, std::true_type) const;
+  std::uint64_t ToIndexImpl(ShmNode* ptr, std::true_type) const;
 
   template <typename U>
   std::uint64_t ToIndexImpl(U* ptr, std::false_type) const {
-    NodePtr allocated_node = GetNode(ptr);
-    return ToIndexImpl(allocated_node.get(), std::true_type{}) + sizeof(Node);
+    ShmNodePtr allocated_node = GetNode(ptr);
+    return ToIndexImpl(allocated_node.get(), std::true_type{}) +
+           sizeof(ShmNode);
   }
 
   // Allocates space from a free node that can fit the requested size.
@@ -195,87 +174,21 @@ class ShmAllocator {
 
   // Given a size, returns the left node and right node, such that the
   // size of the left node < size, and the size of the right node >= size.
-  NodePtr SearchBySize(std::size_t size, std::size_t index, NodePtr* left_node);
+  ShmNodePtr SearchBySize(std::size_t size,
+                          std::size_t index,
+                          ShmNodePtr* left_node);
 
-  // Returns whether the node with the provided index is reachable in the free list.
+  // Returns whether the node with the provided index is reachable in the free
+  // list.
   bool IsNodeReachable(std::size_t index);
 
-  // Coalesces the provided node with the free node to the right of it if available.
-  // Returns the coalesced node.
-  NodePtr CoalesceWithRightNodeIfPossible(NodePtr node);
+  // Coalesces the provided node with the free node to the right of it if
+  // available. Returns the coalesced node.
+  ShmNodePtr CoalesceWithRightNodeIfPossible(ShmNodePtr node);
 
  private:
-  class NodePtr {
-   public:
-    explicit NodePtr(Node* ptr = nullptr) : ptr_(ptr) {
-      if (ptr_) {
-          ptr_->ref_count.fetch_add(1);
-      }
-    }
-
-    explicit NodePtr(const NodePtr& other) : ptr_(other.ptr_) {
-      if (ptr_) {
-        ptr_->ref_count.fetch_add(1);
-      }
-    }
-
-    // Move constructor: saves the cost of a refcount increment.
-    NodePtr(NodePtr&& other) noexcept : ptr_(other.ptr_) {
-      other.ptr_ = nullptr;
-    }
-
-    NodePtr& operator=(const NodePtr& other) {
-      if (ptr_ != other.ptr_) {
-        reset();
-        ptr_ = other.ptr_;
-        if (ptr_) {
-          ptr_->ref_count.fetch_add(1);
-        }
-      }
-      return *this;
-    }
-    
-    NodePtr& operator=(NodePtr&& other) {
-      if (ptr_ != other.ptr_) {
-        reset();
-        ptr_ = other.ptr_;
-        other.ptr_ = nullptr;
-      }
-      return *this;
-    }
-
-    ~NodePtr() { reset(); }
-
-    void reset() {
-      if (ptr_) {
-        ptr_->ref_count.fetch_sub(1);
-        ptr_ = nullptr;
-      }
-    }
-
-    Node* get() const { return ptr_; }
-
-    Node& operator*() const { return *ptr_; }
-
-    Node* operator->() const { return ptr_; }
-
-    operator bool() const { return ptr_ != nullptr; }
-
-    bool operator==(std::nullptr_t) const { return ptr_ == nullptr; }
-
-    bool operator!=(std::nullptr_t) const { return ptr_ != nullptr; }
-
-    bool operator==(const NodePtr& other) const { return ptr_ == other.ptr_; }
-
-    bool operator!=(const NodePtr& other) const { return ptr_ != other.ptr_; }
-
-   private:
-    Node* ptr_;
-  };
-
   // Reference to the shared memory buffer used for allocation
   ChunkManager chunk_manager_;
-
   friend class AllocationLogger;
 };
 
