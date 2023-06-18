@@ -34,17 +34,6 @@ class ChunkedVector {
         chunk_size_(std::move(other.chunk_size_)),
         buffer_factory_(other.buffer_factory_) {}
 
-  /*
-  explicit ChunkedVector(SharedMemoryBuffer&& first_buffer)
-      : name_prefix_(first_buffer.GetName()),
-        chunk_size_((first_buffer.GetSize() - sizeof(std::size_t)) /
-                    ElementSize * ElementSize),
-        buffer_factory_(first_buffer.buffer_factory_) {
-    chunks_.emplace_back(std::move(first_buffer));
-    size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].GetData());
-    load_chunks();
-  }*/
-
   ChunkedVector& operator=(ChunkedVector&& other) {
     name_prefix_ = std::move(other.name_prefix_);
     size_ = std::move(other.size_);
@@ -111,7 +100,7 @@ class ChunkedVector {
   // chunk.
   std::atomic_size_t* size_ = nullptr;
   // Vector of SharedMemoryBuffers that store the elements of the ChunkedVector.
-  std::vector<SharedMemoryBuffer> chunks_;
+  std::vector<std::unique_ptr<Buffer>> chunks_;
   // Mutex for protecting the chunks vector. This is needed because the vector
   // is modified when a new chunk is added.
   mutable std::shared_mutex chunks_rw_mutex_;
@@ -136,10 +125,11 @@ ChunkedVector<T>::ChunkedVector(BufferFactory* buffer_factory,
       buffer_factory_(buffer_factory) {
   // Load the first chunk and add it to the vector. The first chunk also stores
   // the size of the vector.
-  chunks_.emplace_back(name_prefix_ + "_0", chunk_size_ + sizeof(std::size_t));
+  chunks_.emplace_back(buffer_factory_->CreateBuffer(
+      name_prefix_ + "_0", chunk_size_ + sizeof(std::size_t)));
 
   // Read the size from the first chunk
-  size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].GetData());
+  size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0]->GetData());
 
   load_chunks();
 }
@@ -174,17 +164,18 @@ void ChunkedVector<T>::load_chunks() {
 
   // Load the additional chunks
   for (std::size_t i = 1; i < num_chunks; ++i) {
-    chunks_.emplace_back(name_prefix_ + "_" + std::to_string(i),
-                         chunk_size_ * (static_cast<std::size_t>(1) << i));
+    chunks_.emplace_back(buffer_factory_->CreateBuffer(
+        name_prefix_ + "_" + std::to_string(i),
+        chunk_size_ * (static_cast<std::size_t>(1) << i)));
   }
 }
 
 template <typename T>
 void ChunkedVector<T>::expand() {
   std::unique_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-  chunks_.emplace_back(
+  chunks_.emplace_back(buffer_factory_->CreateBuffer(
       name_prefix_ + "_" + std::to_string(chunks_.size()),
-      chunk_size_ * (static_cast<std::size_t>(1) << chunks_.size()));
+      chunk_size_ * (static_cast<std::size_t>(1) << chunks_.size())));
 }
 
 template <typename T>
@@ -230,7 +221,7 @@ std::size_t ChunkedVector<T>::emplace_back(Args&&... args) {
     break;
   }
   T* element_ptr = reinterpret_cast<T*>(
-      reinterpret_cast<char*>(chunks_[chunk_index].GetData()) + byte_offset);
+      reinterpret_cast<char*>(chunks_[chunk_index]->GetData()) + byte_offset);
   new (element_ptr) T(std::forward<Args>(args)...);
 
   return old_size;
@@ -266,7 +257,7 @@ T* ChunkedVector<T>::at(std::size_t index) {
       continue;
     }
     return reinterpret_cast<T*>(
-        reinterpret_cast<char*>(chunks_[chunk_index].GetData()) + byte_offset);
+        reinterpret_cast<char*>(chunks_[chunk_index]->GetData()) + byte_offset);
   }
 }
 
