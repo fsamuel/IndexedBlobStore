@@ -37,7 +37,7 @@ uint8_t* ShmAllocator::Allocate(std::size_t bytes_requested) {
         DeallocateNode(std::move(node));
         allocated_node->size = bytes_needed;
       }
-      AllocationLogger::Get()->RecordDeallocation(*allocated_node);
+      AllocationLogger::Get()->RecordAllocation(*allocated_node);
       return data;
     }
     // No block of sufficient size was found. We need to request a new chunk,
@@ -106,12 +106,12 @@ bool ShmAllocator::DeallocateNode(ShmNodePtr node) {
     return false;
   }
 
-  AllocationLogger::Get()->RecordDeallocation(*node);
-
   // TODO(fsamuel): This is currently broken.
-  // node = CoalesceWithRightNodeIfPossible(std::move(node));
+  node = CoalesceWithRightNodeIfPossible(std::move(node));
 
   node->version.fetch_add(1);
+
+  AllocationLogger::Get()->RecordDeallocation(*node);
 
   ShmNodePtr left_node;
   ShmNodePtr right_node;

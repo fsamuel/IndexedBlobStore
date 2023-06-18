@@ -29,7 +29,8 @@ class ShmNodePtr {
     if (ptr_) {
       std::size_t ref_count = ptr_->ref_count.fetch_add(1) + 1;
       if (ref_count == 0) {
-        AllocationLogger::Get()->PrintLastOperations();
+          AllocationLogger::Get()->PrintIndexHistory(ptr_->index);
+          assert(false);
       }
     }
   }
@@ -71,7 +72,8 @@ class ShmNodePtr {
     if (ptr_) {
       std::size_t last_ref_count = ptr_->ref_count.fetch_sub(1);
       if (last_ref_count == 0) {
-        AllocationLogger::Get()->PrintLastOperations();
+          AllocationLogger::Get()->PrintIndexHistory(ptr_->index);
+          assert(false);
       }
       ptr_ = nullptr;
     }

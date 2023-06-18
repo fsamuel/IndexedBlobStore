@@ -67,6 +67,8 @@ void AllocationLogger::PrintLastOperations() const {
 
 // Prints the history of an operation with a particular index.
 void AllocationLogger::PrintIndexHistory(std::size_t index) const {
+  std::lock_guard<std::mutex> lock(log_mutex_);
+
   std::size_t input_chunk_index = ChunkManager::chunk_index(index);
   std::size_t input_offset_in_chunk = ChunkManager::offset_in_chunk(index);
   std::cout << "History of index " << input_chunk_index << ", "
