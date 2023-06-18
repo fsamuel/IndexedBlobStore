@@ -364,7 +364,10 @@ class BlobStore {
 
   // Constructor that initializes the BlobStore with the provided metadata and
   // data shared memory buffers.
-  BlobStore(SharedMemoryBuffer&& metadataBuffer, ChunkManager&& dataBuffer);
+  BlobStore(BufferFactory* buffer_factory,
+            const std::string& name_prefix,
+            std::size_t requested_chunk_size,
+            ChunkManager&& dataBuffer);
 
   // BlobStore destructor
   ~BlobStore();

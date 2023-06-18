@@ -1,8 +1,11 @@
 #include "blob_store.h"
 
-BlobStore::BlobStore(SharedMemoryBuffer&& metadataBuffer,
+BlobStore::BlobStore(BufferFactory* buffer_factory,
+                     const std::string& name_prefix,
+                     std::size_t requested_chunk_size,
                      ChunkManager&& dataBuffer)
-    : allocator_(std::move(dataBuffer)), metadata_(std::move(metadataBuffer)) {
+    : allocator_(std::move(dataBuffer)),
+      metadata_(buffer_factory, name_prefix, requested_chunk_size) {
   if (metadata_.empty()) {
     metadata_.emplace_back();
   }

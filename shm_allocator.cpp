@@ -107,7 +107,7 @@ bool ShmAllocator::DeallocateNode(ShmNodePtr node) {
   }
 
   // TODO(fsamuel): This is currently broken.
-  node = CoalesceWithRightNodeIfPossible(std::move(node));
+  // node = CoalesceWithRightNodeIfPossible(std::move(node));
 
   node->version.fetch_add(1);
 

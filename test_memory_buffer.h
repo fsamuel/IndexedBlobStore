@@ -9,9 +9,9 @@ class TestMemoryBuffer : public Buffer {
  public:
   TestMemoryBuffer(const std::string& name, size_t size)
       : name_(name), size_(size), buffer_(new char[size]) {
-      // TODO(fsamuel): The fact that we need to do this suggests that the
-      // code that uses this class is brittle. We should fix that.
-      std::memset(buffer_.get(), 0, size);
+    // TODO(fsamuel): The fact that we need to do this suggests that the
+    // code that uses this class is brittle. We should fix that.
+    std::memset(buffer_.get(), 0, size);
   }
 
   ~TestMemoryBuffer() override {}

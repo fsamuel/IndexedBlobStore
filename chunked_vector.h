@@ -8,6 +8,7 @@
 #include <shared_mutex>
 #include <vector>
 
+#include "buffer_factory.h"
 #include "shared_memory_buffer.h"
 
 // ChunkedVector is a dynamic array-like data structure that uses
@@ -22,23 +23,27 @@ class ChunkedVector {
   // Constructs a ChunkedVector with the specified name_prefix for the shared
   // memory buffers. Each SharedMemoryBuffer will be named as name_prefix_i,
   // where i is the chunk index.
-  ChunkedVector(const std::string& name_prefix,
+  ChunkedVector(BufferFactory* buffer_factory,
+                const std::string& name_prefix,
                 std::size_t requested_chunk_size);
 
   ChunkedVector(ChunkedVector&& other)
       : name_prefix_(std::move(other.name_prefix_)),
         size_(std::move(other.size_)),
         chunks_(std::move(other.chunks_)),
-        chunk_size_(std::move(other.chunk_size_)) {}
+        chunk_size_(std::move(other.chunk_size_)),
+        buffer_factory_(other.buffer_factory_) {}
 
+  /*
   explicit ChunkedVector(SharedMemoryBuffer&& first_buffer)
       : name_prefix_(first_buffer.GetName()),
         chunk_size_((first_buffer.GetSize() - sizeof(std::size_t)) /
-                    ElementSize * ElementSize) {
+                    ElementSize * ElementSize),
+        buffer_factory_(first_buffer.buffer_factory_) {
     chunks_.emplace_back(std::move(first_buffer));
     size_ = reinterpret_cast<std::atomic_size_t*>(chunks_[0].GetData());
     load_chunks();
-  }
+  }*/
 
   ChunkedVector& operator=(ChunkedVector&& other) {
     name_prefix_ = std::move(other.name_prefix_);
@@ -111,6 +116,8 @@ class ChunkedVector {
   // is modified when a new chunk is added.
   mutable std::shared_mutex chunks_rw_mutex_;
 
+  BufferFactory* buffer_factory_;
+
   // Loads the existing shared memory buffers based on the current size of the
   // vector.
   void load_chunks();
@@ -120,11 +127,13 @@ class ChunkedVector {
 };
 
 template <typename T>
-ChunkedVector<T>::ChunkedVector(const std::string& name_prefix,
+ChunkedVector<T>::ChunkedVector(BufferFactory* buffer_factory,
+                                const std::string& name_prefix,
                                 std::size_t requested_chunk_size)
     : name_prefix_(name_prefix),
       chunk_size_(std::max(requested_chunk_size, ElementSize) / ElementSize *
-                  ElementSize) {
+                  ElementSize),
+      buffer_factory_(buffer_factory) {
   // Load the first chunk and add it to the vector. The first chunk also stores
   // the size of the vector.
   chunks_.emplace_back(name_prefix_ + "_0", chunk_size_ + sizeof(std::size_t));

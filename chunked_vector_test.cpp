@@ -3,6 +3,7 @@
 
 #include "chunked_vector.h"
 #include "gtest/gtest.h"
+#include "test_memory_buffer_factory.h"
 #include "utils.h"
 
 class ChunkedVectorTest : public ::testing::Test {
@@ -20,7 +21,8 @@ class ChunkedVectorTest : public ::testing::Test {
 };
 
 TEST_F(ChunkedVectorTest, SanityCheck) {
-  ChunkedVector<int> vector("chunked_vector_test", 4);
+  ChunkedVector<int> vector(TestMemoryBufferFactory::Get(),
+                            "chunked_vector_test", 4);
   EXPECT_EQ(vector.size(), 0);
   vector.push_back(0);
   EXPECT_EQ(vector.size(), 1);
@@ -42,7 +44,8 @@ TEST_F(ChunkedVectorTest, SanityCheck) {
 // Basic test for ChunkedVector that populates it with 100 elements and
 // verifies that they are all there.
 TEST_F(ChunkedVectorTest, BasicTest) {
-  ChunkedVector<int> vector("chunked_vector_test", 4);
+  ChunkedVector<int> vector(TestMemoryBufferFactory::Get(),
+                            "chunked_vector_test", 4);
   for (int i = 0; i < 10; i++) {
     vector.push_back(i);
   }
@@ -56,7 +59,8 @@ TEST_F(ChunkedVectorTest, BasicTest) {
 // Push back one element and pop it off and make sure size is updated
 // appropriately each time.
 TEST_F(ChunkedVectorTest, PushbackAndPop) {
-  ChunkedVector<int> vec("chunked_vector_test", 4);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         4);
   EXPECT_EQ(vec.size(), 0);
   vec.push_back(1);
   EXPECT_EQ(vec.size(), 1);
@@ -66,7 +70,8 @@ TEST_F(ChunkedVectorTest, PushbackAndPop) {
 
 // Tests reserve, capacity, and resize operations on ChunkedVector.
 TEST_F(ChunkedVectorTest, ReserveCapacityResize) {
-  ChunkedVector<int> vec("chunked_vector_test", 4);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         4);
   EXPECT_EQ(vec.capacity(), 1);
   vec.reserve(10);
   EXPECT_EQ(vec.capacity(), 15);
@@ -83,7 +88,8 @@ TEST_F(ChunkedVectorTest, ReserveCapacityResize) {
 // updated. Also make sure that the other elements are still there and
 // unchanged.
 TEST_F(ChunkedVectorTest, WriteAndRead) {
-  ChunkedVector<int> vec("chunked_vector_test", 4);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         4);
   for (int i = 0; i < 1000; i++) {
     vec.push_back(i);
   }
@@ -111,7 +117,8 @@ TEST_F(ChunkedVectorTest, LargeChunkWithStruct) {
     int c;
     int d;
   };
-  ChunkedVector<TestStruct> vec("chunked_vector_test", 16);
+  ChunkedVector<TestStruct> vec(TestMemoryBufferFactory::Get(),
+                                "chunked_vector_test", 16);
   EXPECT_EQ(vec.size(), 0);
   TestStruct obj;
   obj.a = 1;
@@ -129,7 +136,8 @@ TEST_F(ChunkedVectorTest, LargeChunkWithStruct) {
 // Insert 1000 elements into a ChunkedVector and then erase them all and make
 // sure the size is updated appropriately.
 TEST_F(ChunkedVectorTest, Erase) {
-  ChunkedVector<int> vec("chunked_vector_test", 4);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         4);
   for (int i = 0; i < 1000; i++) {
     vec.push_back(i);
   }
@@ -150,7 +158,8 @@ TEST_F(ChunkedVectorTest, EraseStruct) {
     int c;
     int d;
   };
-  ChunkedVector<TestStruct> vec("chunked_vector_test", 16);
+  ChunkedVector<TestStruct> vec(TestMemoryBufferFactory::Get(),
+                                "chunked_vector_test", 16);
   for (int i = 0; i < 1000; i++) {
     TestStruct obj;
     obj.a = i;
@@ -180,7 +189,8 @@ TEST_F(ChunkedVectorTest, EraseStruct) {
 
 // Tests a ChunkVector as a byte array.
 TEST_F(ChunkedVectorTest, ByteArray) {
-  ChunkedVector<uint8_t> vec("chunked_vector_test", 4);
+  ChunkedVector<uint8_t> vec(TestMemoryBufferFactory::Get(),
+                             "chunked_vector_test", 4);
   for (int i = 0; i < 256; i++) {
     vec.push_back(i);
   }
@@ -203,7 +213,8 @@ TEST_F(ChunkedVectorTest, ByteArray) {
 // Tests a ChunkVector as a byte array with a different chunk size.
 TEST_F(ChunkedVectorTest, ByteArrayLargeChunk) {
   std::size_t page_size = utils::GetPageSize();
-  ChunkedVector<uint8_t> vec("chunked_vector_test", page_size);
+  ChunkedVector<uint8_t> vec(TestMemoryBufferFactory::Get(),
+                             "chunked_vector_test", page_size);
   for (int i = 0; i < 256; i++) {
     vec.push_back(i);
   }
@@ -228,7 +239,8 @@ TEST_F(ChunkedVectorTest, ByteArrayLargeChunk) {
 TEST_F(ChunkedVectorTest, ConcurrentPushesAndPops) {
   const int num_threads = 100;
   const int num_pushes = 100;
-  ChunkedVector<int> vec("chunked_vector_test", 16);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         16);
 
   auto push_func = [&vec, num_pushes]() {
     for (int i = 0; i < num_pushes; ++i) {
@@ -269,7 +281,8 @@ TEST_F(ChunkedVectorTest, ConcurrentPushesAndPops) {
 TEST_F(ChunkedVectorTest, ConcurrentPushesAndPops2) {
   const int num_threads = 100;
   const int num_pushes = 100;
-  ChunkedVector<int> vec("chunked_vector_test", 16);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         16);
 
   auto push_pop_func = [&vec, num_pushes]() {
     for (int i = 0; i < num_pushes; ++i) {
@@ -292,7 +305,8 @@ TEST_F(ChunkedVectorTest, ConcurrentPushesAndPops2) {
 
 // Push 10,000 integers and verify they're all there in the correct order.
 TEST_F(ChunkedVectorTest, PushIntegers) {
-  ChunkedVector<int> vec("chunked_vector_test", 16);
+  ChunkedVector<int> vec(TestMemoryBufferFactory::Get(), "chunked_vector_test",
+                         16);
   constexpr int kNumIntegers = 100000;
   for (int i = 0; i < kNumIntegers; i++) {
     vec.push_back(i);
@@ -314,7 +328,8 @@ TEST_F(ChunkedVectorTest, PushIntegersMultiThreaded) {
   };
   const int num_threads = 10;
   const int num_pushes = 10000;
-  ChunkedVector<ThreadInt> vec("chunked_vector_test", 16);
+  ChunkedVector<ThreadInt> vec(TestMemoryBufferFactory::Get(),
+                               "chunked_vector_test", 16);
 
   auto push_func = [&vec, num_pushes](int thread_id) {
     for (int i = 0; i < num_pushes; ++i) {

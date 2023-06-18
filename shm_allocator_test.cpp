@@ -2,8 +2,8 @@
 
 #include "chunk_manager.h"
 #include "gtest/gtest.h"
-#include "test_memory_buffer_factory.h"
 #include "shm_allocator.h"
+#include "test_memory_buffer_factory.h"
 
 class ShmAllocatorTest : public ::testing::Test {
  protected:

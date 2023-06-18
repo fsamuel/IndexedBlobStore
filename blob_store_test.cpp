@@ -39,12 +39,14 @@ class BlobStoreTest : public ::testing::Test {
 };
 
 TEST_F(BlobStoreTest, CreateEmptyBlobStore) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   EXPECT_EQ(store.GetSize(), 0);
 }
 
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<std::string> ptr1 = store.New<std::string>("This is a test.");
   // strcpy(&*ptr1, "This is a test.");
   BlobStoreObject<std::string> ptr2 = store.New<std::string>("Hello World!");
@@ -54,7 +56,8 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobs) {
 
 // Creates two blobs with the templatized Put method, and then gets them back.
 TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsUsingTemplatizedPut) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<int> ptr1 = store.New<int>(100);
   BlobStoreObject<int> ptr2 = store.New<int>(1337);
 
@@ -65,7 +68,8 @@ TEST_F(BlobStoreTest, CreateBlobStoreWithTwoBlobsUsingTemplatizedPut) {
 
 // Creates a few blobs of ints, iterates, deletes a few then iterates again.
 TEST_F(BlobStoreTest, BlobIteration) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
 
   BlobStoreObject<const int> ptr1 = std::move(store.New<int>(100)).Downgrade();
   BlobStoreObject<const int> ptr2 = std::move(store.New<int>(200)).Downgrade();
@@ -98,7 +102,8 @@ TEST_F(BlobStoreTest, BlobIteration) {
 // Creates a couple of blobs, deletes one and insures that the BlobStoreObject
 // is no longer valid.
 TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
 
   BlobStoreObject<const std::string> ptr1;
   {
@@ -131,7 +136,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectInvalid) {
 
 // Tests BlobStoreObject::Clone.
 TEST_F(BlobStoreTest, BlobStoreObjectClone) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   // TODO(fsamuel): I should probably implement an array-based version of Clone.
   BlobStoreObject<int> ptr = store.New<int>(64);
   EXPECT_EQ(ptr.GetSize(), sizeof(int));
@@ -147,7 +153,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectClone) {
 // Verify that if we have multiple non-const pointers to the same blob and we
 // downgrade one of them, the newly downgraded pointer will be invalidated.
 TEST_F(BlobStoreTest, BlobStoreObjectDowngradeInvalidates) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<int> ptr = store.New<int>(64);
   EXPECT_EQ(ptr.GetSize(), sizeof(int));
   EXPECT_EQ(*ptr, 64);
@@ -163,7 +170,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectDowngradeInvalidates) {
 // have multiple const pointers to the same blob and we upgrade one of them, the
 // newly upgraded pointer will be invalidated.
 TEST_F(BlobStoreTest, BlobStoreObjectUpgradeInvalidates) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<const int> ptr = store.New<int>(64).Downgrade();
   EXPECT_EQ(ptr.GetSize(), sizeof(int));
   EXPECT_EQ(*ptr, 64);
@@ -179,7 +187,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectUpgradeInvalidates) {
 // get another BlobStoreObject from the index of the dropped blob. This should
 // fail.
 TEST_F(BlobStoreTest, BlobStoreObjectDrop) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<int> ptr = store.New<int>(64);
   size_t index = ptr.Index();
   EXPECT_EQ(ptr.GetSize(), sizeof(int));
@@ -195,7 +204,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectDrop) {
 // should no longer be valid. Try to get another BlobStoreObject from the index
 // of the dropped blob. This should fail.
 TEST_F(BlobStoreTest, BlobStoreObjectDrop2) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<int> ptr = store.New<int>(64);
   size_t index = ptr.Index();
   EXPECT_EQ(ptr.GetSize(), sizeof(int));
@@ -216,7 +226,8 @@ TEST_F(BlobStoreTest, BlobStoreObjectDrop2) {
 // Convert back to std::string or StringSlice and verify that the contents are
 // the same.
 TEST_F(BlobStoreTest, FixedString) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<const std::string> ptr =
       std::move(store.New<std::string>("Hello, world!")).Downgrade();
   BlobStoreObject<const std::string> ptr2 =
@@ -247,7 +258,8 @@ TEST_F(BlobStoreTest, FixedString) {
 // Populate the keys of Leaf node with the blobs. Test the search function
 // of LeafNode.
 TEST_F(BlobStoreTest, LeafNode) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<const std::string> ptr =
       std::move(store.New<std::string>("S1")).Downgrade();
   BlobStoreObject<const std::string> ptr2 =
@@ -271,7 +283,8 @@ TEST_F(BlobStoreTest, LeafNode) {
 // Create a blob that's a char array with a string in it. Verify that the string
 // is the same as the original string.
 TEST_F(BlobStoreTest, CharArray) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<const char[14]> ptr =
       std::move(store.New<const char[14]>("Hello, world!")).Downgrade();
   EXPECT_EQ(ptr->size, 13);
@@ -281,7 +294,8 @@ TEST_F(BlobStoreTest, CharArray) {
 // Create a blob that's an int array, and populate it with some values. Verify
 // that the values are the same as the original values.
 TEST_F(BlobStoreTest, IntArray) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
 
   std::array<int, 4> arr = {1, 2, 3, 4};
   BlobStoreObject<int[4]> ptr = store.New<int[4]>(arr);
@@ -302,7 +316,8 @@ TEST_F(BlobStoreTest, IntArray) {
 // Similar to IntArray creates 8 concurrent threads and drops each blob after
 // writing to it and verifying.
 TEST_F(BlobStoreTest, IntArrayConcurrent) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   std::array<BlobStoreObject<int[4]>, 8> results;
   std::vector<std::thread> threads;
   for (int i = 0; i < 8; i++) {
@@ -332,7 +347,8 @@ TEST_F(BlobStoreTest, IntArrayConcurrent) {
 }
 
 TEST_F(BlobStoreTest, IntArrayConcurrentDrop) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   std::array<BlobStoreObject<int[4]>, 8> results;
   std::vector<std::thread> threads;
   for (int i = 0; i < 8; i++) {
@@ -370,7 +386,8 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDrop) {
 // Allocate some blobs, pass them to 8 threads, and verify that the contents are
 // the same as the original contents.
 TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   std::array<BlobStoreObject<int[4]>, 8> inputs;
   // Allocate 8 blobs.
   for (int i = 0; i < 8; i++) {
@@ -415,7 +432,8 @@ TEST_F(BlobStoreTest, IntArrayConcurrentDropVerify) {
 // In another case, it seems like the control_block_ of BlobStoreObject is being
 // double freed on operator=.
 TEST_F(BlobStoreTest, IntArrayConcurrentClone) {
-  BlobStore store(std::move(*metadataBuffer), std::move(*dataBuffer));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
   BlobStoreObject<int[4]> ptr = store.New<int[4]>({1, 2, 3, 4});
   std::array<BlobStoreObject<int[4]>, 8> inputs;
   std::array<BlobStoreObject<int[4]>, 8> results;

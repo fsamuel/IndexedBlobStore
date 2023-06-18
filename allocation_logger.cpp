@@ -1,5 +1,6 @@
 #include "allocation_logger.h"
 #include "shm_allocator.h"
+#include "test_memory_buffer_factory.h"
 
 thread_local std::map<const AllocationLogger*, std::set<std::size_t>>
     AllocationLogger::skipped_nodes_;
@@ -9,7 +10,8 @@ AllocationLogger* AllocationLogger::Get() {
   return &logger;
 }
 
-AllocationLogger::AllocationLogger() : operations_("operations", 1024) {}
+AllocationLogger::AllocationLogger()
+    : operations_(TestMemoryBufferFactory::Get(), "operations", 1024) {}
 
 void AllocationLogger::RecordAllocation(const ShmNode& node) {
   operations_.emplace_back(OperationType::Allocate, node);

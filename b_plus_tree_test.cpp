@@ -11,8 +11,8 @@ class BPlusTreeTest : public ::testing::Test {
     SharedMemoryBuffer metadataBuffer("MetadataBuffer", utils::GetPageSize());
     ChunkManager dataBuffer(TestMemoryBufferFactory::Get(), "DataBuffer",
                             4 * utils::GetPageSize());
-    blob_store =
-        new BlobStore(std::move(metadataBuffer), std::move(dataBuffer));
+    blob_store = new BlobStore(TestMemoryBufferFactory::Get(), "MetadataBuffer",
+                               4096, std::move(dataBuffer));
   }
 
   virtual void TearDown() {
