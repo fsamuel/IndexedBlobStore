@@ -12,7 +12,7 @@
 #include "shared_memory_buffer.h"
 
 // ChunkedVector is a dynamic array-like data structure that uses
-// SharedMemoryBuffer to allocate its memory in chunks. Each chunk is double the
+// Buffer to allocate its memory in chunks. Each chunk is double the
 // size of the previous chunk. It supports basic operations like push_back,
 // pop_back, access at a particular index, and checking the size of the vector.
 template <typename T>
@@ -21,7 +21,7 @@ class ChunkedVector {
   static constexpr std::size_t ElementSize = sizeof(T);
 
   // Constructs a ChunkedVector with the specified name_prefix for the shared
-  // memory buffers. Each SharedMemoryBuffer will be named as name_prefix_i,
+  // memory buffers. Each Buffer will be named as name_prefix_i,
   // where i is the chunk index.
   ChunkedVector(BufferFactory* buffer_factory,
                 const std::string& name_prefix,
@@ -99,7 +99,7 @@ class ChunkedVector {
   // Pointer to the size of the vector. This is stored at the start of the first
   // chunk.
   std::atomic_size_t* size_ = nullptr;
-  // Vector of SharedMemoryBuffers that store the elements of the ChunkedVector.
+  // Vector of Buffers that store the elements of the ChunkedVector.
   std::vector<std::unique_ptr<Buffer>> chunks_;
   // Mutex for protecting the chunks vector. This is needed because the vector
   // is modified when a new chunk is added.
@@ -107,7 +107,7 @@ class ChunkedVector {
 
   BufferFactory* buffer_factory_;
 
-  // Loads the existing shared memory buffers based on the current size of the
+  // Loads the existing buffers based on the current size of the
   // vector.
   void load_chunks();
 

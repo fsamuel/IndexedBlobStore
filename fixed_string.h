@@ -17,7 +17,7 @@ class FixedString {
   size_t size;
   // Hash of the string data
   std::size_t hash;
-  // Flexible array member for the string data
+  // Flexible array member for the string data.
   char data[1];
 
   // Regular constructor from std::string
@@ -175,6 +175,8 @@ __attribute__((packed))
 #pragma pack(pop)
 #endif
 
+// This is a StorageTraits specialization for std::string. It is used to
+// std::string is stored as a FixedString.
 template <>
 struct StorageTraits<std::string> {
   using StorageType = FixedString;
