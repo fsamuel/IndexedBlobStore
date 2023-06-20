@@ -37,10 +37,6 @@ class ChunkManager {
                                   uint8_t** data,
                                   std::size_t* chunk_size);
 
-  // Returns a pointer to the start of the chunk at the specified index.
-  const uint8_t* get_chunk_start(std::size_t chunk_index) const;
-  uint8_t* get_chunk_start(std::size_t chunk_index);
-
   // Removes the last chunk from the ChunkManager and updates the number of
   // chunks in the first chunk.
   void remove_chunk();
@@ -106,18 +102,24 @@ class ChunkManager {
 
   // Prefix for the names of the shared memory buffers.
   std::string name_prefix_;
+
   // The size of the first chunk in bytes.
   std::size_t chunk_size_;
-  // Vector of SharedMemoryBuffers that store the chunks of the ChunkManager.
+
+  // Vector of buffers that store the chunks of the ChunkManager.
   // This is mutable because the vector is modified when a new chunk is added or
   // removed which can happen even when just reading from the ChunkManager.
   std::vector<std::unique_ptr<Buffer>> chunks_;
+
   // The number of chunks in the ChunkManager, cached from the first chunk for
   // performance.
   std::atomic<std::uint64_t>* num_chunks_encoded_;
+
   // Mutex for protecting the chunks vector. This is needed because the vector
   // is modified when a new chunk is added or removed.
   mutable std::shared_mutex chunks_rw_mutex_;
+
+  // BufferFactory creates either private or shared memory buffers.
   BufferFactory* buffer_factory_;
 };
 

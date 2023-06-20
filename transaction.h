@@ -201,12 +201,15 @@ class Transaction {
     return tree_->Delete(this, key);
   }
 
+  // Aborts the transaction. All new objects are dropped.
   void Abort() && {
     for (const ObjectInfo& object_info : new_objects_) {
       blob_store_->Drop(object_info.index);
     }
   }
 
+  // Commits the transaction. Returns true if the commit was successful, false
+  // otherwise.
   bool Commit() && {
     if (!old_head_.CompareAndSwap(new_head_)) {
       std::move(*this).Abort();
@@ -224,12 +227,19 @@ class Transaction {
   // Sets the new_head's root to the provided index.
   void SetNewRoot(size_t index) { new_head_->root_index = index; }
 
+  // Returns a new object of type T. The object is initialized with the provided
+  // arguments. The newly created object is tracked by the transaction and will
+  // be deleted if the transaction is aborted.
   template <typename T, typename... Args>
   BlobStoreObject<T> New(Args&&... args) {
     return TransactionHelper<KeyType, ValueType, Order, T>::New(
         this, std::forward<Args>(args)...);
   }
 
+  // Returns a mutable version of the provided object. If the object is already
+  // mutable, it is returned as-is. If the version of the node matches the version
+  // of the transaction, then upgrade the pointer to a mutable version. Otherwise,
+  // clone the node and set the version to the transaction's version.
   template <typename T>
   BlobStoreObject<typename std::remove_const<T>::type> GetMutable(
       BlobStoreObject<typename std::add_const<T>::type> node) {
@@ -238,12 +248,15 @@ class Transaction {
         typename std::remove_const<T>::type>::GetMutable(this, std::move(node));
   }
 
+  // A non-const node is already mutable.
   template <typename T>
   BlobStoreObject<typename std::remove_const<T>::type> GetMutable(
       BlobStoreObject<typename std::remove_const<T>::type> node) {
     return node;
   }
 
+  // Record that the object is no longer needed by the transaction. The object
+  // will be deleted if the transaction is committed.
   template <typename T>
   void Drop(BlobStoreObject<T> obj) {
     // The object type doesn't matter when looking up the object in the new

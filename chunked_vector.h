@@ -66,9 +66,6 @@ class ChunkedVector {
                               std::size_t* chunk_index,
                               std::size_t* byte_offset) const;
 
-  // Returns the number of chunks that the ChunkVector is composed of.
-  std::size_t num_chunks() const { return chunks_.size(); }
-
   // Accesses the element at the specified index in the ChunkedVector.
   T* at(std::size_t index);
 
@@ -92,27 +89,31 @@ class ChunkedVector {
   void resize(std::size_t new_size);
 
  private:
-  // Prefix for the names of the shared memory buffers.
-  std::string name_prefix_;
-  // The size of each chunk in bytes. This is always a multiple of ElementSize.
-  const std::size_t chunk_size_;
-  // Pointer to the size of the vector. This is stored at the start of the first
-  // chunk.
-  std::atomic_size_t* size_ = nullptr;
-  // Vector of Buffers that store the elements of the ChunkedVector.
-  std::vector<std::unique_ptr<Buffer>> chunks_;
-  // Mutex for protecting the chunks vector. This is needed because the vector
-  // is modified when a new chunk is added.
-  mutable std::shared_mutex chunks_rw_mutex_;
-
-  BufferFactory* buffer_factory_;
-
   // Loads the existing buffers based on the current size of the
   // vector.
   void load_chunks();
 
   // Adds a new chunk to the vector with double the size of the previous chunk.
   void expand();
+
+  // Prefix for the names of the shared memory buffers.
+  std::string name_prefix_;
+
+  // The size of each chunk in bytes. This is always a multiple of ElementSize.
+  const std::size_t chunk_size_;
+
+  // Pointer to the size of the vector. This is stored at the start of the first
+  // chunk.
+  std::atomic_size_t* size_ = nullptr;
+
+  // Vector of Buffers that store the elements of the ChunkedVector.
+  std::vector<std::unique_ptr<Buffer>> chunks_;
+
+  // Mutex for protecting the chunks vector. This is needed because the vector
+  // is modified when a new chunk is added.
+  mutable std::shared_mutex chunks_rw_mutex_;
+
+  BufferFactory* buffer_factory_;
 };
 
 template <typename T>

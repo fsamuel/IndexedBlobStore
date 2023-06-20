@@ -1,7 +1,10 @@
 #ifndef SHM_NODE_H_
 #define SHM_NODE_H_
 
+#include <assert.h>
 #include <atomic>
+
+#include "allocation_logger.h"
 
 // Header for a free/allocated node in the allocator
 struct ShmNode {

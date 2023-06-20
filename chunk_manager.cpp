@@ -77,19 +77,6 @@ std::size_t ChunkManager::get_or_create_chunk(size_t chunk_index,
   }
 }
 
-const uint8_t* ChunkManager::get_chunk_start(std::size_t chunk_index) const {
-  return const_cast<ChunkManager*>(this)->get_chunk_start(chunk_index);
-}
-
-uint8_t* ChunkManager::get_chunk_start(std::size_t chunk_index) {
-  std::shared_lock<std::shared_mutex> lock(chunks_rw_mutex_);
-  if (chunk_index >= chunks_.size()) {
-    return nullptr;
-  }
-  std::size_t offset = chunk_index == 0 ? sizeof(std::uint64_t) : 0;
-  return reinterpret_cast<uint8_t*>(chunks_[chunk_index]->GetData()) + offset;
-}
-
 void ChunkManager::remove_chunk() {
   while (true) {
     std::uint64_t num_chunks_encoded = num_chunks_encoded_->load();

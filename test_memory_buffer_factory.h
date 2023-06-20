@@ -6,6 +6,7 @@
 #include "buffer_factory.h"
 #include "test_memory_buffer.h"
 
+// Constructs in-memory-only buffers for testing.
 class TestMemoryBufferFactory : public BufferFactory {
  public:
   static BufferFactory* Get() {
