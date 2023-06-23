@@ -130,6 +130,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="allocation_logger.h" />
+    <ClInclude Include="blob_metadata.h" />
     <ClInclude Include="blob_store.h" />
     <ClInclude Include="buffer.h" />
     <ClInclude Include="b_plus_tree.h" />
