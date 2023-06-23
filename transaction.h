@@ -237,9 +237,9 @@ class Transaction {
   }
 
   // Returns a mutable version of the provided object. If the object is already
-  // mutable, it is returned as-is. If the version of the node matches the version
-  // of the transaction, then upgrade the pointer to a mutable version. Otherwise,
-  // clone the node and set the version to the transaction's version.
+  // mutable, it is returned as-is. If the version of the node matches the
+  // version of the transaction, then upgrade the pointer to a mutable version.
+  // Otherwise, clone the node and set the version to the transaction's version.
   template <typename T>
   BlobStoreObject<typename std::remove_const<T>::type> GetMutable(
       BlobStoreObject<typename std::add_const<T>::type> node) {

@@ -17,10 +17,10 @@
 // at the end, and allocating a contiguous space of a certain size.
 class ChunkManager {
  public:
-  // Constructs a ChunkManager with the specified name_prefix for the shared
-  // memory buffers. Each SharedMemoryBuffer will be named as name_prefix_i,
-  // where i is the chunk index. Reads the number of chunks from the first chunk
-  // and adds any necessary chunks.
+  // Constructs a ChunkManager with the specified name_prefix for the buffers.
+  // Each buffer will be named as name_prefix_i, where i is the chunk index.
+  // Reads the number of chunks from the first chunk and adds any necessary
+  // chunks.
   ChunkManager(BufferFactory* buffer_factory,
                const std::string& name_prefix,
                std::size_t initial_chunk_size);
@@ -100,7 +100,7 @@ class ChunkManager {
   static std::uint64_t set_num_chunks(std::uint64_t num_chunks_encoded,
                                       std::uint64_t num_chunks);
 
-  // Prefix for the names of the shared memory buffers.
+  // Prefix for the names of the buffers.
   std::string name_prefix_;
 
   // The size of the first chunk in bytes.
