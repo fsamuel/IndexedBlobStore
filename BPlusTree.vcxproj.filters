@@ -84,6 +84,12 @@
     <ClInclude Include="blob_metadata.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="blob_store_object.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="blob_store_base.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="shared_memory_buffer.cpp">
