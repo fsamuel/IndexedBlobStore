@@ -2,6 +2,7 @@
 #define TREE_ITERATOR_H_
 
 #include "blob_store.h"
+#include "tree_nodes.h"
 
 // Iterator class for BPlusTree
 template <typename KeyType, typename ValueType, std::size_t Order>

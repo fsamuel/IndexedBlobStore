@@ -27,7 +27,7 @@
     <ClCompile Include="src\fixed_string.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\nodes.cpp">
+    <ClCompile Include="src\tree_nodes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\shared_memory_buffer.cpp">
@@ -83,7 +83,7 @@
     <ClInclude Include="include\fixed_string.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\nodes.h">
+    <ClInclude Include="include\tree_nodes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\shared_memory_buffer.h">

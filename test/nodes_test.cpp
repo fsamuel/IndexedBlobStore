@@ -1,4 +1,4 @@
-#include "nodes.h"
+#include "tree_nodes.h"
 #include "gtest/gtest.h"
 
 TEST(NodesTest, CastToNodeFromBaseNode) {

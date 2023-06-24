@@ -6,8 +6,8 @@
 #include <unordered_set>
 
 #include "b_plus_tree_base.h"
-#include "nodes.h"
 #include "tree_iterator.h"
+#include "tree_nodes.h"
 
 // Enumerating the different types of objects stored in a transaction.
 enum class ObjectType { LeafNode, InternalNode, HeadNode, KeyValue, DontCare };

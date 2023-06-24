@@ -2,8 +2,8 @@
 #define B_PLUS_TREE_BASE_H_
 
 #include "blob_store.h"
-#include "nodes.h"
 #include "tree_iterator.h"
+#include "tree_nodes.h"
 
 template <typename KeyType, typename ValueType, std::size_t Order>
 class Transaction;

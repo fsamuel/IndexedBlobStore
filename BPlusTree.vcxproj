@@ -136,7 +136,7 @@
     <ClCompile Include="src\blob_store.cpp" />
     <ClCompile Include="src\chunk_manager.cpp" />
     <ClCompile Include="src\fixed_string.cpp" />
-    <ClCompile Include="src\nodes.cpp" />
+    <ClCompile Include="src\tree_nodes.cpp" />
     <ClCompile Include="src\shared_memory_buffer.cpp" />
     <ClCompile Include="src\shm_allocator.cpp" />
     <ClCompile Include="src\string_slice.cpp" />
@@ -155,7 +155,7 @@
     <ClInclude Include="include\chunked_vector.h" />
     <ClInclude Include="include\chunk_manager.h" />
     <ClInclude Include="include\fixed_string.h" />
-    <ClInclude Include="include\nodes.h" />
+    <ClInclude Include="include\tree_nodes.h" />
     <ClInclude Include="include\shared_memory_buffer.h" />
     <ClInclude Include="include\shared_memory_buffer_factory.h" />
     <ClInclude Include="include\shm_allocator.h" />

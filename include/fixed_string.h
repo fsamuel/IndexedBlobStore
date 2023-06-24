@@ -14,7 +14,7 @@
 class FixedString {
  public:
   // The size of the data is stored at the start of the memory block
-  size_t size;
+  std::size_t size;
   // Hash of the string data
   std::size_t hash;
   // Flexible array member for the string data.
