@@ -105,6 +105,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>C:\Users\fadys\source\repos\BPlusTree\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -120,6 +121,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>C:\Users\fadys\source\repos\BPlusTree\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -129,43 +131,43 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="allocation_logger.h" />
-    <ClInclude Include="blob_metadata.h" />
-    <ClInclude Include="blob_store.h" />
-    <ClInclude Include="blob_store_base.h" />
-    <ClInclude Include="blob_store_object.h" />
-    <ClInclude Include="buffer.h" />
-    <ClInclude Include="b_plus_tree.h" />
-    <ClInclude Include="b_plus_tree_base.h" />
-    <ClInclude Include="chunked_vector.h" />
-    <ClInclude Include="chunk_manager.h" />
-    <ClInclude Include="fixed_string.h" />
-    <ClInclude Include="buffer_factory.h" />
-    <ClInclude Include="nodes.h" />
-    <ClInclude Include="shared_memory_buffer_factory.h" />
-    <ClInclude Include="shm_allocator.h" />
-    <ClInclude Include="shm_node.h" />
-    <ClInclude Include="storage_traits.h" />
-    <ClInclude Include="string_slice.h" />
-    <ClInclude Include="Main.h" />
-    <ClInclude Include="shared_memory_buffer.h" />
-    <ClInclude Include="test_memory_buffer.h" />
-    <ClInclude Include="test_memory_buffer_factory.h" />
-    <ClInclude Include="transaction.h" />
-    <ClInclude Include="tree_iterator.h" />
-    <ClInclude Include="utils.h" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="src\allocation_logger.cpp" />
+    <ClCompile Include="src\blob_store.cpp" />
+    <ClCompile Include="src\chunk_manager.cpp" />
+    <ClCompile Include="src\fixed_string.cpp" />
+    <ClCompile Include="src\nodes.cpp" />
+    <ClCompile Include="src\shared_memory_buffer.cpp" />
+    <ClCompile Include="src\shm_allocator.cpp" />
+    <ClCompile Include="src\string_slice.cpp" />
+    <ClCompile Include="src\utils.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="allocation_logger.cpp" />
-    <ClCompile Include="blob_store.cpp" />
-    <ClCompile Include="chunk_manager.cpp" />
-    <ClCompile Include="fixed_string.cpp" />
-    <ClCompile Include="Main.cpp" />
-    <ClCompile Include="nodes.cpp" />
-    <ClCompile Include="shared_memory_buffer.cpp" />
-    <ClCompile Include="shm_allocator.cpp" />
-    <ClCompile Include="string_slice.cpp" />
-    <ClCompile Include="utils.cpp" />
+    <ClInclude Include="include\allocation_logger.h" />
+    <ClInclude Include="include\blob_metadata.h" />
+    <ClInclude Include="include\blob_store.h" />
+    <ClInclude Include="include\blob_store_base.h" />
+    <ClInclude Include="include\blob_store_object.h" />
+    <ClInclude Include="include\buffer.h" />
+    <ClInclude Include="include\buffer_factory.h" />
+    <ClInclude Include="include\b_plus_tree.h" />
+    <ClInclude Include="include\b_plus_tree_base.h" />
+    <ClInclude Include="include\chunked_vector.h" />
+    <ClInclude Include="include\chunk_manager.h" />
+    <ClInclude Include="include\fixed_string.h" />
+    <ClInclude Include="include\nodes.h" />
+    <ClInclude Include="include\shared_memory_buffer.h" />
+    <ClInclude Include="include\shared_memory_buffer_factory.h" />
+    <ClInclude Include="include\shm_allocator.h" />
+    <ClInclude Include="include\shm_node.h" />
+    <ClInclude Include="include\storage_traits.h" />
+    <ClInclude Include="include\string_slice.h" />
+    <ClInclude Include="include\test_memory_buffer.h" />
+    <ClInclude Include="include\test_memory_buffer_factory.h" />
+    <ClInclude Include="include\transaction.h" />
+    <ClInclude Include="include\tree_iterator.h" />
+    <ClInclude Include="include\utils.h" />
+    <ClInclude Include="Main.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

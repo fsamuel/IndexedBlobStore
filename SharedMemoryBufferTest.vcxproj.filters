@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\allocation_logger.cpp" />
+    <ClCompile Include="src\blob_store.cpp" />
+    <ClCompile Include="src\chunk_manager.cpp" />
+    <ClCompile Include="src\fixed_string.cpp" />
+    <ClCompile Include="src\nodes.cpp" />
+    <ClCompile Include="src\shared_memory_buffer.cpp" />
+    <ClCompile Include="src\shm_allocator.cpp" />
+    <ClCompile Include="src\string_slice.cpp" />
+    <ClCompile Include="src\utils.cpp" />
+    <ClCompile Include="test\blob_store_test.cpp" />
+    <ClCompile Include="test\b_plus_tree_test.cpp" />
+    <ClCompile Include="test\chunked_vector_test.cpp" />
+    <ClCompile Include="test\chunk_manager_test.cpp" />
+    <ClCompile Include="test\fixed_string_test.cpp" />
+    <ClCompile Include="test\nodes_test.cpp" />
+    <ClCompile Include="test\shared_memory_buffer_test.cpp" />
+    <ClCompile Include="test\shm_allocator_test.cpp" />
+    <ClCompile Include="test\string_slice_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\allocation_logger.h" />
+    <ClInclude Include="include\b_plus_tree.h" />
+    <ClInclude Include="include\b_plus_tree_base.h" />
+    <ClInclude Include="include\blob_metadata.h" />
+    <ClInclude Include="include\blob_store.h" />
+    <ClInclude Include="include\blob_store_base.h" />
+    <ClInclude Include="include\blob_store_object.h" />
+    <ClInclude Include="include\buffer.h" />
+    <ClInclude Include="include\buffer_factory.h" />
+    <ClInclude Include="include\chunk_manager.h" />
+    <ClInclude Include="include\chunked_vector.h" />
+    <ClInclude Include="include\fixed_string.h" />
+    <ClInclude Include="include\nodes.h" />
+    <ClInclude Include="include\shared_memory_buffer.h" />
+    <ClInclude Include="include\shared_memory_buffer_factory.h" />
+    <ClInclude Include="include\shm_allocator.h" />
+    <ClInclude Include="include\shm_node.h" />
+    <ClInclude Include="include\storage_traits.h" />
+    <ClInclude Include="include\string_slice.h" />
+    <ClInclude Include="include\test_memory_buffer.h" />
+    <ClInclude Include="include\test_memory_buffer_factory.h" />
+    <ClInclude Include="include\transaction.h" />
+    <ClInclude Include="include\tree_iterator.h" />
+    <ClInclude Include="include\utils.h" />
+  </ItemGroup>
+</Project>

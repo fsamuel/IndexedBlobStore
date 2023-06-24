@@ -58,23 +58,6 @@ class BlobStore : public BlobStoreBase {
       BlobStoreObject<T>>::type
   New(std::initializer_list<typename StorageTraits<T>::ElementType> initList);
 
-  template <typename T, typename... Args>
-  typename std::enable_if<
-      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
-          std::is_trivially_copyable<
-              typename StorageTraits<T>::StorageType>::value,
-      BlobStoreObject<T>>::type
-  NewImpl(Args&&... args);
-
-  template <typename T>
-  typename std::enable_if<
-      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
-          std::is_trivially_copyable<
-              typename StorageTraits<T>::StorageType>::value,
-      BlobStoreObject<T>>::type
-  NewImpl(
-      std::initializer_list<typename StorageTraits<T>::ElementType> initList);
-
   // Gets the object of type T at the specified index.
   template <typename T>
   BlobStoreObject<T> GetMutable(size_t index) {
@@ -188,6 +171,23 @@ class BlobStore : public BlobStoreBase {
  private:
   using MetadataVector = ChunkedVector<BlobMetadata>;
 
+  template <typename T, typename... Args>
+  typename std::enable_if<
+      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
+      std::is_trivially_copyable<
+      typename StorageTraits<T>::StorageType>::value,
+      BlobStoreObject<T>>::type
+      NewImpl(Args&&... args);
+
+  template <typename T>
+  typename std::enable_if<
+      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
+      std::is_trivially_copyable<
+      typename StorageTraits<T>::StorageType>::value,
+      BlobStoreObject<T>>::type
+      NewImpl(
+          std::initializer_list<typename StorageTraits<T>::ElementType> initList);
+
   // Returns the index of the first free slot in the metadata vector.
   size_t FindFreeSlot();
 
@@ -209,9 +209,6 @@ class BlobStore : public BlobStoreBase {
 
   Allocator allocator_;
   MetadataVector metadata_;
-
-  template <typename T>
-  friend class BlobStoreObject;
 };
 
 template <typename T, typename... Args>

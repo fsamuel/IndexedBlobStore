@@ -43,36 +43,24 @@
     <IncludePath>C:\Users\fadys\source\repos\BPlusTree;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
-    <ClInclude Include="allocation_logger.h" />
-    <ClInclude Include="chunked_vector.h" />
-    <ClInclude Include="chunk_manager.h" />
-    <ClInclude Include="fixed_string.h" />
-    <ClInclude Include="nodes.h" />
-    <ClInclude Include="shared_memory_buffer.h" />
-    <ClInclude Include="blob_store.h" />
-    <ClInclude Include="b_plus_tree.h" />
-    <ClInclude Include="shm_allocator.h" />
-    <ClInclude Include="string_slice.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="allocation_logger.cpp" />
-    <ClCompile Include="chunked_vector_test.cpp" />
-    <ClCompile Include="chunk_manager.cpp" />
-    <ClCompile Include="chunk_manager_test.cpp" />
-    <ClCompile Include="fixed_string.cpp" />
-    <ClCompile Include="fixed_string_test.cpp" />
-    <ClCompile Include="nodes.cpp" />
-    <ClCompile Include="nodes_test.cpp" />
-    <ClCompile Include="shared_memory_buffer.cpp" />
-    <ClCompile Include="blob_store.cpp" />
-    <ClCompile Include="blob_store_test.cpp" />
-    <ClCompile Include="b_plus_tree_test.cpp" />
-    <ClCompile Include="shared_memory_buffer_test.cpp" />
-    <ClCompile Include="shm_allocator.cpp" />
-    <ClCompile Include="shm_allocator_test.cpp" />
-    <ClCompile Include="string_slice.cpp" />
-    <ClCompile Include="string_slice_test.cpp" />
-    <ClCompile Include="utils.cpp" />
+    <ClCompile Include="src\allocation_logger.cpp" />
+    <ClCompile Include="src\blob_store.cpp" />
+    <ClCompile Include="src\chunk_manager.cpp" />
+    <ClCompile Include="src\fixed_string.cpp" />
+    <ClCompile Include="src\nodes.cpp" />
+    <ClCompile Include="src\shared_memory_buffer.cpp" />
+    <ClCompile Include="src\shm_allocator.cpp" />
+    <ClCompile Include="src\string_slice.cpp" />
+    <ClCompile Include="src\utils.cpp" />
+    <ClCompile Include="test\blob_store_test.cpp" />
+    <ClCompile Include="test\b_plus_tree_test.cpp" />
+    <ClCompile Include="test\chunked_vector_test.cpp" />
+    <ClCompile Include="test\chunk_manager_test.cpp" />
+    <ClCompile Include="test\fixed_string_test.cpp" />
+    <ClCompile Include="test\nodes_test.cpp" />
+    <ClCompile Include="test\shared_memory_buffer_test.cpp" />
+    <ClCompile Include="test\shm_allocator_test.cpp" />
+    <ClCompile Include="test\string_slice_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\BPlusTree\BPlusTree.vcxproj">
@@ -81,6 +69,32 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\allocation_logger.h" />
+    <ClInclude Include="include\blob_metadata.h" />
+    <ClInclude Include="include\blob_store.h" />
+    <ClInclude Include="include\blob_store_base.h" />
+    <ClInclude Include="include\blob_store_object.h" />
+    <ClInclude Include="include\buffer.h" />
+    <ClInclude Include="include\buffer_factory.h" />
+    <ClInclude Include="include\b_plus_tree.h" />
+    <ClInclude Include="include\b_plus_tree_base.h" />
+    <ClInclude Include="include\chunked_vector.h" />
+    <ClInclude Include="include\chunk_manager.h" />
+    <ClInclude Include="include\fixed_string.h" />
+    <ClInclude Include="include\nodes.h" />
+    <ClInclude Include="include\shared_memory_buffer.h" />
+    <ClInclude Include="include\shared_memory_buffer_factory.h" />
+    <ClInclude Include="include\shm_allocator.h" />
+    <ClInclude Include="include\shm_node.h" />
+    <ClInclude Include="include\storage_traits.h" />
+    <ClInclude Include="include\string_slice.h" />
+    <ClInclude Include="include\test_memory_buffer.h" />
+    <ClInclude Include="include\test_memory_buffer_factory.h" />
+    <ClInclude Include="include\transaction.h" />
+    <ClInclude Include="include\tree_iterator.h" />
+    <ClInclude Include="include\utils.h" />
   </ItemGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -111,7 +125,7 @@
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <WarningLevel>Level2</WarningLevel>
-      <AdditionalIncludeDirectories>C:\Users\fadys\source\repos\googletest\googletest\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\fadys\source\repos\googletest\googletest\include;C:\Users\fadys\source\repos\BPlusTree\include</AdditionalIncludeDirectories>
       <AdditionalOptions>/fsanitize-coverage=edge %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
@@ -146,7 +160,7 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <WarningLevel>Level2</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>C:\Users\fadys\source\repos\googletest\googletest\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\fadys\source\repos\googletest\googletest\include;C:\Users\fadys\source\repos\BPlusTree\include</AdditionalIncludeDirectories>
       <AdditionalOptions>/fsanitize-coverage=edge %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
