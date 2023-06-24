@@ -9,26 +9,14 @@
 #include <string>
 #include <type_traits>
 
+#include "blob_metadata.h"
 #include "blob_store_base.h"
 #include "blob_store_object.h"
-#include "blob_metadata.h"
 #include "chunked_vector.h"
 #include "shm_allocator.h"
 #include "storage_traits.h"
 #include "string_slice.h"
 #include "utils.h"
-
-constexpr std::int32_t WRITE_LOCK_FLAG = 0x80000000;
-
-namespace {
-void SpinWait() {
-#if defined(_WIN32)
-  Sleep(0);
-#else
-  std::this_thread::yield();
-#endif
-}
-}  // namespace
 
 class BlobStore;
 
@@ -206,14 +194,12 @@ class BlobStore : public BlobStoreBase {
   // Returns the number of free slots in the metadata vector.
   size_t GetFreeSlotCount() const;
 
-
-
   // BlobStoreBase implementation:
   uint8_t* GetRaw(size_t index, size_t* offset) override;
   std::size_t Clone(std::size_t index) override;
   bool CompareAndSwap(std::size_t index,
-      std::size_t expected_offset,
-      std::size_t new_offset) override;
+                      std::size_t expected_offset,
+                      std::size_t new_offset) override;
   std::size_t GetSize(std::size_t index) override;
   bool AcquireReadLock(std::size_t index) override;
   bool AcquireWriteLock(std::size_t index) override;
