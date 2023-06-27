@@ -155,6 +155,8 @@
     <ClInclude Include="include\chunked_vector.h" />
     <ClInclude Include="include\chunk_manager.h" />
     <ClInclude Include="include\fixed_string.h" />
+    <ClInclude Include="include\paged_file.h" />
+    <ClInclude Include="include\paged_file_nodes.h" />
     <ClInclude Include="include\tree_nodes.h" />
     <ClInclude Include="include\shared_memory_buffer.h" />
     <ClInclude Include="include\shared_memory_buffer_factory.h" />

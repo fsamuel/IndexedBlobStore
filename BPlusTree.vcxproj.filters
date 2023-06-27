@@ -83,6 +83,12 @@
     <ClInclude Include="include\fixed_string.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\paged_file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\paged_file_nodes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\tree_nodes.h">
       <Filter>Header Files</Filter>
     </ClInclude>

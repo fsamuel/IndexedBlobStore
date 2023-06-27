@@ -8,6 +8,7 @@
     <ClCompile Include="src\shared_memory_buffer.cpp" />
     <ClCompile Include="src\shm_allocator.cpp" />
     <ClCompile Include="src\string_slice.cpp" />
+    <ClCompile Include="src\tree_nodes.cpp" />
     <ClCompile Include="src\utils.cpp" />
     <ClCompile Include="test\blob_store_test.cpp" />
     <ClCompile Include="test\b_plus_tree_test.cpp" />
@@ -15,10 +16,10 @@
     <ClCompile Include="test\chunk_manager_test.cpp" />
     <ClCompile Include="test\fixed_string_test.cpp" />
     <ClCompile Include="test\nodes_test.cpp" />
+    <ClCompile Include="test\paged_file_test.cpp" />
     <ClCompile Include="test\shared_memory_buffer_test.cpp" />
     <ClCompile Include="test\shm_allocator_test.cpp" />
     <ClCompile Include="test\string_slice_test.cpp" />
-    <ClCompile Include="src\tree_nodes.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -36,6 +37,7 @@
     <ClInclude Include="include\chunk_manager.h" />
     <ClInclude Include="include\chunked_vector.h" />
     <ClInclude Include="include\fixed_string.h" />
+    <ClInclude Include="include\paged_file.h" />
     <ClInclude Include="include\shared_memory_buffer.h" />
     <ClInclude Include="include\shared_memory_buffer_factory.h" />
     <ClInclude Include="include\shm_allocator.h" />
