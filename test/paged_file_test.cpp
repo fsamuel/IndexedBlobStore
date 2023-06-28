@@ -26,11 +26,11 @@ TEST_F(PagedFileTest, SanityCheck) {
                   std::move(*dataBuffer));
   EXPECT_EQ(store.GetSize(), 0);
   PagedFile file = PagedFile<6, 32>::Create(&store);
-  constexpr std::size_t BUFFER_SIZE = 256;
+  constexpr std::size_t BUFFER_SIZE = 1024;
   char write_buffer[BUFFER_SIZE];
   // Fill the write buffer with random bits.
   for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
-    write_buffer[i] = i;
+    write_buffer[i] = static_cast<uint8_t>(i % 256);
   }
   file.Write(&write_buffer[0], sizeof(write_buffer));
   EXPECT_EQ(file.Tell(), BUFFER_SIZE);
@@ -40,6 +40,6 @@ TEST_F(PagedFileTest, SanityCheck) {
   file.Read(&read_buffer[0], sizeof(read_buffer));
   EXPECT_EQ(file.Tell(), BUFFER_SIZE);
   for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
-    EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), i);
+    EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), i % 256);
   }
 }
