@@ -34,6 +34,7 @@ TEST_F(PagedFileTest, SanityCheck) {
   }
   file.Write(&write_buffer[0], sizeof(write_buffer));
   EXPECT_EQ(file.Tell(), BUFFER_SIZE);
+  EXPECT_EQ(file.GetSize(), BUFFER_SIZE);
   char read_buffer[BUFFER_SIZE];
   file.Seek(0);
   file.Read(&read_buffer[0], sizeof(read_buffer));

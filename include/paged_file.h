@@ -111,6 +111,7 @@ class PagedFile {
       data += bytes_to_write;
       remaining_data_size -= bytes_to_write;
     }
+    inode_->size = std::max(inode_->size, pos_);
   }
 
   void Read(char* data, std::size_t size) {
@@ -136,6 +137,8 @@ class PagedFile {
   void Seek(std::size_t offset) { pos_ = offset; }
 
   std::size_t Tell() const { return pos_; }
+
+  std::size_t GetSize() const { return inode_->size;  }
 
  private:
   // Position within the file
