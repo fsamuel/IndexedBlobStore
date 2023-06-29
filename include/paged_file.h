@@ -41,6 +41,8 @@ class PagedFile {
     return obj;
   }
 
+  // Given a block_index, find a corresponding direct block through potentially
+  // multiple layers of indirection.
   BlobStoreObject<DirectBlock> GetOrCreateDirectBlock(std::size_t block_index) {
     constexpr std::size_t NumDirectBlocks = INode::NUM_DIRECT_BLOCKS;
     constexpr std::size_t NumIndirectBlocks = INode::NUM_INDIRECT_BLOCKS;
@@ -92,6 +94,11 @@ class PagedFile {
     return BlobStoreObject<DirectBlock>();
   }
 
+  // TODO(fsamuel): Any write operation should increment the version
+  // counter associated with the node. Suppose the version of a 
+  // BlobStoreObject was stored as part of the ID to it. We can then
+  // very quickly identify whether the current node needs to be updated
+  // or not.
   void Write(const char* data, std::size_t data_size) {
     std::size_t remaining_data_size = data_size;
     while (remaining_data_size > 0) {
@@ -114,20 +121,24 @@ class PagedFile {
     inode_->size = std::max(inode_->size, pos_);
   }
 
+  // We should have a pure GetDirectBlock for reads. We should never
+  // be creating any blocks on reads. 
   void Read(char* data, std::size_t size) {
     std::size_t remaining_data_size = size;
     while (remaining_data_size > 0) {
       std::size_t block_index = pos_ / BlockSize;
       BlobStoreObject<DirectBlock> direct_block =
           GetOrCreateDirectBlock(block_index);
-      if (direct_block == nullptr) {
-        // We ran out of space.
-        return;
-      }
+
       std::size_t data_offset = pos_ % BlockSize;
       std::size_t bytes_to_read =
           std::min(remaining_data_size, BlockSize - data_offset);
-      std::memcpy(data, direct_block->data + data_offset, bytes_to_read);
+      if (direct_block != nullptr) {
+          // We support sparse files so a missing block isn't necessarily a problem.
+          std::memcpy(data, direct_block->data + data_offset, bytes_to_read);
+      } else {
+		  std::memset(data, 0, bytes_to_read);
+	  }
       pos_ += bytes_to_read;
       data += bytes_to_read;
       remaining_data_size -= bytes_to_read;
