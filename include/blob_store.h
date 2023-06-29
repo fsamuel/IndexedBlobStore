@@ -173,20 +173,20 @@ class BlobStore : public BlobStoreBase {
 
   template <typename T, typename... Args>
   typename std::enable_if<
-      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
-      std::is_trivially_copyable<
-      typename StorageTraits<T>::StorageType>::value,
+      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+          std::is_trivially_copyable<
+              typename StorageTraits<T>::StorageType>::value,
       BlobStoreObject<T>>::type
-      NewImpl(Args&&... args);
+  NewImpl(Args&&... args);
 
   template <typename T>
   typename std::enable_if<
-      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value&&
-      std::is_trivially_copyable<
-      typename StorageTraits<T>::StorageType>::value,
+      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+          std::is_trivially_copyable<
+              typename StorageTraits<T>::StorageType>::value,
       BlobStoreObject<T>>::type
-      NewImpl(
-          std::initializer_list<typename StorageTraits<T>::ElementType> initList);
+  NewImpl(
+      std::initializer_list<typename StorageTraits<T>::ElementType> initList);
 
   // Returns the index of the first free slot in the metadata vector.
   size_t FindFreeSlot();

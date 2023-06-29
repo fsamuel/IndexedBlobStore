@@ -1,5 +1,5 @@
-#include "tree_nodes.h"
 #include "gtest/gtest.h"
+#include "tree_nodes.h"
 
 TEST(NodesTest, CastToNodeFromBaseNode) {
   BaseNode<4> base_node(NodeType::INTERNAL, 2);

@@ -9,7 +9,7 @@
 // Header for a free/allocated node in the allocator
 struct ShmNode {
   // Reference count for the node. This is used to determine when the node can
-  // be coalesced. 
+  // be coalesced.
   std::atomic<std::uint32_t> ref_count;
   // Version number for detecting state changes in the node.
   std::atomic<std::uint32_t> version;

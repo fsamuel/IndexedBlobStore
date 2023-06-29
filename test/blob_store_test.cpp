@@ -3,8 +3,8 @@
 
 #include "chunk_manager.h"
 #include "fixed_string.h"
-#include "tree_nodes.h"
 #include "test_memory_buffer_factory.h"
+#include "tree_nodes.h"
 
 class BlobStoreTest : public ::testing::Test {
  protected:

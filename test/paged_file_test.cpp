@@ -47,24 +47,23 @@ TEST_F(PagedFileTest, SanityCheck) {
 // Write a sparse file and verify that the file is the correct size and that
 // the sparse regions are zeroed.
 TEST_F(PagedFileTest, SparseFile) {
-    BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-        std::move(*dataBuffer));
-    EXPECT_EQ(store.GetSize(), 0);
-    PagedFile file = PagedFile<6, 32>::Create(&store);
-    char buffer[16];
-    memset(buffer, 2, sizeof(buffer));
-    file.Write(&buffer[0], sizeof(buffer));
-    file.Seek(496);
-    file.Write(&buffer[0], sizeof(buffer));
-    file.Seek(0);
-    char read_buffer[512];
-    file.Read(&read_buffer[0], sizeof(read_buffer));
-    for (std::size_t i = 0; i < 512; ++i) {
-        if (i < 16 || i >= 496) {
-		    EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
-		} else {
-		    EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
-		}
-	}
-
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
+  EXPECT_EQ(store.GetSize(), 0);
+  PagedFile file = PagedFile<6, 32>::Create(&store);
+  char buffer[16];
+  memset(buffer, 2, sizeof(buffer));
+  file.Write(&buffer[0], sizeof(buffer));
+  file.Seek(496);
+  file.Write(&buffer[0], sizeof(buffer));
+  file.Seek(0);
+  char read_buffer[512];
+  file.Read(&read_buffer[0], sizeof(read_buffer));
+  for (std::size_t i = 0; i < 512; ++i) {
+    if (i < 16 || i >= 496) {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
+    } else {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
+    }
+  }
 }
