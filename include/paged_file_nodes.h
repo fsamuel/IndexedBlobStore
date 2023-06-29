@@ -37,9 +37,6 @@ struct INode {
   // Size of the file
   std::size_t size;
 
-  // Capacity of the file
-  std::size_t capacity;
-
   // Block ID of the root block
   std::size_t direct_block_ids[NUM_DIRECT_BLOCKS];
   std::size_t indirect_block_ids[NUM_INDIRECT_BLOCKS];
