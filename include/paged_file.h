@@ -54,12 +54,15 @@ class PagedFile {
                                      : 0;
   }
 
-  std::size_t* GetOrCreateIndirectBlockChildID(std::size_t* indirect_block_id,
-                                               std::size_t block_index) {
-    BlobStoreObject<IndirectBlock> indirect_block =
-        GetOrCreateBlock<IndirectBlock>(indirect_block_id);
-    // This is only safe if we're sure we won't discard the indirect block.
-    return &indirect_block->children[block_index];
+  template <typename T, typename ChildType>
+  BlobStoreObject<T> GetOrCreateBlockWithChild(std::size_t* block_id,
+                                               std::size_t child_index) {
+    BlobStoreObject<T> block = GetOrCreateBlock<T>(block_id);
+    if (block->children[child_index] == 0) {
+      BlobStoreObject<ChildType> child_block = blob_store_->New<ChildType>();
+      block->children[child_index] = child_block.Index();
+    }
+    return block;
   }
 
   BlobStoreObject<const DirectBlock> GetDirectBlock(std::size_t block_index) {
@@ -114,10 +117,12 @@ class PagedFile {
 
     if (block_index < IndirectBlockCapacity * INode::NUM_INDIRECT_BLOCKS) {
       std::size_t indirect_block_index = block_index / IndirectBlockCapacity;
-      std::size_t* block_id = GetOrCreateIndirectBlockChildID(
-          &inode_->indirect_block_ids[indirect_block_index],
-          block_index % IndirectBlockCapacity);
-      return GetOrCreateBlock<DirectBlock>(block_id);
+      BlobStoreObject<IndirectBlock> indirect_block =
+          GetOrCreateBlockWithChild<IndirectBlock, DirectBlock>(
+              &inode_->indirect_block_ids[indirect_block_index],
+              block_index % IndirectBlockCapacity);
+      return blob_store_->GetMutable<DirectBlock>(
+          indirect_block->children[block_index % IndirectBlockCapacity]);
     }
 
     block_index -= IndirectBlockCapacity * INode::NUM_INDIRECT_BLOCKS;
@@ -128,12 +133,16 @@ class PagedFile {
           block_index / (IndirectBlockCapacity * IndirectBlockCapacity);
       std::size_t indirect_block_index =
           (block_index / IndirectBlockCapacity) % IndirectBlockCapacity;
-      std::size_t* indirect_block_id = GetOrCreateIndirectBlockChildID(
-          &inode_->doubly_indirect_block_ids[doubly_indirect_block_index],
-          indirect_block_index);
-      std::size_t* block_id = GetOrCreateIndirectBlockChildID(
-          indirect_block_id, block_index % IndirectBlockCapacity);
-      return GetOrCreateBlock<DirectBlock>(block_id);
+      BlobStoreObject<IndirectBlock> doubly_indirect_block =
+          GetOrCreateBlockWithChild<IndirectBlock, IndirectBlock>(
+              &inode_->doubly_indirect_block_ids[doubly_indirect_block_index],
+              indirect_block_index);
+      BlobStoreObject<IndirectBlock> indirect_block =
+          GetOrCreateBlockWithChild<IndirectBlock, DirectBlock>(
+              &doubly_indirect_block->children[indirect_block_index],
+              block_index % IndirectBlockCapacity);
+      return blob_store_->GetMutable<DirectBlock>(
+          indirect_block->children[block_index % IndirectBlockCapacity]);
     }
 
     return BlobStoreObject<DirectBlock>();
