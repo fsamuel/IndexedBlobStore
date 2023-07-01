@@ -1,13 +1,13 @@
-#ifndef TRANSACTION_H_
-#define TRANSACTION_H_
+#ifndef B_PLUS_TREE_TRANSACTION_H_
+#define B_PLUS_TREE_TRANSACTION_H_
 
 #include <cstddef>
 #include <functional>
 #include <unordered_set>
 
 #include "b_plus_tree_base.h"
-#include "tree_iterator.h"
-#include "tree_nodes.h"
+#include "b_plus_tree_iterator.h"
+#include "b_plus_tree_nodes.h"
 
 // Enumerating the different types of objects stored in a transaction.
 enum class ObjectType { LeafNode, InternalNode, HeadNode, KeyValue, DontCare };
@@ -279,4 +279,4 @@ class Transaction {
   friend struct TransactionHelper;
 };
 
-#endif  // TRANSACTION_H_
+#endif  // B_PLUS_TREE_TRANSACTION_H_

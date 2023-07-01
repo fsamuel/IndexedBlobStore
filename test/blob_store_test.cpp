@@ -1,15 +1,14 @@
 #include "blob_store.h"
 #include "gtest/gtest.h"
 
+#include "b_plus_tree_nodes.h"
 #include "chunk_manager.h"
 #include "fixed_string.h"
 #include "test_memory_buffer_factory.h"
-#include "tree_nodes.h"
 
 class BlobStoreTest : public ::testing::Test {
  protected:
   virtual void SetUp() {
-    RemoveChunkFiles();
     // create a shared memory allocator
     dataBuffer =
         new ChunkManager(TestMemoryBufferFactory::Get(), "DataBuffer", 4096);
@@ -19,19 +18,6 @@ class BlobStoreTest : public ::testing::Test {
   virtual void TearDown() {
     delete dataBuffer;
     delete metadataBuffer;
-    RemoveChunkFiles();
-  }
-
-  void RemoveChunkFiles() {
-    // Delete all files with the prefix "test_chunk"
-    // Do this in case the previous test failed and left some files behind
-    for (int i = 0; i < 20; ++i) {
-      std::string filename = "DataBuffer_" + std::to_string(i);
-      std::remove(filename.c_str());
-      filename = "MetadataBuffer_" + std::to_string(i);
-      std::remove(filename.c_str());
-    }
-    std::remove("MetadataBuffer");
   }
 
   ChunkManager* dataBuffer = nullptr;

@@ -1,9 +1,9 @@
 #ifndef B_PLUS_TREE_BASE_H_
 #define B_PLUS_TREE_BASE_H_
 
+#include "b_plus_tree_iterator.h"
+#include "b_plus_tree_nodes.h"
 #include "blob_store.h"
-#include "tree_iterator.h"
-#include "tree_nodes.h"
 
 template <typename KeyType, typename ValueType, std::size_t Order>
 class Transaction;

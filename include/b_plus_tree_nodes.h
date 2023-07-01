@@ -1,5 +1,5 @@
-#ifndef NODES_H_
-#define NODES_H_
+#ifndef B_PLUS_TREE_NODES_H_
+#define B_PLUS_TREE_NODES_H_
 
 #include <array>
 #include <cstddef>
@@ -377,4 +377,4 @@ void PrintNode(BlobStoreObject<const Node> node) {
   }
 }
 
-#endif  // NODES_H_
+#endif  // B_PLUS_TREE_NODES_H_

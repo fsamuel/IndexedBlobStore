@@ -27,7 +27,7 @@
     <ClCompile Include="src\fixed_string.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\tree_nodes.cpp">
+    <ClCompile Include="src\b_plus_tree_nodes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\shared_memory_buffer.cpp">
@@ -89,7 +89,7 @@
     <ClInclude Include="include\paged_file_nodes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\tree_nodes.h">
+    <ClInclude Include="include\b_plus_tree_nodes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\shared_memory_buffer.h">
@@ -116,10 +116,10 @@
     <ClInclude Include="include\test_memory_buffer_factory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\transaction.h">
+    <ClInclude Include="include\b_plus_tree_transaction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\tree_iterator.h">
+    <ClInclude Include="include\b_plus_tree_iterator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\utils.h">

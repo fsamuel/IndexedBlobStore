@@ -50,7 +50,7 @@
     <ClCompile Include="src\shared_memory_buffer.cpp" />
     <ClCompile Include="src\shm_allocator.cpp" />
     <ClCompile Include="src\string_slice.cpp" />
-    <ClCompile Include="src\tree_nodes.cpp" />
+    <ClCompile Include="src\b_plus_tree_nodes.cpp" />
     <ClCompile Include="src\utils.cpp" />
     <ClCompile Include="test\blob_store_test.cpp" />
     <ClCompile Include="test\b_plus_tree_test.cpp" />

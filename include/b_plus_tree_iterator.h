@@ -1,8 +1,8 @@
-#ifndef TREE_ITERATOR_H_
-#define TREE_ITERATOR_H_
+#ifndef B_PLUS_TREE_ITERATOR_H_
+#define B_PLUS_TREE_ITERATOR_H_
 
+#include "b_plus_tree_nodes.h"
 #include "blob_store.h"
-#include "tree_nodes.h"
 
 // Iterator class for BPlusTree
 template <typename KeyType, typename ValueType, std::size_t Order>
@@ -112,4 +112,4 @@ class TreeIterator {
   size_t key_index_;
 };
 
-#endif  // TREE_ITERATOR_H_
+#endif  // B_PLUS_TREE_ITERATOR_H_

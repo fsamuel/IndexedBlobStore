@@ -5,10 +5,10 @@
 #include <queue>
 
 #include "b_plus_tree_base.h"
+#include "b_plus_tree_iterator.h"
+#include "b_plus_tree_nodes.h"
+#include "b_plus_tree_transaction.h"
 #include "blob_store.h"
-#include "transaction.h"
-#include "tree_iterator.h"
-#include "tree_nodes.h"
 
 // InsertionBundle represents output of an insertion operation.
 // It is either empty or contains a BlobStoreObject of the newly cloned node,
