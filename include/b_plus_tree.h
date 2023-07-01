@@ -12,6 +12,9 @@
 
 namespace b_plus_tree {
 
+using blob_store::BlobStore;
+using blob_store::BlobStoreObject;
+
 // InsertionBundle represents output of an insertion operation.
 // It is either empty or contains a BlobStoreObject of the newly cloned node,
 // the key to be inserted into the parent node, and the BlobStoreObect of the

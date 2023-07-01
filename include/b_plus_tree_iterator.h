@@ -6,6 +6,8 @@
 
 namespace b_plus_tree {
 
+using blob_store::BlobStore;
+
 // Iterator class for BPlusTree
 template <typename KeyType, typename ValueType, std::size_t Order>
 class TreeIterator {

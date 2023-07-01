@@ -7,6 +7,8 @@
 #include "blob_store_base.h"
 #include "storage_traits.h"
 
+namespace blob_store {
+
 // BlobStoreObject is a wrapper around BlobStore that provides a safe way to
 // access objects stored in a BlobStore instance. It automatically updates its
 // internal pointer to the object whenever the memory in BlobStore is
@@ -351,5 +353,7 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(
   }
   ptr_ = reinterpret_cast<StorageType*>(store_->GetRaw(index_, &offset_));
 }
+
+}  // namespace blob_store
 
 #endif  // BLOB_STORE_OBJECT_H_

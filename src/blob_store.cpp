@@ -1,5 +1,7 @@
 #include "blob_store.h"
 
+namespace blob_store {
+
 constexpr std::int32_t WRITE_LOCK_FLAG = 0x80000000;
 
 namespace {
@@ -274,3 +276,5 @@ void BlobStore::UpgradeReadLock(std::size_t index) {
     SpinWait();
   }
 }
+
+}  // namespace blob_store

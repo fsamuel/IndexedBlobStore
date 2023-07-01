@@ -18,7 +18,7 @@
 #include "string_slice.h"
 #include "utils.h"
 
-class BlobStore;
+namespace blob_store {
 
 // BlobStore is a class that manages the storage and retrieval of objects
 // (blobs) in shared memory. It supports storing, getting, and deleting
@@ -276,5 +276,7 @@ BlobStore::NewImpl(
   metadata.next_free_index = -1;
   return BlobStoreObject<T>(this, index);
 }
+
+}  // namespace blob_store
 
 #endif  // BLOB_STORE_H_

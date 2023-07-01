@@ -10,6 +10,10 @@
 #include "storage_traits.h"
 
 namespace b_plus_tree {
+
+using blob_store::BlobStore;
+using blob_store::BlobStoreObject;
+
 enum class NodeType : uint8_t { HEAD, INTERNAL, LEAF };
 
 struct Node {

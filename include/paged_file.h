@@ -10,6 +10,9 @@
 #include "blob_store_object.h"
 #include "paged_file_nodes.h"
 
+using blob_store::BlobStore;
+using blob_store::BlobStoreObject;
+
 // A file that is stored in a blob store. The file is divided into blocks of
 // size BlockSize. The file is represented by an inode, which contains the
 // size of the file and the block ids of the blocks that make up the file.

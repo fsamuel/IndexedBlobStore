@@ -3,6 +3,8 @@
 
 #include <cstddef>
 
+namespace blob_store {
+
 // This class defines the interface for a blob store. A blob store is a data
 // structure that stores a collection of objects of any type that can be
 // serialized to disk.
@@ -39,5 +41,7 @@ class BlobStoreBase {
   // that no other thread is holding a read lock.
   virtual void UpgradeReadLock(size_t index) = 0;
 };
+
+}  // namespace blob_store
 
 #endif  // BLOB_STORE_BASE_H_

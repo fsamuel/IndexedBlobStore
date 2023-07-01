@@ -7,6 +7,7 @@
 #include "test_memory_buffer_factory.h"
 
 using namespace b_plus_tree;
+using namespace blob_store;
 
 class BlobStoreTest : public ::testing::Test {
  protected:
