@@ -23,6 +23,7 @@ build --compiler=clang-cl
 build --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
 build --action_env=CC=clang
 build --action_env=CXX=clang++
+build --cxxopt="/std:c++17"
 #build --action_env=BAZEL_LLVM=PATH_TO_YOUR_LLVM_FOLDER
 
 build:coverage --copt=-fprofile-instr-generate

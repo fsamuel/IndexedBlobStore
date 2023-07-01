@@ -10,6 +10,8 @@
 #include "b_plus_tree_transaction.h"
 #include "blob_store.h"
 
+namespace b_plus_tree {
+
 // InsertionBundle represents output of an insertion operation.
 // It is either empty or contains a BlobStoreObject of the newly cloned node,
 // the key to be inserted into the parent node, and the BlobStoreObect of the
@@ -943,5 +945,7 @@ void BPlusTree<KeyType, ValueType, Order>::RebalanceChildWithLeftOrRightSibling(
   MergeChildWithLeftOrRightSibling(transaction, parent, child_index,
                                    std::move(child), new_child);
 }
+
+}  //  namespace b_plus_tree
 
 #endif  // B_PLUS_TREE_H_

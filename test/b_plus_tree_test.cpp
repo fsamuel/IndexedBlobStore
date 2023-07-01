@@ -4,6 +4,8 @@
 #include "test_memory_buffer_factory.h"
 #include "utils.h"
 
+using namespace b_plus_tree;
+
 class BPlusTreeTest : public ::testing::Test {
  protected:
   virtual void SetUp() {

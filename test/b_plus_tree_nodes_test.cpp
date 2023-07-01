@@ -1,7 +1,9 @@
 #include "gtest/gtest.h"
 #include "b_plus_tree_nodes.h"
 
-TEST(NodesTest, CastToNodeFromBaseNode) {
+using namespace b_plus_tree;
+
+TEST(BPlusTreeNodesTest, CastToNodeFromBaseNode) {
   BaseNode<4> base_node(NodeType::INTERNAL, 2);
   Node* node = reinterpret_cast<Node*>(&base_node);
 
@@ -12,7 +14,7 @@ TEST(NodesTest, CastToNodeFromBaseNode) {
   EXPECT_EQ(node->version, 1);
 }
 
-TEST(NodesTest, CastToNodeFromLeafNode) {
+TEST(BPlusTreeNodesTest, CastToNodeFromLeafNode) {
   LeafNode<4> leaf_node(2);
   Node* node = reinterpret_cast<Node*>(&leaf_node);
 
@@ -23,7 +25,7 @@ TEST(NodesTest, CastToNodeFromLeafNode) {
   EXPECT_EQ(node->version, 1);
 }
 
-TEST(NodesTest, CastToNodeFromHeadNode) {
+TEST(BPlusTreeNodesTest, CastToNodeFromHeadNode) {
   HeadNode head_node(1);
   Node* node = reinterpret_cast<Node*>(&head_node);
 
@@ -31,7 +33,7 @@ TEST(NodesTest, CastToNodeFromHeadNode) {
   EXPECT_EQ(node->version, 1);
 }
 
-TEST(NodesTest, CastToNodeFromInternalNode) {
+TEST(BPlusTreeNodesTest, CastToNodeFromInternalNode) {
   InternalNode<4> internal_node(2);
   Node* node = reinterpret_cast<Node*>(&internal_node);
 
@@ -42,7 +44,7 @@ TEST(NodesTest, CastToNodeFromInternalNode) {
   EXPECT_EQ(node->version, 1);
 }
 
-TEST(NodesTest, CastToBaseNodeFromLeafNode) {
+TEST(BPlusTreeNodesTest, CastToBaseNodeFromLeafNode) {
   LeafNode<4> leaf_node(2);
   BaseNode<4>* base_node = reinterpret_cast<BaseNode<4>*>(&leaf_node);
 
@@ -63,7 +65,7 @@ TEST(NodesTest, CastToBaseNodeFromLeafNode) {
   EXPECT_EQ(base_node->keys[1], 2);
 }
 
-TEST(NodesTest, CastToBaseNodeFromInternalNode) {
+TEST(BPlusTreeNodesTest, CastToBaseNodeFromInternalNode) {
   InternalNode<4> internal_node(2);
   BaseNode<4>* base_node = reinterpret_cast<BaseNode<4>*>(&internal_node);
 

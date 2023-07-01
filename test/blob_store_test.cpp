@@ -6,6 +6,8 @@
 #include "fixed_string.h"
 #include "test_memory_buffer_factory.h"
 
+using namespace b_plus_tree;
+
 class BlobStoreTest : public ::testing::Test {
  protected:
   virtual void SetUp() {

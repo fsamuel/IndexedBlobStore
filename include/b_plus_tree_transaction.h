@@ -9,6 +9,8 @@
 #include "b_plus_tree_iterator.h"
 #include "b_plus_tree_nodes.h"
 
+namespace b_plus_tree {
+
 // Enumerating the different types of objects stored in a transaction.
 enum class ObjectType { LeafNode, InternalNode, HeadNode, KeyValue, DontCare };
 
@@ -278,5 +280,7 @@ class Transaction {
   template <typename KeyType, typename ValueType, std::size_t Order, typename T>
   friend struct TransactionHelper;
 };
+
+}  // namespace b_plus_tree
 
 #endif  // B_PLUS_TREE_TRANSACTION_H_

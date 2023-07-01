@@ -5,6 +5,8 @@
 #include "b_plus_tree_nodes.h"
 #include "blob_store.h"
 
+namespace b_plus_tree {
+
 template <typename KeyType, typename ValueType, std::size_t Order>
 class Transaction;
 
@@ -22,5 +24,7 @@ class BPlusTreeBase {
   virtual Iterator Search(BlobStoreObject<HeadNode> head,
                           const KeyType& key) = 0;
 };
+
+}  // namespace b_plus_tree
 
 #endif  // B_PLUS_TREE_BASE_H_

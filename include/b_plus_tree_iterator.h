@@ -4,6 +4,8 @@
 #include "b_plus_tree_nodes.h"
 #include "blob_store.h"
 
+namespace b_plus_tree {
+
 // Iterator class for BPlusTree
 template <typename KeyType, typename ValueType, std::size_t Order>
 class TreeIterator {
@@ -111,5 +113,7 @@ class TreeIterator {
   BlobStoreObject<const LeafNode> leaf_node_;
   size_t key_index_;
 };
+
+}  // namespace b_plus_tree
 
 #endif  // B_PLUS_TREE_ITERATOR_H_

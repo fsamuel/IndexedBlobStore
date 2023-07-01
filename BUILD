@@ -12,9 +12,9 @@ cc_library(
     srcs = [
         "src/allocation_logger.cpp",
         "src/blob_store.cpp",
+        "src/b_plus_tree_nodes.cpp",
         "src/chunk_manager.cpp",
         "src/fixed_string.cpp",
-        "src/nodes.cpp",
         "src/shared_memory_buffer.cpp",
         "src/shm_allocator.cpp",
         "src/string_slice.cpp",
@@ -24,6 +24,9 @@ cc_library(
         "include/allocation_logger.h",
         "include/b_plus_tree.h",
         "include/b_plus_tree_base.h",
+        "include/b_plus_tree_iterator.h",
+        "include/b_plus_tree_nodes.h",
+        "include/b_plus_tree_transaction.h",
         "include/blob_metadata.h",
         "include/blob_store.h",
         "include/blob_store_base.h",
@@ -33,7 +36,6 @@ cc_library(
         "include/chunk_manager.h",
         "include/chunked_vector.h",
         "include/fixed_string.h",
-        "include/nodes.h",
         "include/shared_memory_buffer.h",
         "include/shared_memory_buffer_factory.h",
         "include/shm_allocator.h",
@@ -42,8 +44,6 @@ cc_library(
         "include/string_slice.h",
         "include/test_memory_buffer.h",
         "include/test_memory_buffer_factory.h",
-        "include/transaction.h",
-        "include/tree_iterator.h",
         "include/utils.h"     
     ],
     includes = [
@@ -55,11 +55,12 @@ cc_test(
     name = "b_plus_tree_tests",
     srcs = [
         "test/b_plus_tree_test.cpp",
+        "test/b_plus_tree_nodes_test.cpp",
         "test/blob_store_test.cpp",
         "test/chunk_manager_test.cpp",
         "test/chunked_vector_test.cpp",
         "test/fixed_string_test.cpp",
-        "test/nodes_test.cpp",
+        "test/paged_file_test.cpp",
         "test/shared_memory_buffer_test.cpp",
         "test/shm_allocator_test.cpp",
         "test/string_slice_test.cpp"

@@ -9,6 +9,7 @@
 #include "fixed_string.h"
 #include "storage_traits.h"
 
+namespace b_plus_tree {
 enum class NodeType : uint8_t { HEAD, INTERNAL, LEAF };
 
 struct Node {
@@ -376,5 +377,6 @@ void PrintNode(BlobStoreObject<const Node> node) {
       break;
   }
 }
+}  // namespace b_plus_tree
 
 #endif  // B_PLUS_TREE_NODES_H_
