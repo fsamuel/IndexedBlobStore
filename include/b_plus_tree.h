@@ -83,7 +83,6 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
   void CreateRoot() {
     auto head = blob_store_.New<HeadNode>();
     auto root = blob_store_.New<LeafNode>();
-    head->set_version(0);
     head->root_index = root.Index();
     head->previous = BlobStore::InvalidIndex;
   }
@@ -546,8 +545,7 @@ void BPlusTree<KeyType, ValueType, Order>::Print(size_t version) {
   std::queue<NodeWithLevel> queue;
   BlobStoreObject<const HeadNode> head = blob_store_.Get<HeadNode>(1);
   // Find the head with the given version
-  while (head->previous != BlobStore::InvalidIndex &&
-         head->get_version() > version) {
+  while (head->previous != BlobStore::InvalidIndex && head->version > version) {
     head = blob_store_.Get<HeadNode>(head->previous);
   }
   PrintNode(head);

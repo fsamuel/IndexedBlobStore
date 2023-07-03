@@ -8,10 +8,6 @@ TEST(BPlusTreeNodesTest, CastToNodeFromBaseNode) {
   Node* node = reinterpret_cast<Node*>(&base_node);
 
   EXPECT_EQ(node->type, NodeType::INTERNAL);
-  EXPECT_EQ(node->version, 0);
-
-  base_node.set_version(1);
-  EXPECT_EQ(node->version, 1);
 }
 
 TEST(BPlusTreeNodesTest, CastToNodeFromLeafNode) {
@@ -19,10 +15,6 @@ TEST(BPlusTreeNodesTest, CastToNodeFromLeafNode) {
   Node* node = reinterpret_cast<Node*>(&leaf_node);
 
   EXPECT_EQ(node->type, NodeType::LEAF);
-  EXPECT_EQ(node->version, 0);
-
-  leaf_node.set_version(1);
-  EXPECT_EQ(node->version, 1);
 }
 
 TEST(BPlusTreeNodesTest, CastToNodeFromHeadNode) {
@@ -30,7 +22,6 @@ TEST(BPlusTreeNodesTest, CastToNodeFromHeadNode) {
   Node* node = reinterpret_cast<Node*>(&head_node);
 
   EXPECT_EQ(node->type, NodeType::HEAD);
-  EXPECT_EQ(node->version, 1);
 }
 
 TEST(BPlusTreeNodesTest, CastToNodeFromInternalNode) {
@@ -38,10 +29,6 @@ TEST(BPlusTreeNodesTest, CastToNodeFromInternalNode) {
   Node* node = reinterpret_cast<Node*>(&internal_node);
 
   EXPECT_EQ(node->type, NodeType::INTERNAL);
-  EXPECT_EQ(node->version, 0);
-
-  internal_node.set_version(1);
-  EXPECT_EQ(node->version, 1);
 }
 
 TEST(BPlusTreeNodesTest, CastToBaseNodeFromLeafNode) {
@@ -51,11 +38,7 @@ TEST(BPlusTreeNodesTest, CastToBaseNodeFromLeafNode) {
   EXPECT_EQ(base_node->is_head(), false);
   EXPECT_EQ(base_node->is_leaf(), true);
   EXPECT_EQ(base_node->is_internal(), false);
-  EXPECT_EQ(base_node->get_version(), 0);
   EXPECT_EQ(base_node->num_keys(), 2);
-
-  leaf_node.set_version(1);
-  EXPECT_EQ(base_node->get_version(), 1);
 
   // Update the keys in leaf_node and verify they're visible in base
   // node.
@@ -72,7 +55,6 @@ TEST(BPlusTreeNodesTest, CastToBaseNodeFromInternalNode) {
   EXPECT_EQ(base_node->is_head(), false);
   EXPECT_EQ(base_node->is_leaf(), false);
   EXPECT_EQ(base_node->is_internal(), true);
-  EXPECT_EQ(base_node->get_version(), 0);
   EXPECT_EQ(base_node->num_keys(), 2);
 
   // Update the keys in internal_node and verify they're visible in base

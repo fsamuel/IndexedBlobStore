@@ -19,12 +19,10 @@ enum class NodeType : uint8_t { HEAD, INTERNAL, LEAF };
 struct Node {
   // The type of node this is: head, internal or leaf.
   NodeType type;
-  // The version of this node.
-  std::size_t version;
 
-  Node() : type(NodeType::HEAD), version(0) {}
+  Node() : type(NodeType::HEAD) {}
 
-  Node(NodeType type, std::size_t version) : type(type), version(version) {}
+  Node(NodeType type, std::size_t version) : type(type) {}
 
   // Returns whether this node is a head node.
   bool is_head() const { return type == NodeType::HEAD; }
@@ -34,12 +32,6 @@ struct Node {
 
   // Returns whether this node is an internal node.
   bool is_internal() const { return type == NodeType::INTERNAL; }
-
-  // Returns the version of the node.
-  size_t get_version() const { return version; }
-
-  // Sets the version of the node.
-  void set_version(size_t new_version) { version = new_version; }
 };
 
 // These partially verify that we can safely store the nodes in the blob store
@@ -50,6 +42,8 @@ static_assert(std::is_standard_layout<Node>::value, "Node is standard layout");
 
 struct HeadNode {
   Node node;
+  // The version of the tree.
+  std::size_t version;
   // The index of the root node.
   std::size_t root_index;
   // The index of the previous head.
@@ -57,19 +51,19 @@ struct HeadNode {
 
   HeadNode(std::size_t version)
       : node(NodeType::HEAD, version),
+        version(version),
         root_index(BlobStore::InvalidIndex),
         previous(BlobStore::InvalidIndex) {}
 
   HeadNode()
       : node(NodeType::HEAD, 0),
+        version(0),
         root_index(BlobStore::InvalidIndex),
         previous(BlobStore::InvalidIndex) {}
 
   bool is_head() const { return node.is_head(); }
   bool is_leaf() const { return node.is_leaf(); }
   bool is_internal() const { return node.is_internal(); }
-  size_t get_version() const { return node.get_version(); }
-  void set_version(size_t new_version) { node.set_version(new_version); }
 };
 
 static_assert(std::is_trivially_copyable<HeadNode>::value,
@@ -95,8 +89,6 @@ struct BaseNode {
   bool is_head() const { return node.is_head(); }
   bool is_leaf() const { return node.is_leaf(); }
   bool is_internal() const { return node.is_internal(); }
-  size_t get_version() const { return node.get_version(); }
-  void set_version(size_t new_version) { node.set_version(new_version); }
 
   // Returns whether the node has the maximum number of keys it can hold.
   bool is_full() const { return n == Order - 1; }
@@ -177,8 +169,6 @@ struct InternalNode {
   size_t num_keys() const { return base.num_keys(); }
   void increment_num_keys() { base.increment_num_keys(); }
   void decrement_num_keys() { base.decrement_num_keys(); }
-  size_t get_version() const { return base.get_version(); }
-  void set_version(size_t new_version) { base.set_version(new_version); }
   void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
   size_t get_key(size_t index) const { return base.get_key(index); }
   void set_key(size_t index, size_t key) { base.set_key(index, key); }
@@ -221,8 +211,6 @@ struct LeafNode {
   size_t num_keys() const { return base.num_keys(); }
   void increment_num_keys() { base.increment_num_keys(); }
   void decrement_num_keys() { base.decrement_num_keys(); }
-  size_t get_version() const { return base.get_version(); }
-  void set_version(size_t new_version) { base.set_version(new_version); }
   void set_num_keys(size_t num_keys) { base.set_num_keys(num_keys); }
   size_t get_key(size_t index) const { return base.get_key(index); }
   void set_key(size_t index, size_t key) { base.set_key(index, key); }
@@ -322,8 +310,7 @@ void PrintNode(BlobStoreObject<const InternalNode<Order>> node) {
     return;
   }
   std::cout << "Internal node (Index = " << node.Index()
-            << ", n = " << node->num_keys()
-            << ", version = " << node->get_version() << ") ";
+            << ", n = " << node->num_keys() << ") ";
   for (size_t i = 0; i < node->num_keys(); ++i) {
     BlobStoreObject<const KeyType> key_ptr;
     GetKey(node, i, &key_ptr);
@@ -339,8 +326,7 @@ void PrintNode(BlobStoreObject<const LeafNode<Order>> node) {
     return;
   }
   std::cout << "Leaf node (Index = " << node.Index()
-            << ", n = " << node->num_keys()
-            << ", version = " << node->get_version() << ") ";
+            << ", n = " << node->num_keys() << ") ";
   for (size_t i = 0; i < node->num_keys(); ++i) {
     BlobStoreObject<const KeyType> key_ptr;
     GetKey(node, i, &key_ptr);

@@ -72,7 +72,6 @@ std::size_t BlobStore::Clone(std::size_t index) {
   clone_metadata.size = metadata.size;
   clone_metadata.offset = allocator_.ToIndex(ptr);
   assert(clone_metadata.offset != ShmAllocator::InvalidIndex);
-
   clone_metadata.lock_state = 0;
   clone_metadata.next_free_index = -1;
   return clone_index;

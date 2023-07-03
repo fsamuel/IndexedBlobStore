@@ -3,6 +3,8 @@
 
 #include <atomic>
 
+namespace blob_store {
+
 #ifdef _WIN64
 typedef __int64 ssize_t;
 #else
@@ -14,11 +16,14 @@ struct BlobMetadata {
   // TODO(fsamuel): Can we get this from the allocator? Or perhaps BlobStore is
   // the allocator.
   size_t size;
+
   // The offset of the blob in the shared memory buffer.
   std::atomic<std::size_t> offset;
+
   // The lock state of the blob.
   // TODO(fsamuel): We should probably get rid of this.
   std::atomic<int> lock_state;
+
   // This field can take one of three states:
   // -  -1 if the slot is occupied
   // -   0 if the slot is tombstoned or at the end of the free list.
@@ -55,5 +60,7 @@ struct BlobMetadata {
     return next_free_index.compare_exchange_strong(expected, 0);
   }
 };
+
+}  // namespace blob_store
 
 #endif  // BLOB_METADATA_H_

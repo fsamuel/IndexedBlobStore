@@ -6,8 +6,8 @@ void PrintNode(BlobStoreObject<const HeadNode> node) {
     std::cout << "NULL head" << std::endl;
     return;
   }
-  std::cout << "head (Index = " << node.Index()
+  std::cout << "Head (Index = " << node.Index()
             << ", root = " << node->root_index
-            << ", version = " << node->get_version() << ")" << std::endl;
+            << ", version = " << node->version << ")" << std::endl;
 }
 }  // namespace b_plus_tree

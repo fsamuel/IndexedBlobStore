@@ -114,6 +114,7 @@ class BlobStoreObject {
     }
     size_t offset = control_block_->offset_;
     size_t other_offset = other.control_block_->offset_;
+
     return control_block_->store_->CompareAndSwap(control_block_->index_,
                                                   offset, other_offset) &&
            control_block_->store_->CompareAndSwap(other.control_block_->index_,
