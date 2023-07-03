@@ -9,17 +9,20 @@
 
 namespace blob_store {
 
-// BlobStoreObject is a wrapper around BlobStore that provides a safe way to
-// access objects stored in a BlobStore instance. It automatically updates its
-// internal pointer to the object whenever the memory in BlobStore is
-// reallocated, ensuring that the clients don't store stale pointers. It also
-// implements the BlobStoreObserver interface to receive notifications from the
-// BlobStore when the memory is reallocated.
+// The BlobStoreObject class provides a type-safe smart pointer for managing the
+// lifecycle and access of a Blob stored within a BlobStore. It uses RAII
+// (Resource Acquisition Is Initialization) principle to handle resource
+// allocation and deallocation.
 //
-// Usage:
+// The BlobStoreObject is thread-safe due to usage of atomic operations for
+// reference counting. It supports moving, copying, upgrading (non-const to
+// const) and downgrading (const to non-const) operations on the smart pointer,
+// while ensuring atomicity of operations.
+//
+// Usage Example:
 //   BlobStoreObject<MyClass> obj(&blobStore, index);
 //   obj->myMethod();
-//   MyClass& obj = *obj;
+//   MyClass& objRef = *obj;
 //
 template <typename T>
 class BlobStoreObject {
@@ -29,8 +32,13 @@ class BlobStoreObject {
   using ElementType = typename StorageTraits<T>::ElementType;
   using NonConstStorageType = typename StorageTraits<non_const_T>::StorageType;
 
+  // Default constructor that creates an empty BlobStoreObject with a null
+  // control block.
   BlobStoreObject() : control_block_(nullptr) {}
 
+  // Copy constructor that duplicates the BlobStoreObject by creating a new
+  // reference to the same ControlBlock. It increments the refcount to reflect
+  // the new reference.
   BlobStoreObject(const BlobStoreObject& other)
       : control_block_(other.control_block_) {
     if (control_block_ != nullptr) {
@@ -38,28 +46,34 @@ class BlobStoreObject {
     }
   }
 
-  // Move constructor
+  // Move constructor that transfers ownership of a BlobStoreObject without
+  // creating a new reference. The moved-from BlobStoreObject will have a null
+  // ControlBlock after the operation.
   BlobStoreObject(BlobStoreObject&& other)
       : control_block_(other.control_block_) {
     other.control_block_ = nullptr;
   }
 
-  // Constructor: creates a new ControlBlock with the provided store and index.
-  // The ControlBlock starts with a refcount of 1.
+  // Constructs a BlobStoreObject from a BlobStore and an index. The
+  // BlobStoreObject will hold a pointer to the BlobStore and the index of the
+  // Blob in the store. The created ControlBlock starts with a refcount of 1.
   BlobStoreObject(BlobStoreBase* store, size_t index);
 
-  // Destructor: Decrements the ControlBlock and destroys it if the refcount
-  // goes to zero.
+  // Destructor that decrements the refcount of the ControlBlock. If the
+  // refcount reaches zero, it means there are no BlobStoreObjects pointing to
+  // the Blob, so the Blob can be safely deleted.
   ~BlobStoreObject() {
     if (control_block_ && control_block_->DecrementRefCount()) {
       delete control_block_;
     }
   }
 
-  // Returns the blob_store associated with this object.
+  // Accessor for the BlobStore associated with this object.
   BlobStoreBase* GetBlobStore() const { return control_block_->store_; }
 
-  // Arrow operator: Provides access to the object's methods.
+  // Arrow operators provide access to the methods of the actual object stored.
+  // If control_block_ or the stored object pointer is null, it raises an
+  // assertion failure.
   StorageType* operator->() {
     assert(control_block_ != nullptr);
     assert(control_block_->ptr_ != nullptr);
@@ -97,12 +111,16 @@ class BlobStoreObject {
     return (*control_block_->ptr_)[i];
   }
 
+  // Clone this BlobStoreObject, creating a new blob in the BlobStore
+  // with the same content and returning a BlobStoreObject pointing to it.
   BlobStoreObject<typename std::remove_const<T>::type> Clone() const {
     size_t clone_index = control_block_->store_->Clone(control_block_->index_);
     return BlobStoreObject<typename std::remove_const<T>::type>(
         control_block_->store_, clone_index);
   }
 
+  // Attempt to atomically swap the contents of two BlobStoreObjects if they are
+  // of the same underlying type.
   template <typename U>
   typename std::enable_if<
       std::is_same<typename std::remove_const<U>::type,
@@ -121,10 +139,10 @@ class BlobStoreObject {
                                                   other_offset, offset);
   }
 
-  // Returns the index of the Blob.
+  // Returns the index of the Blob within the BlobStore.
   size_t Index() const { return control_block_->index_; }
 
-  // Returns the total size in bytes of this object.
+  // Returns the total size in bytes of the Blob within the BlobStore.
   size_t GetSize() const {
     if (control_block_ == nullptr || control_block_->store_ == nullptr) {
       return 0;
@@ -133,6 +151,7 @@ class BlobStoreObject {
   }
 
   // Casts BlobStoreObject<T> to a const-preserving BlobStoreObject<U>.
+  // The casting mechanism ensures type safety.
   template <typename U>
   auto To() & -> typename std::conditional<
       std::is_const<T>::value,
@@ -164,6 +183,8 @@ class BlobStoreObject {
     return new_ptr;
   }
 
+  // Downgrades the BlobStoreObject to const and removes the ownership,
+  // if the refcount equals 1, otherwise returns an empty BlobStoreObject.
   BlobStoreObject<const T> Downgrade() && {
     ControlBlock* control_block = control_block_;
     control_block_ = nullptr;
@@ -182,7 +203,8 @@ class BlobStoreObject {
   }
 
   // Upgrades a const T BlobStoreObject to a non-const T BlobStoreObject.
-  // This is only valid if the BlobStoreObject is the only owner of the Blob.
+  // This operation is valid if the BlobStoreObject is the sole owner of the
+  // Blob. Otherwise, it returns an empty BlobStoreObject.
   BlobStoreObject<non_const_T> Upgrade() && {
     ControlBlock* control_block = control_block_;
     control_block_ = nullptr;
@@ -200,6 +222,10 @@ class BlobStoreObject {
     return upgraded_object;
   }
 
+  // Overloaded copy assignment operator.
+  // Decrements the control block reference count of the current object and
+  // deletes it if necessary. Then, makes this object point to the control block
+  // of the other object and increments its refcount.
   BlobStoreObject& operator=(const BlobStoreObject& other) {
     if (this != &other) {
       if (control_block_ && control_block_->DecrementRefCount()) {
@@ -213,6 +239,10 @@ class BlobStoreObject {
     return *this;
   }
 
+  // Overloaded move assignment operator.
+  // Decrements the control block reference count of the current object and
+  // deletes it if necessary. Then, takes ownership of the control block of the
+  // other object.
   BlobStoreObject& operator=(BlobStoreObject&& other) {
     if (this != &other) {
       // TODO(fsamuel): It seems there are occasional cases where we double
@@ -226,6 +256,10 @@ class BlobStoreObject {
     return *this;
   }
 
+  // Overloaded nullptr assignment operator.
+  // Decrements the control block reference count of the current object and
+  // deletes it if necessary. Then, sets the control block of this object to
+  // nullptr.
   BlobStoreObject& operator=(std::nullptr_t) {
     if (control_block_ && control_block_->DecrementRefCount()) {
       delete control_block_;

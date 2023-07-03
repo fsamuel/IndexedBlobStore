@@ -59,13 +59,6 @@ class ChunkedVector {
   // Removes the last element of the ChunkedVector.
   void pop_back();
 
-  // Returns the chunk index and byte offset of the element at the specified
-  // index. The chunk index is the index of the chunk that contains the element.
-  // The byte offset is the offset of the element from the start of the chunk.
-  void chunk_index_and_offset(std::size_t index,
-                              std::size_t* chunk_index,
-                              std::size_t* byte_offset) const;
-
   // Accesses the element at the specified index in the ChunkedVector.
   T* at(std::size_t index);
 
@@ -89,6 +82,13 @@ class ChunkedVector {
   void resize(std::size_t new_size);
 
  private:
+  // Returns the chunk index and byte offset of the element at the specified
+  // index. The chunk index is the index of the chunk that contains the element.
+  // The byte offset is the offset of the element from the start of the chunk.
+  void chunk_index_and_offset(std::size_t index,
+                              std::size_t* chunk_index,
+                              std::size_t* byte_offset) const;
+
   // Loads the existing buffers based on the current size of the
   // vector.
   void load_chunks();
@@ -154,6 +154,28 @@ std::size_t ChunkedVector<T>::capacity() const {
 }
 
 template <typename T>
+void ChunkedVector<T>::chunk_index_and_offset(std::size_t index,
+                                              std::size_t* chunk_index,
+                                              std::size_t* byte_offset) const {
+  // Calculate the total byte offset for the desired index
+  *byte_offset = index * ElementSize;
+
+  // Calculate the number of chunks needed to reach the byte offset.
+  // We start with chunk_index 0, which has a capacity of chunk_size_.
+  *chunk_index = 0;
+  std::size_t chunk_capacity = chunk_size_;
+
+  // Increase the chunk_index and double the chunk_capacity until
+  // we have enough capacity to reach the byte_offset.
+  while (*byte_offset >= chunk_capacity) {
+    *byte_offset -= chunk_capacity;
+    chunk_capacity *= 2;
+    ++(*chunk_index);
+  }
+  *byte_offset += (*chunk_index == 0 ? sizeof(size_t) : 0);
+}
+
+template <typename T>
 void ChunkedVector<T>::load_chunks() {
   size_t size = *size_ / ElementSize;
 
@@ -177,28 +199,6 @@ void ChunkedVector<T>::expand() {
   chunks_.emplace_back(buffer_factory_->CreateBuffer(
       name_prefix_ + "_" + std::to_string(chunks_.size()),
       chunk_size_ * (static_cast<std::size_t>(1) << chunks_.size())));
-}
-
-template <typename T>
-void ChunkedVector<T>::chunk_index_and_offset(std::size_t index,
-                                              std::size_t* chunk_index,
-                                              std::size_t* byte_offset) const {
-  // Calculate the total byte offset for the desired index
-  *byte_offset = index * ElementSize;
-
-  // Calculate the number of chunks needed to reach the byte offset.
-  // We start with chunk_index 0, which has a capacity of chunk_size_.
-  *chunk_index = 0;
-  std::size_t chunk_capacity = chunk_size_;
-
-  // Increase the chunk_index and double the chunk_capacity until
-  // we have enough capacity to reach the byte_offset.
-  while (*byte_offset >= chunk_capacity) {
-    *byte_offset -= chunk_capacity;
-    chunk_capacity *= 2;
-    ++(*chunk_index);
-  }
-  *byte_offset += (*chunk_index == 0 ? sizeof(size_t) : 0);
 }
 
 template <typename T>
