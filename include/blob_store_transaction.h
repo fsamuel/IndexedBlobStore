@@ -36,8 +36,9 @@ void PrintNode(BlobStoreObject<const HeadNode> node);
 
 class Transaction {
  public:
-  Transaction(BlobStore* blob_store) : blob_store_(blob_store) {
-    old_head_ = blob_store_->Get<HeadNode>(1);
+  Transaction(BlobStore* blob_store, size_t head_index)
+      : blob_store_(blob_store) {
+    old_head_ = blob_store_->Get<HeadNode>(head_index);
     new_head_ = old_head_.Clone();
     ++new_head_->version;
     new_head_->previous = new_head_.Index();

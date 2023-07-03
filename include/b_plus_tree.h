@@ -48,12 +48,13 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
 
  public:
   BPlusTree(BlobStore& blob_store) : blob_store_(blob_store) {
-    if (blob_store_.IsEmpty()) {
-      CreateRoot();
-    }
+    CreateRootIfNecessary();
   }
 
-  Transaction CreateTransaction() { return Transaction(this, &blob_store_); }
+  Transaction CreateTransaction() {
+    // TODO(fsamuel): The head index should not be fixed.
+    return Transaction(this, &blob_store_, 1);
+  }
 
   // BPlusTreeBase implementation.
   void Insert(Transaction* transaction,
@@ -82,11 +83,16 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
  private:
   BlobStore& blob_store_;
 
-  void CreateRoot() {
-    auto head = blob_store_.New<HeadNode>();
-    auto root = blob_store_.New<LeafNode>();
-    head->root_index = root.Index();
-    head->previous = BlobStore::InvalidIndex;
+  void CreateRootIfNecessary() {
+    // TODO(fsamuel): This needs to be revamped. Can we have multiple B+ trees
+    // in a BlobStore? Some other object should prepare a bunch of head nodes
+    // and pass one in here.
+    if (blob_store_.IsEmpty()) {
+      auto head = blob_store_.New<HeadNode>();
+      auto root = blob_store_.New<LeafNode>();
+      head->root_index = root.Index();
+      head->previous = BlobStore::InvalidIndex;
+    }
   }
 
   // Searches for the provided key in the provided subtree rooted at node.
@@ -240,12 +246,8 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator
 BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
-  BlobStoreObject<const HeadNode> head = blob_store_.Get<HeadNode>(1);
-  if (head->root_index == BlobStore::InvalidIndex) {
-    return Iterator(&blob_store_, std::vector<size_t>(), 0);
-  }
-  return Search(blob_store_.Get<BaseNode>(head->root_index), key,
-                std::vector<size_t>());
+  Transaction txn(CreateTransaction());
+  return txn.Search(key);
 }
 
 template <typename KeyType, typename ValueType, size_t Order>

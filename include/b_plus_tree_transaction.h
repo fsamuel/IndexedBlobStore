@@ -21,8 +21,8 @@ class Transaction : public blob_store::Transaction {
   using BaseNode = BaseNode<Order>;
   using BPlusTreeBase = BPlusTreeBase<KeyType, ValueType, Order>;
 
-  Transaction(BPlusTreeBase* tree, BlobStore* store)
-      : blob_store::Transaction(store), tree_(tree) {}
+  Transaction(BPlusTreeBase* tree, BlobStore* store, size_t head_index)
+      : blob_store::Transaction(store, head_index), tree_(tree) {}
 
   void Insert(const KeyType& key, const ValueType& value) {
     BlobStoreObject<KeyType> key_ptr = New<KeyType>(key);
