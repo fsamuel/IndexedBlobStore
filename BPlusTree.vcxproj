@@ -148,6 +148,7 @@
     <ClInclude Include="include\blob_store.h" />
     <ClInclude Include="include\blob_store_base.h" />
     <ClInclude Include="include\blob_store_object.h" />
+    <ClInclude Include="include\blob_store_transaction.h" />
     <ClInclude Include="include\buffer.h" />
     <ClInclude Include="include\buffer_factory.h" />
     <ClInclude Include="include\b_plus_tree.h" />
