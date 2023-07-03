@@ -6,6 +6,8 @@
 #include "paged_file_nodes.h"
 #include "test_memory_buffer_factory.h"
 
+using namespace paged_file;
+
 class PagedFileTest : public ::testing::Test {
  protected:
   virtual void SetUp() {
