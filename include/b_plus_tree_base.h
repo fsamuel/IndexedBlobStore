@@ -4,6 +4,7 @@
 #include "b_plus_tree_iterator.h"
 #include "b_plus_tree_nodes.h"
 #include "blob_store.h"
+#include "blob_store_transaction.h"
 
 namespace b_plus_tree {
 
@@ -21,8 +22,7 @@ class BPlusTreeBase {
                       BlobStoreObject<const ValueType> value) = 0;
   virtual BlobStoreObject<const ValueType> Delete(Transaction* transaction,
                                                   const KeyType& key) = 0;
-  virtual Iterator Search(BlobStoreObject<HeadNode> head,
-                          const KeyType& key) = 0;
+  virtual Iterator Search(Transaction* transaction, const KeyType& key) = 0;
 };
 
 }  // namespace b_plus_tree

@@ -19,7 +19,7 @@
     <ClCompile Include="test\shared_memory_buffer_test.cpp" />
     <ClCompile Include="test\shm_allocator_test.cpp" />
     <ClCompile Include="test\string_slice_test.cpp" />
-    <ClCompile Include="src\b_plus_tree_nodes.cpp" />
+    <ClCompile Include="src\blob_store_transaction.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -9,6 +9,7 @@
 #include "b_plus_tree_nodes.h"
 #include "b_plus_tree_transaction.h"
 #include "blob_store.h"
+#include "blob_store_transaction.h"
 
 namespace b_plus_tree {
 
@@ -40,6 +41,7 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
   using InternalNode = InternalNode<Order>;
   using LeafNode = LeafNode<Order>;
   using Transaction = BPlusTreeBase<KeyType, ValueType, Order>::Transaction;
+  using HeadNode = blob_store::HeadNode;
 
   using InsertionBundle = InsertionBundle<KeyType, BaseNode>;
   using Iterator = TreeIterator<KeyType, ValueType, Order>;
@@ -57,7 +59,7 @@ class BPlusTree : public BPlusTreeBase<KeyType, ValueType, Order> {
   void Insert(Transaction* transaction,
               BlobStoreObject<const KeyType> key,
               BlobStoreObject<const ValueType> value) override;
-  Iterator Search(BlobStoreObject<HeadNode> head, const KeyType& key) override;
+  Iterator Search(Transaction* transaction, const KeyType& key) override;
   BlobStoreObject<const ValueType> Delete(Transaction* transaction,
                                           const KeyType& key) override;
 
@@ -221,7 +223,7 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(
     Transaction* transaction,
     BlobStoreObject<const KeyType> key,
     BlobStoreObject<const ValueType> value) {
-  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot();
+  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot<BaseNode>();
   InsertionBundle bundle = Insert(transaction, std::move(root), key, value);
   if (bundle.new_right_node != nullptr) {
     BlobStoreObject<InternalNode> new_root = transaction->New<InternalNode>(1);
@@ -248,11 +250,10 @@ BPlusTree<KeyType, ValueType, Order>::Search(const KeyType& key) {
 
 template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator
-BPlusTree<KeyType, ValueType, Order>::Search(BlobStoreObject<HeadNode> head,
+BPlusTree<KeyType, ValueType, Order>::Search(Transaction* transaction,
                                              const KeyType& key) {
-  BlobStoreObject<const BaseNode> root =
-      blob_store_.Get<BaseNode>(head->root_index);
-  if (head->root_index == BlobStore::InvalidIndex) {
+  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot<BaseNode>();
+  if (root == nullptr) {
     return Iterator(&blob_store_, std::vector<size_t>(), 0);
   }
   return Search(std::move(root), key, std::vector<size_t>());
@@ -509,7 +510,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(
     Transaction* transaction,
     const KeyType& key) {
-  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot();
+  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot<BaseNode>();
   BlobStoreObject<BaseNode> new_root =
       transaction->GetMutable<BaseNode>(std::move(root));
 

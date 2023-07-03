@@ -27,7 +27,7 @@
     <ClCompile Include="src\fixed_string.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\b_plus_tree_nodes.cpp">
+    <ClCompile Include="src\blob_store_transaction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\shared_memory_buffer.cpp">

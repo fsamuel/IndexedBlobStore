@@ -1,6 +1,7 @@
-#include "b_plus_tree_nodes.h"
+#include "blob_store_transaction.h"
 
-namespace b_plus_tree {
+namespace blob_store {
+
 void PrintNode(BlobStoreObject<const HeadNode> node) {
   if (node == nullptr) {
     std::cout << "NULL head" << std::endl;
@@ -10,4 +11,5 @@ void PrintNode(BlobStoreObject<const HeadNode> node) {
             << ", root = " << node->root_index
             << ", version = " << node->version << ")" << std::endl;
 }
-}  // namespace b_plus_tree
+
+}  // namespace blob_store

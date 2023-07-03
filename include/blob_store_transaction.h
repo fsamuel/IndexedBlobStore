@@ -7,9 +7,42 @@
 
 namespace blob_store {
 
+// Head points to the latest version of a BlobStore-indexed data structure.
+struct HeadNode {
+  // The version of the transaction.
+  std::size_t version;
+  // The index of the root node.
+  std::size_t root_index;
+  // The index of the previous head.
+  std::size_t previous;
+
+  HeadNode(std::size_t version)
+      : version(version),
+        root_index(BlobStore::InvalidIndex),
+        previous(BlobStore::InvalidIndex) {}
+
+  HeadNode()
+      : version(0),
+        root_index(BlobStore::InvalidIndex),
+        previous(BlobStore::InvalidIndex) {}
+};
+
+static_assert(std::is_trivially_copyable<HeadNode>::value,
+              "HeadNode is trivially copyable");
+static_assert(std::is_standard_layout<HeadNode>::value,
+              "HeadNode is standard layout");
+
+void PrintNode(BlobStoreObject<const HeadNode> node);
+
 class Transaction {
  public:
-  Transaction(BlobStore* blob_store) : blob_store_(blob_store) {}
+  Transaction(BlobStore* blob_store) : blob_store_(blob_store) {
+    old_head_ = blob_store_->Get<HeadNode>(1);
+    new_head_ = old_head_.Clone();
+    ++new_head_->version;
+    new_head_->previous = new_head_.Index();
+    new_objects_.insert(new_head_.Index());
+  }
 
   // Aborts the transaction. All new objects are dropped.
   void Abort() && {
@@ -20,7 +53,21 @@ class Transaction {
 
   // Commits the transaction. Returns true if the commit was successful, false
   // otherwise.
-  virtual bool Commit() && = 0;
+  bool Commit() && {
+    if (!old_head_.CompareAndSwap(new_head_)) {
+      std::move(*this).Abort();
+      return false;
+    }
+    return true;
+  }
+
+  template <typename T>
+  BlobStoreObject<const T> GetNewRoot() const {
+    return blob_store_->Get<T>(new_head_->root_index);
+  }
+
+  // Sets the new_head's root to the provided index.
+  void SetNewRoot(size_t index) { new_head_->root_index = index; }
 
   // Returns a new object of type T. The object is initialized with the provided
   // arguments. The newly created object is tracked by the transaction and will
@@ -68,8 +115,11 @@ class Transaction {
     discarded_objects_.insert(obj.Index());
   }
 
- protected:
+ private:
   BlobStore* blob_store_;
+  // Holding onto the old head ensures we retain a snapshot of the tree.
+  BlobStoreObject<const HeadNode> old_head_;
+  BlobStoreObject<HeadNode> new_head_;
   std::unordered_set<size_t> new_objects_;
   std::unordered_set<size_t> discarded_objects_;
 };

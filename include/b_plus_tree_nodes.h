@@ -14,81 +14,27 @@ namespace b_plus_tree {
 using blob_store::BlobStore;
 using blob_store::BlobStoreObject;
 
-enum class NodeType : uint8_t { HEAD, INTERNAL, LEAF };
-
-struct Node {
-  // The type of node this is: head, internal or leaf.
-  NodeType type;
-
-  Node() : type(NodeType::HEAD) {}
-
-  Node(NodeType type, std::size_t version) : type(type) {}
-
-  // Returns whether this node is a head node.
-  bool is_head() const { return type == NodeType::HEAD; }
-
-  // Returns whether this node is a leaf node.
-  bool is_leaf() const { return type == NodeType::LEAF; }
-
-  // Returns whether this node is an internal node.
-  bool is_internal() const { return type == NodeType::INTERNAL; }
-};
-
-// These partially verify that we can safely store the nodes in the blob store
-// and that we can safely clone them.
-static_assert(std::is_trivially_copyable<Node>::value,
-              "Node is trivially copyable");
-static_assert(std::is_standard_layout<Node>::value, "Node is standard layout");
-
-struct HeadNode {
-  Node node;
-  // The version of the tree.
-  std::size_t version;
-  // The index of the root node.
-  std::size_t root_index;
-  // The index of the previous head.
-  std::size_t previous;
-
-  HeadNode(std::size_t version)
-      : node(NodeType::HEAD, version),
-        version(version),
-        root_index(BlobStore::InvalidIndex),
-        previous(BlobStore::InvalidIndex) {}
-
-  HeadNode()
-      : node(NodeType::HEAD, 0),
-        version(0),
-        root_index(BlobStore::InvalidIndex),
-        previous(BlobStore::InvalidIndex) {}
-
-  bool is_head() const { return node.is_head(); }
-  bool is_leaf() const { return node.is_leaf(); }
-  bool is_internal() const { return node.is_internal(); }
-};
-
-static_assert(std::is_trivially_copyable<HeadNode>::value,
-              "HeadNode is trivially copyable");
-static_assert(std::is_standard_layout<HeadNode>::value,
-              "HeadNode is standard layout");
+enum class NodeType : uint8_t { INTERNAL, LEAF };
 
 template <std::size_t Order = 4>
 struct BaseNode {
-  Node node;
+  // The type of node this is: internal or leaf.
+  NodeType type;
+
   // The number of keys in the node.
   std::size_t n;
   // The keys in the node.
   std::array<std::size_t, Order - 1> keys;
 
-  BaseNode(NodeType type, std::size_t n) : node(type, 0), n(n) {
+  BaseNode(NodeType type, std::size_t n) : type(type), n(n) {
     // Initialize all keys to invalid index.
     for (size_t i = 0; i < Order - 1; ++i) {
       keys[i] = BlobStore::InvalidIndex;
     }
   }
 
-  bool is_head() const { return node.is_head(); }
-  bool is_leaf() const { return node.is_leaf(); }
-  bool is_internal() const { return node.is_internal(); }
+  bool is_leaf() const { return type == NodeType::LEAF; }
+  bool is_internal() const { return type == NodeType::INTERNAL; }
 
   // Returns whether the node has the maximum number of keys it can hold.
   bool is_full() const { return n == Order - 1; }
@@ -347,26 +293,6 @@ void PrintNode(BlobStoreObject<const BaseNode<Order>> node) {
   PrintNode(node.To<LeafNode>());
 }
 
-void PrintNode(BlobStoreObject<const HeadNode> node);
-
-template <std::size_t Order>
-void PrintNode(BlobStoreObject<const Node> node) {
-  if (node == nullptr) {
-    std::cout << "NULL Node" << std::endl;
-    return;
-  }
-  switch (node->type) {
-    case NodeType::LEAF:
-      PrintNode(node.To<LeafNode<Order>>());
-      break;
-    case NodeType::INTERNAL:
-      PrintNode(node.To<InternalNode<Order>>());
-      break;
-    case NodeType::HEAD:
-      PrintNode(node.To<HeadNode>());
-      break;
-  }
-}
 }  // namespace b_plus_tree
 
 #endif  // B_PLUS_TREE_NODES_H_
