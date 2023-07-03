@@ -223,7 +223,7 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(
     Transaction* transaction,
     BlobStoreObject<const KeyType> key,
     BlobStoreObject<const ValueType> value) {
-  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot<BaseNode>();
+  BlobStoreObject<const BaseNode> root = transaction->GetRootNode<BaseNode>();
   InsertionBundle bundle = Insert(transaction, std::move(root), key, value);
   if (bundle.new_right_node != nullptr) {
     BlobStoreObject<InternalNode> new_root = transaction->New<InternalNode>(1);
@@ -231,9 +231,9 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(
     new_root->children[1] = bundle.new_right_node.Index();
     new_root->set_num_keys(1);
     new_root->set_key(0, bundle.new_key.Index());
-    transaction->SetNewRoot(new_root.Index());
+    transaction->SetRootNode(new_root.Index());
   } else {
-    transaction->SetNewRoot(bundle.new_left_node.Index());
+    transaction->SetRootNode(bundle.new_left_node.Index());
   }
 }
 
@@ -252,7 +252,7 @@ template <typename KeyType, typename ValueType, size_t Order>
 typename BPlusTree<KeyType, ValueType, Order>::Iterator
 BPlusTree<KeyType, ValueType, Order>::Search(Transaction* transaction,
                                              const KeyType& key) {
-  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot<BaseNode>();
+  BlobStoreObject<const BaseNode> root = transaction->GetRootNode<BaseNode>();
   if (root == nullptr) {
     return Iterator(&blob_store_, std::vector<size_t>(), 0);
   }
@@ -510,14 +510,14 @@ template <typename KeyType, typename ValueType, size_t Order>
 BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(
     Transaction* transaction,
     const KeyType& key) {
-  BlobStoreObject<const BaseNode> root = transaction->GetNewRoot<BaseNode>();
+  BlobStoreObject<const BaseNode> root = transaction->GetRootNode<BaseNode>();
   BlobStoreObject<BaseNode> new_root =
       transaction->GetMutable<BaseNode>(std::move(root));
 
   if (new_root->is_leaf()) {
     // If the root is a leaf node, then we can just delete the key from the leaf
     // node.
-    transaction->SetNewRoot(new_root.Index());
+    transaction->SetRootNode(new_root.Index());
     return DeleteFromLeafNode(new_root.To<LeafNode>(), key);
   }
 
@@ -533,7 +533,7 @@ BlobStoreObject<const ValueType> BPlusTree<KeyType, ValueType, Order>::Delete(
   } else {
     deleted = Delete(transaction, &new_root, key_index, key);
   }
-  transaction->SetNewRoot(new_root.Index());
+  transaction->SetRootNode(new_root.Index());
   return deleted;
 }
 

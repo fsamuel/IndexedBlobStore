@@ -62,12 +62,12 @@ class Transaction {
   }
 
   template <typename T>
-  BlobStoreObject<const T> GetNewRoot() const {
+  BlobStoreObject<const T> GetRootNode() const {
     return blob_store_->Get<T>(new_head_->root_index);
   }
 
   // Sets the new_head's root to the provided index.
-  void SetNewRoot(size_t index) { new_head_->root_index = index; }
+  void SetRootNode(size_t index) { new_head_->root_index = index; }
 
   // Returns a new object of type T. The object is initialized with the provided
   // arguments. The newly created object is tracked by the transaction and will
