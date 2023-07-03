@@ -9,7 +9,6 @@ using namespace b_plus_tree;
 class BPlusTreeTest : public ::testing::Test {
  protected:
   virtual void SetUp() {
-    RemoveChunkFiles();
     SharedMemoryBuffer metadataBuffer("MetadataBuffer", utils::GetPageSize());
     ChunkManager dataBuffer(TestMemoryBufferFactory::Get(), "DataBuffer",
                             4 * utils::GetPageSize());
@@ -20,19 +19,6 @@ class BPlusTreeTest : public ::testing::Test {
   virtual void TearDown() {
     // cleanup the BlobStore
     delete blob_store;
-    RemoveChunkFiles();
-  }
-
-  void RemoveChunkFiles() {
-    // Delete all files with the prefix "test_chunk"
-    // Do this in case the previous test failed and left some files behind
-    for (int i = 0; i < 20; ++i) {
-      std::string filename = "DataBuffer_" + std::to_string(i);
-      std::remove(filename.c_str());
-      filename = "MetadataBuffer_" + std::to_string(i);
-      std::remove(filename.c_str());
-    }
-    std::remove("MetadataBuffer");
   }
 
   BlobStore* blob_store;

@@ -12,8 +12,6 @@
 
 namespace b_plus_tree {
 
-using blob_store::HeadNode;
-
 template <typename KeyType, typename ValueType, std::size_t Order>
 class Transaction : public blob_store::Transaction {
  public:

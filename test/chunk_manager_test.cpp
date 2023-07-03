@@ -4,24 +4,7 @@
 
 #include "test_memory_buffer_factory.h"
 
-class ChunkManagerTest : public ::testing::Test {
- protected:
-  virtual void SetUp() { RemoveChunkFiles(); }
-
-  virtual void TearDown() { RemoveChunkFiles(); }
-
- private:
-  void RemoveChunkFiles() {
-    // Delete all files with the prefix "test_chunk"
-    // Do this in case the previous test failed and left some files behind
-    for (int i = 0; i < 20; ++i) {
-      std::string filename = "test_chunk_" + std::to_string(i);
-      std::remove(filename.c_str());
-    }
-  }
-};
-
-TEST_F(ChunkManagerTest, AddChunkAndRemoveChunk) {
+TEST(ChunkManagerTest, AddChunkAndRemoveChunk) {
   ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk", 64);
 
   // Initially, there should be 1 chunk
@@ -49,7 +32,7 @@ TEST_F(ChunkManagerTest, AddChunkAndRemoveChunk) {
   EXPECT_EQ(manager.num_chunks(), 1);
 }
 
-TEST_F(ChunkManagerTest, AccessChunkAndOffset) {
+TEST(ChunkManagerTest, AccessChunkAndOffset) {
   ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk", 64);
 
   // Add 3 more chunks
@@ -76,7 +59,7 @@ TEST_F(ChunkManagerTest, AccessChunkAndOffset) {
   EXPECT_EQ(*data2, 20);
 }
 
-TEST_F(ChunkManagerTest, TotalCapacity) {
+TEST(ChunkManagerTest, TotalCapacity) {
   std::size_t chunk_size = 64;
   ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk",
                        chunk_size);
@@ -104,7 +87,7 @@ TEST_F(ChunkManagerTest, TotalCapacity) {
 // Tests get_or_create_chunk() verifying that it will not create a new chunk
 // if the chunk already exists and that it can create multiple chunks to get
 // to the desired chunk.
-TEST_F(ChunkManagerTest, GetOrCreateChunk) {
+TEST(ChunkManagerTest, GetOrCreateChunk) {
   ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk", 64);
 
   // Initially, there should be 1 chunk
@@ -120,7 +103,7 @@ TEST_F(ChunkManagerTest, GetOrCreateChunk) {
   EXPECT_EQ(num_created, 0);
   EXPECT_EQ(manager.num_chunks(), 6);
 }
-TEST_F(ChunkManagerTest, ConcurrentAccess) {
+TEST(ChunkManagerTest, ConcurrentAccess) {
   const std::size_t chunk_size = 64;
   ChunkManager manager(TestMemoryBufferFactory::Get(), "test_chunk",
                        chunk_size);
