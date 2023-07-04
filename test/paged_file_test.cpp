@@ -69,3 +69,61 @@ TEST_F(PagedFileTest, SparseFile) {
     }
   }
 }
+
+// Similar to SparseFile but performs the write operations in a transaction.
+TEST_F(PagedFileTest, SparseFileTransaction) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+				  std::move(*dataBuffer));
+  PagedFile file = PagedFile<6, 32>::Create(&store);
+
+  char buffer[16];
+  memset(buffer, 2, sizeof(buffer));
+
+  Transaction transaction = file.CreateTransaction();
+  transaction.Write(&buffer[0], sizeof(buffer));
+  transaction.Seek(496);
+  transaction.Write(&buffer[0], sizeof(buffer));
+  std::move(transaction).Commit();
+
+  file.Seek(0);
+  char read_buffer[512];
+  file.Read(&read_buffer[0], sizeof(read_buffer));
+  for (std::size_t i = 0; i < 512; ++i) {
+	if (i < 16 || i >= 496) {
+	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
+	} else {
+	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
+	}
+  }
+}
+
+// Similar to SparseFile, but partially overwrites previously written data.
+TEST_F(PagedFileTest, SparseFileOverwrite) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+				  std::move(*dataBuffer));
+  EXPECT_EQ(store.GetSize(), 0);
+  PagedFile file = PagedFile<6, 32>::Create(&store);
+  char buffer[16];
+  memset(buffer, 2, sizeof(buffer));
+  file.Write(&buffer[0], sizeof(buffer));
+
+  file.Seek(496);
+  file.Write(&buffer[0], sizeof(buffer));
+
+  file.Seek(0);
+  memset(buffer, 3, sizeof(buffer));
+  file.Write(&buffer[0], sizeof(buffer));
+
+  file.Seek(0);
+  char read_buffer[512];
+  file.Read(&read_buffer[0], sizeof(read_buffer));
+  for (std::size_t i = 0; i < 512; ++i) {
+	if (i < 16) {
+	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 3);
+	} else if (i >= 16 && i < 496) {
+	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
+	} else {
+	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
+	}
+  }
+}

@@ -156,8 +156,7 @@ PagedFile<NumBlocks, BlockSize> PagedFile<NumBlocks, BlockSize>::Open(
 template <std::size_t NumBlocks, std::size_t BlockSize>
 typename PagedFileBase<NumBlocks, BlockSize>::Transaction
 PagedFile<NumBlocks, BlockSize>::CreateTransaction() {
-  typename PagedFileBase<NumBlocks, BlockSize>::Transaction transaction(
-      this, blob_store_, head_index_);
+  Transaction transaction(this, blob_store_, head_index_);
   return transaction;
 }
 
