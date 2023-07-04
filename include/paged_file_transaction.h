@@ -41,7 +41,6 @@ class Transaction : public blob_store::Transaction {
 
  private:
   std::size_t pos_ = 0;
-  BlobStoreObject<INode> inode_;
   PagedFileBase* paged_file_;
 };
 

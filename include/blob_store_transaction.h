@@ -1,7 +1,8 @@
 #ifndef BLOB_STORE_TRANSACTION_H_
 #define BLOB_STORE_TRANSACTION_H_
 
-#include <unordered_set>
+#include <optional>
+#include <unordered_map>
 
 #include "blob_store.h"
 
@@ -42,13 +43,15 @@ class Transaction {
     new_head_ = old_head_.Clone();
     ++new_head_->version;
     new_head_->previous = new_head_.Index();
-    new_objects_.insert(new_head_.Index());
+    OperationInfo operation_info{OperationType::MUTATED_OBJECT,
+                                 old_head_.Index(), new_head_.Index()};
+    new_objects_.emplace(new_head_.Index(), operation_info);
   }
 
   // Aborts the transaction. All new objects are dropped.
   void Abort() && {
-    for (const std::size_t& object_index : new_objects_) {
-      blob_store_->Drop(object_index);
+    for (const auto& obj : new_objects_) {
+      blob_store_->Drop(obj.first);
     }
   }
 
@@ -77,7 +80,9 @@ class Transaction {
   BlobStoreObject<T> New(Args&&... args) {
     BlobStoreObject<T> object =
         blob_store_->New<T>(std::forward<Args>(args)...);
-    new_objects_.insert(object.Index());
+    OperationInfo operation_info{OperationType::NEW_OBJECT,
+                                 BlobStore::InvalidIndex, object.Index()};
+    new_objects_.emplace(object.Index(), operation_info);
     return object;
   }
 
@@ -92,8 +97,10 @@ class Transaction {
       return std::move(object).Upgrade();
     }
     auto new_object = object.Clone();
-    discarded_objects_.insert(object.Index());
-    new_objects_.insert(new_object.Index());
+    OperationInfo operation_info{OperationType::MUTATED_OBJECT, object.Index(),
+                                 new_object.Index()};
+    discarded_objects_.emplace(object.Index(), operation_info);
+    new_objects_.emplace(new_object.Index(), operation_info);
     return new_object;
   }
 
@@ -113,16 +120,25 @@ class Transaction {
     if (new_objects_.count(obj.Index()) > 0) {
       new_objects_.erase(obj.Index());
     }
-    discarded_objects_.insert(obj.Index());
+    OperationInfo operation_info{OperationType::DELETED_OBJECT, obj.Index(),
+                                 BlobStore::InvalidIndex};
+    discarded_objects_.emplace(obj.Index(), operation_info);
   }
 
  private:
+  enum class OperationType { NEW_OBJECT, DELETED_OBJECT, MUTATED_OBJECT };
+  struct OperationInfo {
+    OperationType type;
+    std::size_t old_index;
+    std::size_t new_index;
+  };
+
   BlobStore* blob_store_;
   // Holding onto the old head ensures we retain a snapshot of the tree.
   BlobStoreObject<const HeadNode> old_head_;
   BlobStoreObject<HeadNode> new_head_;
-  std::unordered_set<size_t> new_objects_;
-  std::unordered_set<size_t> discarded_objects_;
+  std::unordered_map<size_t, OperationInfo> new_objects_;
+  std::unordered_map<size_t, OperationInfo> discarded_objects_;
 };
 
 }  // namespace blob_store
