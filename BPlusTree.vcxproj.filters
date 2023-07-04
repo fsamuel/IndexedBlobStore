@@ -134,5 +134,8 @@
     <ClInclude Include="include\paged_file_transaction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\paged_file_base.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
