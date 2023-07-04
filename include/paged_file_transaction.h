@@ -23,11 +23,20 @@ class Transaction : public blob_store::Transaction {
     paged_file_->Write(this, data, data_size);
   }
 
-  // Read data with the provided size from the file at the current position.
-  // Returns the number of bytes actually read. The file position will be
-  // updated to the end of the read data.
   std::size_t Read(char* data, std::size_t size) {
     return paged_file_->Read(this, data, size);
+  }
+
+  // Seek to the given offset in the file.
+  void Seek(std::size_t offset) { pos_ = offset; }
+
+  // Return the current position in the file.
+  std::size_t Tell() const { return pos_; }
+
+  // Return the size of the file.
+  std::size_t GetSize() const {
+    BlobStoreObject<const INode> inode = GetRootNode<INode>();
+    return inode->size;
   }
 
  private:
