@@ -25,7 +25,7 @@ class BPlusTreeTest : public ::testing::Test {
 };
 
 TEST_F(BPlusTreeTest, BasicTree) {
-  BPlusTree<int, int, 4> tree(*blob_store);
+  BPlusTree<int, int, 8> tree(*blob_store);
   for (int i = 0; i < 100; i++) {
     tree.Insert(i, i * 100);
   }

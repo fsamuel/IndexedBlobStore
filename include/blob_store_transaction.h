@@ -3,6 +3,7 @@
 
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "blob_store.h"
 
@@ -43,15 +44,14 @@ class Transaction {
     new_head_ = old_head_.Clone();
     ++new_head_->version;
     new_head_->previous = new_head_.Index();
-    OperationInfo operation_info{OperationType::MUTATED_OBJECT,
-                                 old_head_.Index(), new_head_.Index()};
-    new_objects_.emplace(new_head_.Index(), operation_info);
+    transaction_objects_.insert(new_head_.Index());
+    mutated_objects_.emplace(old_head_.Index(), new_head_.Index());
   }
 
   // Aborts the transaction. All new objects are dropped.
   void Abort() && {
-    for (const auto& obj : new_objects_) {
-      blob_store_->Drop(obj.first);
+    for (size_t object_index : transaction_objects_) {
+      blob_store_->Drop(object_index);
     }
   }
 
@@ -80,9 +80,8 @@ class Transaction {
   BlobStoreObject<T> New(Args&&... args) {
     BlobStoreObject<T> object =
         blob_store_->New<T>(std::forward<Args>(args)...);
-    OperationInfo operation_info{OperationType::NEW_OBJECT,
-                                 BlobStore::InvalidIndex, object.Index()};
-    new_objects_.emplace(object.Index(), operation_info);
+    new_objects_.emplace(object.Index());
+    transaction_objects_.insert(object.Index());
     return object;
   }
 
@@ -93,14 +92,12 @@ class Transaction {
   template <typename T>
   BlobStoreObject<typename std::remove_const<T>::type> GetMutable(
       BlobStoreObject<typename std::add_const<T>::type> object) {
-    if (new_objects_.count(object.Index()) > 0) {
+    if (transaction_objects_.count(object.Index()) > 0) {
       return std::move(object).Upgrade();
     }
     auto new_object = object.Clone();
-    OperationInfo operation_info{OperationType::MUTATED_OBJECT, object.Index(),
-                                 new_object.Index()};
-    discarded_objects_.emplace(object.Index(), operation_info);
-    new_objects_.emplace(new_object.Index(), operation_info);
+    mutated_objects_.emplace(object.Index(), new_object.Index());
+    transaction_objects_.insert(new_object.Index());
     return new_object;
   }
 
@@ -114,31 +111,33 @@ class Transaction {
   // Record that the object is no longer needed by the transaction. The object
   // will be deleted if the transaction is committed.
   template <typename T>
-  void Drop(BlobStoreObject<T> obj) {
-    // The object type doesn't matter when looking up the object in the new
-    // objects set.
-    if (new_objects_.count(obj.Index()) > 0) {
-      new_objects_.erase(obj.Index());
+  void Drop(BlobStoreObject<T>&& obj) {
+    if (transaction_objects_.count(obj.Index()) > 0) {
+      // If the object was created by the transaction, then we can drop it.
+      // This object might still be referenced by the created or mutated
+      // maps.
+      transaction_objects_.erase(obj.Index());
+      blob_store_->Drop(std::move(obj));
+      return;
     }
-    OperationInfo operation_info{OperationType::DELETED_OBJECT, obj.Index(),
-                                 BlobStore::InvalidIndex};
-    discarded_objects_.emplace(obj.Index(), operation_info);
+    discarded_objects_.emplace(obj.Index());
   }
 
  private:
-  enum class OperationType { NEW_OBJECT, DELETED_OBJECT, MUTATED_OBJECT };
-  struct OperationInfo {
-    OperationType type;
-    std::size_t old_index;
-    std::size_t new_index;
-  };
 
   BlobStore* blob_store_;
   // Holding onto the old head ensures we retain a snapshot of the tree.
   BlobStoreObject<const HeadNode> old_head_;
   BlobStoreObject<HeadNode> new_head_;
-  std::unordered_map<size_t, OperationInfo> new_objects_;
-  std::unordered_map<size_t, OperationInfo> discarded_objects_;
+  // All new objects are tracked by the transaction and will be deleted if the
+  // transaction is aborted.
+  std::unordered_set<size_t> transaction_objects_;
+  // Objects that were created by the transaction via the New operation.
+  std::unordered_set<size_t> new_objects_;
+  // Mutated objects are objects that were cloned and modified.
+  // This is a map from the old index to the new index.
+  std::unordered_map<size_t, size_t> mutated_objects_;
+  std::unordered_set<size_t> discarded_objects_;
 };
 
 }  // namespace blob_store
