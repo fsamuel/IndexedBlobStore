@@ -133,16 +133,16 @@ TEST_F(PagedFileTest, ConcurrentWrites) {
 	BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
 		std::move(*dataBuffer));
 	EXPECT_EQ(store.GetSize(), 0);
-	PagedFile file = PagedFile<9, 64>::Create(&store);
+	PagedFile file = PagedFile<9, 128>::Create(&store);
 	constexpr std::size_t BUFFER_SIZE = 1024;
 	char write_buffer[BUFFER_SIZE];
 	// Fill the write buffer with random bits.
 	for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
 		write_buffer[i] = static_cast<uint8_t>(i % 256);
 	}
-
+	constexpr std::size_t NUM_THREADS = 8;
 	std::vector<std::thread> threads;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < NUM_THREADS; i++) {
 		threads.push_back(std::thread([i, &file, &write_buffer, BUFFER_SIZE]() {
 
 			while (true) {
@@ -160,10 +160,10 @@ TEST_F(PagedFileTest, ConcurrentWrites) {
 		thread.join();
 	}
 
-	EXPECT_EQ(file.GetSize(), 4096);
+	EXPECT_EQ(file.GetSize(), NUM_THREADS * BUFFER_SIZE);
 
 	char read_buffer[BUFFER_SIZE];
-	for (int i = 0; i < 4; ++i) {
+	for (int i = 0; i < NUM_THREADS; ++i) {
 		file.Seek(i * BUFFER_SIZE);
 		file.Read(&read_buffer[0], sizeof(read_buffer));
 		EXPECT_EQ(file.Tell(), (i + 1) * BUFFER_SIZE);
