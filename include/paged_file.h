@@ -91,6 +91,8 @@ class PagedFile : public PagedFileBase<NumBlocks, BlockSize> {
     } else {
       new_obj = transaction->GetMutable<T>(std::move(obj));
     }
+    // Even if we're not calling New, GetMutable may create a
+    // clone of the object, so we need to update the block_id.
     *block_id = new_obj.Index();
     return new_obj;
   }
@@ -177,7 +179,7 @@ void PagedFile<NumBlocks, BlockSize>::Write(Transaction* transaction,
     if (direct_block == nullptr) {
       // We ran out of space.
       // TODO(fsamuel): Handle this case.
-      return;
+      break;
     }
     std::size_t data_offset = transaction->Tell() % BlockSize;
     std::size_t bytes_to_write =
