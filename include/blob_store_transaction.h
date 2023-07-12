@@ -124,7 +124,6 @@ class Transaction {
   }
 
  private:
-
   BlobStore* blob_store_;
   // Holding onto the old head ensures we retain a snapshot of the tree.
   BlobStoreObject<const HeadNode> old_head_;

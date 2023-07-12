@@ -232,7 +232,7 @@ void BPlusTree<KeyType, ValueType, Order>::Insert(
   BlobStoreObject<const BaseNode> root = transaction->GetRootNode<BaseNode>();
   InsertionBundle bundle = Insert(transaction, std::move(root), key, value);
   if (bundle.new_right_node != nullptr) {
-    BlobStoreObject<InternalNode> new_root = transaction->New<InternalNode>(1);
+    BlobStoreObject<InternalNode> new_root = transaction->New<InternalNode>();
     new_root->children[0] = bundle.new_left_node.Index();
     new_root->children[1] = bundle.new_right_node.Index();
     new_root->set_num_keys(1);
@@ -304,14 +304,10 @@ BPlusTree<KeyType, ValueType, Order>::SplitLeafNode(
   for (int i = 0; i < new_right_node->num_keys(); ++i) {
     new_right_node->set_key(i, left_node->get_key(middle_key_index + i));
     new_right_node->values[i] = left_node->values[middle_key_index + i];
-    left_node->set_key(middle_key_index + i, BlobStore::InvalidIndex);
-    left_node->values[middle_key_index + i] = BlobStore::InvalidIndex;
   }
-  left_node->values[middle_key_index] = BlobStore::InvalidIndex;
 
   // Update the key count of the left_node.
   left_node->set_num_keys(middle_key_index);
-  left_node->set_key(middle_key_index, BlobStore::InvalidIndex);
 
   return InsertionBundle(left_node.To<BaseNode>(), middle_key,
                          new_right_node.To<BaseNode>());
@@ -333,16 +329,11 @@ BPlusTree<KeyType, ValueType, Order>::SplitInternalNode(
   for (int i = 0; i < new_right_node->num_keys(); ++i) {
     new_right_node->set_key(i, left_node->get_key(middle_key_index + i + 1));
     new_right_node->children[i] = left_node->children[middle_key_index + i + 1];
-    left_node->set_key(middle_key_index + i + 1, BlobStore::InvalidIndex);
-    left_node->children[middle_key_index + i + 1] = BlobStore::InvalidIndex;
   }
   new_right_node->children[new_right_node->num_keys()] =
       left_node->children[middle_key_index + new_right_node->num_keys() + 1];
-  left_node->children[middle_key_index + new_right_node->num_keys() + 1] =
-      BlobStore::InvalidIndex;
 
   left_node->set_num_keys(middle_key_index);
-  left_node->set_key(middle_key_index, BlobStore::InvalidIndex);
   return InsertionBundle(left_node.To<BaseNode>(), middle_key,
                          new_right_node.To<BaseNode>());
 }
@@ -668,9 +659,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(
     new_right_sibling_internal_node->children[0] =
         new_left_sibling_internal_node
             ->children[new_left_sibling_internal_node->num_keys()];
-    new_left_sibling_internal_node
-        ->children[new_left_sibling_internal_node->num_keys()] =
-        BlobStore::InvalidIndex;
+ 
     new_right_sibling->set_key(0, parent_node->get_key(child_index - 1));
   } else {
     auto new_right_sibling_leaf_node = new_right_sibling.To<LeafNode>();
@@ -695,8 +684,6 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(
   parent_node->set_key(child_index - 1, new_left_sibling->get_key(
                                             new_left_sibling->num_keys() - 1));
 
-  new_left_sibling->set_key(new_left_sibling->num_keys() - 1,
-                            BlobStore::InvalidIndex);
   new_right_sibling->increment_num_keys();
 
   new_left_sibling->decrement_num_keys();
@@ -736,8 +723,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(
       new_right_internal_node->children[i - 1] =
           new_right_internal_node->children[i];
     }
-    new_right_internal_node->children[new_right_internal_node->num_keys()] =
-        BlobStore::InvalidIndex;
+
     key_index = new_right_sibling->get_key(0);
   } else {
     auto new_left_leaf_node = new_left_sibling.To<LeafNode>();
@@ -751,8 +737,6 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(
     for (int i = 1; i < new_right_leaf_node->num_keys(); ++i) {
       new_right_leaf_node->values[i - 1] = new_right_leaf_node->values[i];
     }
-    new_right_leaf_node->values[new_right_leaf_node->num_keys() - 1] =
-        BlobStore::InvalidIndex;
 
     key_index = new_right_sibling->get_key(1);
   }
@@ -760,8 +744,6 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromRightSibling(
   for (int i = 1; i < new_right_sibling->num_keys(); ++i) {
     new_right_sibling->keys[i - 1] = new_right_sibling->keys[i];
   }
-  new_right_sibling->keys[new_right_sibling->num_keys() - 1] =
-      BlobStore::InvalidIndex;
 
   new_left_sibling->increment_num_keys();
   new_right_sibling->decrement_num_keys();

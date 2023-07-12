@@ -1,6 +1,7 @@
 #ifndef B_PLUS_TREE_NODES_H_
 #define B_PLUS_TREE_NODES_H_
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,15 +24,11 @@ struct BaseNode {
 
   // The number of keys in the node.
   std::size_t n;
+
   // The keys in the node.
   std::array<std::size_t, Order - 1> keys;
 
-  BaseNode(NodeType type, std::size_t n) : type(type), n(n) {
-    // Initialize all keys to invalid index.
-    for (size_t i = 0; i < Order - 1; ++i) {
-      keys[i] = BlobStore::InvalidIndex;
-    }
-  }
+  BaseNode(NodeType type, std::size_t num_keys) : type(type), n(num_keys) {}
 
   bool is_leaf() const { return type == NodeType::LEAF; }
   bool is_internal() const { return type == NodeType::INTERNAL; }
@@ -102,11 +99,7 @@ template <std::size_t Order = 4>
 struct InternalNode {
   BaseNode<Order> base;
   std::array<std::size_t, Order> children;
-  explicit InternalNode(std::size_t n) : base(NodeType::INTERNAL, n) {
-    for (size_t i = 0; i < Order; ++i) {
-      children[i] = BlobStore::InvalidIndex;
-    }
-  }
+  explicit InternalNode(std::size_t n = 0) : base(NodeType::INTERNAL, n) {}
 
   bool is_leaf() const { return base.is_leaf(); }
   bool is_internal() const { return base.is_internal(); }
@@ -144,11 +137,7 @@ struct LeafNode {
   BaseNode<Order> base;
   std::array<std::size_t, Order - 1> values;
 
-  LeafNode(std::size_t num_keys = 0) : base(NodeType::LEAF, num_keys) {
-    for (size_t i = 0; i < Order - 1; ++i) {
-      values[i] = BlobStore::InvalidIndex;
-    }
-  }
+  LeafNode(std::size_t num_keys = 0) : base(NodeType::LEAF, num_keys) {}
 
   bool is_leaf() const { return base.is_leaf(); }
   bool is_internal() const { return base.is_internal(); }
