@@ -301,61 +301,63 @@ TEST_F(BlobStoreTest, DynamicUint8Array) {
 // Creates a blob that's an int array with an unspecified length in the type.
 TEST_F(BlobStoreTest, DynamicIntArray) {
   BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-				  std::move(*dataBuffer));
+                  std::move(*dataBuffer));
   BlobStoreObject<int[]> ptr = store.New<int[]>(256);
   EXPECT_GE(ptr.GetSize(), 256 * sizeof(int));
 
   // Write some values into the array.
   for (int i = 0; i < 256; i++) {
-	ptr[i] = i;
+    ptr[i] = i;
   }
   // Read the values back out.
   for (int i = 0; i < 256; i++) {
-	EXPECT_EQ(ptr[i], i);
+    EXPECT_EQ(ptr[i], i);
   }
 }
 
-// Similar to DynamicIntArray but initializes the array with an initializer list.
+// Similar to DynamicIntArray but initializes the array with an initializer
+// list.
 TEST_F(BlobStoreTest, DynamicIntArrayWithInitializerList) {
   BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-				  std::move(*dataBuffer));
+                  std::move(*dataBuffer));
   BlobStoreObject<int[]> ptr = store.New<int[]>({1, 2, 3, 4});
   EXPECT_GE(ptr.GetSize(), 4 * sizeof(int));
 
   // Read the values back out.
   for (int i = 0; i < 4; i++) {
-	EXPECT_EQ(ptr[i], i + 1);
+    EXPECT_EQ(ptr[i], i + 1);
   }
 }
 
 // Similar to DynamicIntArray but with doubles.
 TEST_F(BlobStoreTest, DynamicDoubleArray) {
-    BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-        std::move(*dataBuffer));
-    BlobStoreObject<double[]> ptr = store.New<double[]>(256);
-    EXPECT_GE(ptr.GetSize(), 256 * sizeof(double));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
+  BlobStoreObject<double[]> ptr = store.New<double[]>(256);
+  EXPECT_GE(ptr.GetSize(), 256 * sizeof(double));
 
-    // Write some values into the array.
-    for (int i = 0; i < 256; i++) {
-        ptr[i] = i;
-    }
-    // Read the values back out.
-    for (int i = 0; i < 256; i++) {
-        EXPECT_EQ(ptr[i], i);
-    }
+  // Write some values into the array.
+  for (int i = 0; i < 256; i++) {
+    ptr[i] = i;
+  }
+  // Read the values back out.
+  for (int i = 0; i < 256; i++) {
+    EXPECT_EQ(ptr[i], i);
+  }
 }
 
-// Similar to DynamicDoubleArray but initializes the array with an initializer list.
+// Similar to DynamicDoubleArray but initializes the array with an initializer
+// list.
 TEST_F(BlobStoreTest, DynamicDoubleArrayWithInitializerList) {
-	BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-		std::move(*dataBuffer));
-	BlobStoreObject<double[]> ptr = store.New<double[]>({ 1.0, 2.0, 3.0, 4.0 });
-	EXPECT_GE(ptr.GetSize(), 4 * sizeof(double));
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
+  BlobStoreObject<double[]> ptr = store.New<double[]>({1.0, 2.0, 3.0, 4.0});
+  EXPECT_GE(ptr.GetSize(), 4 * sizeof(double));
 
-	// Read the values back out.
-	for (int i = 0; i < 4; i++) {
-		EXPECT_EQ(ptr[i], i + 1);
-	}
+  // Read the values back out.
+  for (int i = 0; i < 4; i++) {
+    EXPECT_EQ(ptr[i], i + 1);
+  }
 }
 
 // Create a blob that's an int array, and populate it with some values. Verify
@@ -543,15 +545,32 @@ TEST_F(BlobStoreTest, IntArrayConcurrentClone) {
   }
 }
 
-// Use SerializeTraits to serialize a vector of strings to a blob and then deserialize again.
+// Use SerializeTraits to serialize a vector of strings to a blob and then
+// deserialize again.
 TEST_F(BlobStoreTest, SerializeTraits) {
   BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-				  std::move(*dataBuffer));
+                  std::move(*dataBuffer));
   std::vector<std::string> input = {"Hello", "World"};
-  size_t serialized_size = SerializeTraits<std::vector<std::string>>::Size(input);
-  BlobStoreObject<char[]> ptr = store.New<char[]>(serialized_size);
-  SerializeTraits<std::vector<std::string>>::Serialize(&ptr[0], input);
+  BlobStoreObject<char[]> ptr = store.Serialize(input);
+
   std::vector<std::string> output;
-  SerializeTraits<std::vector<std::string>>::Deserialize(&ptr[0], &output);
+  ptr.Deserialize(&output);
+
+  EXPECT_EQ(input, output);
+}
+
+// Use SerializeTraits to serialize an std::unordered_map to a blob and then
+// deserialize it again.
+TEST_F(BlobStoreTest, SerializeTraitsUnorderedMap) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
+
+  std::unordered_map<std::string, int> input = {
+      {"Hello", 1}, {"World", 2}, {"Test", 1337}};
+  BlobStoreObject<char[]> ptr = store.Serialize(input);
+
+  std::unordered_map<std::string, int> output;
+  ptr.Deserialize(&output);
+
   EXPECT_EQ(input, output);
 }

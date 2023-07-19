@@ -120,6 +120,15 @@ class BlobStoreObject {
         control_block_->store_, clone_index);
   }
 
+  // Deserializes the content of the blob into the provided object.
+  template <typename U>
+  void Deserialize(U* obj) const {
+    assert(control_block_ != nullptr);
+    assert(control_block_->ptr_ != nullptr);
+    SerializeTraits<U>::Deserialize(
+        &StorageTraits<T>::GetElement(control_block_->ptr_, 0), obj);
+  }
+
   // Attempt to atomically swap the contents of two BlobStoreObjects if they are
   // of the same underlying type.
   template <typename U>
@@ -394,23 +403,23 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(
 
 // SerializeTraits for BlobStoreObject<T>. This just stores the index of the
 // object in the BlobStore.
-template<typename T>
+template <typename T>
 struct SerializeTraits<blob_store::BlobStoreObject<T>> {
-    static size_t Size(const blob_store::BlobStoreObject<T>& s) {
-        return sizeof(size_t);
-    }
+  static size_t Size(const blob_store::BlobStoreObject<T>& s) {
+    return sizeof(size_t);
+  }
 
-    static void Serialize(char* buffer, const blob_store::BlobStoreObject<T>& s) {
-        size_t index = s.Index();
-        memcpy(buffer, &index, sizeof(size_t));
-    }
+  static void Serialize(char* buffer, const blob_store::BlobStoreObject<T>& s) {
+    size_t index = s.Index();
+    memcpy(buffer, &index, sizeof(size_t));
+  }
 
-    static void Deserialize(const char* buffer, blob_store::BlobStoreObject<T>* s) {
-        size_t index;
-        memcpy(&index, buffer, sizeof(size_t));
-        *s = BlobStoreObject<T>(s->store(), index);
-    }
+  static void Deserialize(const char* buffer,
+                          blob_store::BlobStoreObject<T>* s) {
+    size_t index;
+    memcpy(&index, buffer, sizeof(size_t));
+    *s = BlobStoreObject<T>(s->store(), index);
+  }
 };
-
 
 #endif  // BLOB_STORE_OBJECT_H_

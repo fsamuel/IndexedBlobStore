@@ -64,6 +64,10 @@ class BlobStore : public BlobStoreBase {
       BlobStoreObject<T>>::type
   New(std::initializer_list<typename StorageTraits<T>::ElementType> initList);
 
+  // Creates a new BlobStoreObject<char[]> that consists of a serialized T type.
+  template <typename T>
+  BlobStoreObject<char[]> Serialize(const T& object);
+
   // Gets the object of type T at the specified index.
   template <typename T>
   BlobStoreObject<T> GetMutable(size_t index) {
@@ -247,6 +251,14 @@ typename std::enable_if<
 BlobStore::New(
     std::initializer_list<typename StorageTraits<T>::ElementType> initList) {
   return NewImpl<T>(initList);
+}
+
+template <typename T>
+BlobStoreObject<char[]> BlobStore::Serialize(const T& object) {
+  size_t size = SerializeTraits<T>::Size(object);
+  BlobStoreObject<char[]> blob = New<char[]>(size);
+  SerializeTraits<T>::Serialize(&blob[0], object);
+  return blob;
 }
 
 template <typename T, typename... Args>
