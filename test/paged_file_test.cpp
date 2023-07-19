@@ -73,7 +73,7 @@ TEST_F(PagedFileTest, SparseFile) {
 // Similar to SparseFile but performs the write operations in a transaction.
 TEST_F(PagedFileTest, SparseFileTransaction) {
   BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-				  std::move(*dataBuffer));
+                  std::move(*dataBuffer));
   PagedFile file = PagedFile<6, 32>::Create(&store);
 
   char buffer[16];
@@ -89,18 +89,18 @@ TEST_F(PagedFileTest, SparseFileTransaction) {
   char read_buffer[512];
   file.Read(&read_buffer[0], sizeof(read_buffer));
   for (std::size_t i = 0; i < 512; ++i) {
-	if (i < 16 || i >= 496) {
-	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
-	} else {
-	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
-	}
+    if (i < 16 || i >= 496) {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
+    } else {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
+    }
   }
 }
 
 // Similar to SparseFile, but partially overwrites previously written data.
 TEST_F(PagedFileTest, SparseFileOverwrite) {
   BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-				  std::move(*dataBuffer));
+                  std::move(*dataBuffer));
   EXPECT_EQ(store.GetSize(), 0);
   PagedFile file = PagedFile<6, 32>::Create(&store);
   char buffer[16];
@@ -118,57 +118,56 @@ TEST_F(PagedFileTest, SparseFileOverwrite) {
   char read_buffer[512];
   file.Read(&read_buffer[0], sizeof(read_buffer));
   for (std::size_t i = 0; i < 512; ++i) {
-	if (i < 16) {
-	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 3);
-	} else if (i >= 16 && i < 496) {
-	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
-	} else {
-	  EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
-	}
+    if (i < 16) {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 3);
+    } else if (i >= 16 && i < 496) {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 0);
+    } else {
+      EXPECT_EQ(static_cast<uint8_t>(read_buffer[i]), 2);
+    }
   }
 }
 
 // Four threads concurrently writing to a single file in different locations.
 TEST_F(PagedFileTest, ConcurrentWrites) {
-	BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
-		std::move(*dataBuffer));
-	EXPECT_EQ(store.GetSize(), 0);
-	PagedFile file = PagedFile<9, 128>::Create(&store);
-	constexpr std::size_t BUFFER_SIZE = 1024;
-	char write_buffer[BUFFER_SIZE];
-	// Fill the write buffer with random bits.
-	for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
-		write_buffer[i] = static_cast<uint8_t>(i % 256);
-	}
-	constexpr std::size_t NUM_THREADS = 8;
-	std::vector<std::thread> threads;
-	for (int i = 0; i < NUM_THREADS; i++) {
-		threads.push_back(std::thread([i, &file, &write_buffer, BUFFER_SIZE]() {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
+  EXPECT_EQ(store.GetSize(), 0);
+  PagedFile file = PagedFile<9, 128>::Create(&store);
+  constexpr std::size_t BUFFER_SIZE = 1024;
+  char write_buffer[BUFFER_SIZE];
+  // Fill the write buffer with random bits.
+  for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
+    write_buffer[i] = static_cast<uint8_t>(i % 256);
+  }
+  constexpr std::size_t NUM_THREADS = 8;
+  std::vector<std::thread> threads;
+  for (int i = 0; i < NUM_THREADS; i++) {
+    threads.push_back(std::thread([i, &file, &write_buffer, BUFFER_SIZE]() {
+      while (true) {
+        Transaction transaction = file.CreateTransaction();
+        transaction.Seek(i * BUFFER_SIZE);
+        transaction.Write(&write_buffer[0], sizeof(write_buffer));
+        if (std::move(transaction).Commit()) {
+          break;
+        }
+      }
+    }));
+  }
 
-			while (true) {
-				Transaction transaction = file.CreateTransaction();
-				transaction.Seek(i * BUFFER_SIZE);
-				transaction.Write(&write_buffer[0], sizeof(write_buffer));
-				if (std::move(transaction).Commit()) {
-					break;
-				}
-			}
-			}));
-	}
+  for (auto& thread : threads) {
+    thread.join();
+  }
 
-	for (auto& thread : threads) {
-		thread.join();
-	}
+  EXPECT_EQ(file.GetSize(), NUM_THREADS * BUFFER_SIZE);
 
-	EXPECT_EQ(file.GetSize(), NUM_THREADS * BUFFER_SIZE);
-
-	char read_buffer[BUFFER_SIZE];
-	for (int i = 0; i < NUM_THREADS; ++i) {
-		file.Seek(i * BUFFER_SIZE);
-		file.Read(&read_buffer[0], sizeof(read_buffer));
-		EXPECT_EQ(file.Tell(), (i + 1) * BUFFER_SIZE);
-		for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
-			EXPECT_EQ(static_cast<uint32_t>(read_buffer[i]), write_buffer[i]);
-		}
-	}
+  char read_buffer[BUFFER_SIZE];
+  for (int i = 0; i < NUM_THREADS; ++i) {
+    file.Seek(i * BUFFER_SIZE);
+    file.Read(&read_buffer[0], sizeof(read_buffer));
+    EXPECT_EQ(file.Tell(), (i + 1) * BUFFER_SIZE);
+    for (std::size_t i = 0; i < BUFFER_SIZE; ++i) {
+      EXPECT_EQ(static_cast<uint32_t>(read_buffer[i]), write_buffer[i]);
+    }
+  }
 }

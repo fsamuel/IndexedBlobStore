@@ -102,13 +102,13 @@ class BlobStoreObject {
   ElementType& operator[](size_t i) {
     assert(control_block_ != nullptr);
     assert(control_block_->ptr_ != nullptr);
-    return (*control_block_->ptr_)[i];
+    return StorageTraits<T>::GetElement(control_block_->ptr_, i);
   }
 
   const ElementType& operator[](size_t i) const {
     assert(control_block_ != nullptr);
     assert(control_block_->ptr_ != nullptr);
-    return (*control_block_->ptr_)[i];
+    return StorageTraits<T>::GetElement(control_block_->ptr_, i);
   }
 
   // Clone this BlobStoreObject, creating a new blob in the BlobStore

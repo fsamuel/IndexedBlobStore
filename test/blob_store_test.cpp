@@ -280,6 +280,83 @@ TEST_F(BlobStoreTest, CharArray) {
   EXPECT_EQ(*ptr, "Hello, world!");
 }
 
+// Creates a blob that's a uint8_t array with an unspecified length in the type.
+TEST_F(BlobStoreTest, DynamicUint8Array) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+                  std::move(*dataBuffer));
+  BlobStoreObject<uint8_t[]> ptr = store.New<uint8_t[]>(256);
+  EXPECT_GE(ptr.GetSize(), 256);
+
+  // Write some values into the array.
+  for (int i = 0; i < 256; i++) {
+    ptr[i] = i;
+  }
+  // Read the values back out.
+  for (int i = 0; i < 256; i++) {
+    EXPECT_EQ(ptr[i], i);
+  }
+}
+
+// Creates a blob that's an int array with an unspecified length in the type.
+TEST_F(BlobStoreTest, DynamicIntArray) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+				  std::move(*dataBuffer));
+  BlobStoreObject<int[]> ptr = store.New<int[]>(256);
+  EXPECT_GE(ptr.GetSize(), 256 * sizeof(int));
+
+  // Write some values into the array.
+  for (int i = 0; i < 256; i++) {
+	ptr[i] = i;
+  }
+  // Read the values back out.
+  for (int i = 0; i < 256; i++) {
+	EXPECT_EQ(ptr[i], i);
+  }
+}
+
+// Similar to DynamicIntArray but initializes the array with an initializer list.
+TEST_F(BlobStoreTest, DynamicIntArrayWithInitializerList) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+				  std::move(*dataBuffer));
+  BlobStoreObject<int[]> ptr = store.New<int[]>({1, 2, 3, 4});
+  EXPECT_GE(ptr.GetSize(), 4 * sizeof(int));
+
+  // Read the values back out.
+  for (int i = 0; i < 4; i++) {
+	EXPECT_EQ(ptr[i], i + 1);
+  }
+}
+
+// Similar to DynamicIntArray but with doubles.
+TEST_F(BlobStoreTest, DynamicDoubleArray) {
+    BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+        std::move(*dataBuffer));
+    BlobStoreObject<double[]> ptr = store.New<double[]>(256);
+    EXPECT_GE(ptr.GetSize(), 256 * sizeof(double));
+
+    // Write some values into the array.
+    for (int i = 0; i < 256; i++) {
+        ptr[i] = i;
+    }
+    // Read the values back out.
+    for (int i = 0; i < 256; i++) {
+        EXPECT_EQ(ptr[i], i);
+    }
+}
+
+// Similar to DynamicDoubleArray but initializes the array with an initializer list.
+TEST_F(BlobStoreTest, DynamicDoubleArrayWithInitializerList) {
+	BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+		std::move(*dataBuffer));
+	BlobStoreObject<double[]> ptr = store.New<double[]>({ 1.0, 2.0, 3.0, 4.0 });
+	EXPECT_GE(ptr.GetSize(), 4 * sizeof(double));
+
+	// Read the values back out.
+	for (int i = 0; i < 4; i++) {
+		EXPECT_EQ(ptr[i], i + 1);
+	}
+}
+
 // Create a blob that's an int array, and populate it with some values. Verify
 // that the values are the same as the original values.
 TEST_F(BlobStoreTest, IntArray) {

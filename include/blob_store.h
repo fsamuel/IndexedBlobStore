@@ -44,11 +44,17 @@ class BlobStore : public BlobStoreBase {
   // BlobStore and returns a BlobStoreObject.
   template <typename T, typename... Args>
   typename std::enable_if<
-      std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
+      !is_unsized_array<T>::value &&
+          std::is_standard_layout<
+              typename StorageTraits<T>::StorageType>::value &&
           std::is_trivially_copyable<
               typename StorageTraits<T>::StorageType>::value,
       BlobStoreObject<T>>::type
   New(Args&&... args);
+
+  template <typename T>
+  typename std::enable_if<is_unsized_array<T>::value, BlobStoreObject<T>>::type
+  New(size_t size);
 
   template <typename T>
   typename std::enable_if<
@@ -188,6 +194,10 @@ class BlobStore : public BlobStoreBase {
   NewImpl(
       std::initializer_list<typename StorageTraits<T>::ElementType> initList);
 
+  template <typename T>
+  typename std::enable_if<is_unsized_array<T>::value, BlobStoreObject<T>>::type
+  NewImpl(size_t size);
+
   // Returns the index of the first free slot in the metadata vector.
   size_t FindFreeSlot();
 
@@ -212,13 +222,20 @@ class BlobStore : public BlobStoreBase {
 };
 
 template <typename T, typename... Args>
-typename std::enable_if<
-    std::is_standard_layout<typename StorageTraits<T>::StorageType>::value &&
-        std::is_trivially_copyable<
-            typename StorageTraits<T>::StorageType>::value,
-    BlobStoreObject<T>>::type
+typename std::enable_if<!is_unsized_array<T>::value &&
+                            std::is_standard_layout<typename StorageTraits<
+                                T>::StorageType>::value &&
+                            std::is_trivially_copyable<
+                                typename StorageTraits<T>::StorageType>::value,
+                        BlobStoreObject<T>>::type
 BlobStore::New(Args&&... args) {
   return NewImpl<T>(std::forward<Args>(args)...);
+}
+
+template <typename T>
+typename std::enable_if<is_unsized_array<T>::value, BlobStoreObject<T>>::type
+BlobStore::New(size_t size) {
+  return NewImpl<T>(size);
 }
 
 template <typename T>
@@ -270,6 +287,23 @@ BlobStore::NewImpl(
                           reinterpret_cast<ElementType*>(ptr));
   BlobMetadata& metadata = metadata_[index];
   metadata.size = size;
+  metadata.offset = allocator_.ToIndex(ptr);
+  assert(metadata.offset != ShmAllocator::InvalidIndex);
+  metadata.lock_state = 0;
+  metadata.next_free_index = -1;
+  return BlobStoreObject<T>(this, index);
+}
+
+template <typename T>
+typename std::enable_if<is_unsized_array<T>::value, BlobStoreObject<T>>::type
+BlobStore::NewImpl(size_t size) {
+  using ElementType = typename StorageTraits<T>::ElementType;
+  using BaseType = typename std::remove_extent<ElementType>::type;
+  size_t index = FindFreeSlot();
+  size_t size_in_bytes = size * sizeof(BaseType);
+  uint8_t* ptr = allocator_.Allocate(size_in_bytes);
+  BlobMetadata& metadata = metadata_[index];
+  metadata.size = size_in_bytes;
   metadata.offset = allocator_.ToIndex(ptr);
   assert(metadata.offset != ShmAllocator::InvalidIndex);
   metadata.lock_state = 0;

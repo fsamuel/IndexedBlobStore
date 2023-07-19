@@ -659,7 +659,7 @@ bool BPlusTree<KeyType, ValueType, Order>::BorrowFromLeftSibling(
     new_right_sibling_internal_node->children[0] =
         new_left_sibling_internal_node
             ->children[new_left_sibling_internal_node->num_keys()];
- 
+
     new_right_sibling->set_key(0, parent_node->get_key(child_index - 1));
   } else {
     auto new_right_sibling_leaf_node = new_right_sibling.To<LeafNode>();
