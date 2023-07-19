@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "blob_store_base.h"
+#include "serialize_traits.h"
 #include "storage_traits.h"
 
 namespace blob_store {
@@ -390,5 +391,26 @@ BlobStoreObject<T>::BlobStoreObject::ControlBlock::ControlBlock(
 }
 
 }  // namespace blob_store
+
+// SerializeTraits for BlobStoreObject<T>. This just stores the index of the
+// object in the BlobStore.
+template<typename T>
+struct SerializeTraits<blob_store::BlobStoreObject<T>> {
+    static size_t Size(const blob_store::BlobStoreObject<T>& s) {
+        return sizeof(size_t);
+    }
+
+    static void Serialize(char* buffer, const blob_store::BlobStoreObject<T>& s) {
+        size_t index = s.Index();
+        memcpy(buffer, &index, sizeof(size_t));
+    }
+
+    static void Deserialize(const char* buffer, blob_store::BlobStoreObject<T>* s) {
+        size_t index;
+        memcpy(&index, buffer, sizeof(size_t));
+        *s = BlobStoreObject<T>(s->store(), index);
+    }
+};
+
 
 #endif  // BLOB_STORE_OBJECT_H_

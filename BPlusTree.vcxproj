@@ -161,6 +161,7 @@
     <ClInclude Include="include\paged_file_nodes.h" />
     <ClInclude Include="include\b_plus_tree_nodes.h" />
     <ClInclude Include="include\paged_file_transaction.h" />
+    <ClInclude Include="include\serialize_traits.h" />
     <ClInclude Include="include\shared_memory_buffer.h" />
     <ClInclude Include="include\shared_memory_buffer_factory.h" />
     <ClInclude Include="include\shm_allocator.h" />

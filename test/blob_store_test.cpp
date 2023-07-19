@@ -4,6 +4,7 @@
 #include "b_plus_tree_nodes.h"
 #include "chunk_manager.h"
 #include "fixed_string.h"
+#include "serialize_traits.h"
 #include "test_memory_buffer_factory.h"
 
 using namespace b_plus_tree;
@@ -540,4 +541,17 @@ TEST_F(BlobStoreTest, IntArrayConcurrentClone) {
       }
     }
   }
+}
+
+// Use SerializeTraits to serialize a vector of strings to a blob and then deserialize again.
+TEST_F(BlobStoreTest, SerializeTraits) {
+  BlobStore store(TestMemoryBufferFactory::Get(), "MetadataBuffer", 4096,
+				  std::move(*dataBuffer));
+  std::vector<std::string> input = {"Hello", "World"};
+  size_t serialized_size = SerializeTraits<std::vector<std::string>>::Size(input);
+  BlobStoreObject<char[]> ptr = store.New<char[]>(serialized_size);
+  SerializeTraits<std::vector<std::string>>::Serialize(&ptr[0], input);
+  std::vector<std::string> output;
+  SerializeTraits<std::vector<std::string>>::Deserialize(&ptr[0], &output);
+  EXPECT_EQ(input, output);
 }
