@@ -121,11 +121,21 @@ class BlobStoreObject {
   }
 
   // Deserializes the content of the blob into the provided object.
-  template <typename U>
-  void Deserialize(U* obj) const {
+  template <typename U, typename V = T>
+  typename std::enable_if<!std::is_same<U, BlobStoreObject<V>>::value>::type
+  Deserialize(U* obj) const {
     assert(control_block_ != nullptr);
     assert(control_block_->ptr_ != nullptr);
     SerializeTraits<U>::Deserialize(
+        &StorageTraits<T>::GetElement(control_block_->ptr_, 0), obj);
+  }
+
+  template <typename U>
+  void Deserialize(BlobStoreObject<U>* obj) const {
+    assert(control_block_ != nullptr);
+    assert(control_block_->ptr_ != nullptr);
+    *obj = BlobStoreObject<U>(control_block_->store_, 0);
+    SerializeTraits<BlobStoreObject<U>>::Deserialize(
         &StorageTraits<T>::GetElement(control_block_->ptr_, 0), obj);
   }
 
@@ -418,7 +428,7 @@ struct SerializeTraits<blob_store::BlobStoreObject<T>> {
                           blob_store::BlobStoreObject<T>* s) {
     size_t index;
     memcpy(&index, buffer, sizeof(size_t));
-    *s = BlobStoreObject<T>(s->store(), index);
+    *s = BlobStoreObject<T>(s->GetBlobStore(), index);
   }
 };
 
