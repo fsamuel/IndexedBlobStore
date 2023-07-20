@@ -428,7 +428,7 @@ struct SerializeTraits<blob_store::BlobStoreObject<T>> {
                           blob_store::BlobStoreObject<T>* s) {
     size_t index;
     memcpy(&index, buffer, sizeof(size_t));
-    *s = BlobStoreObject<T>(s->GetBlobStore(), index);
+    *s = blob_store::BlobStoreObject<T>(s->GetBlobStore(), index);
   }
 };
 

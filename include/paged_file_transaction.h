@@ -46,4 +46,19 @@ class Transaction : public blob_store::Transaction {
 
 }  // namespace paged_file
 
+template <std::size_t NumBlocks, std::size_t BlockSize>
+struct SerializeTraits<paged_file::Transaction<NumBlocks, BlockSize>> {
+    static size_t Size(const paged_file::Transaction<NumBlocks, BlockSize>& transaction) {
+        return SerializeTraits<blob_store::Transaction>::Size(transaction);
+    }
+
+    static void Serialize(char* buffer, const paged_file::Transaction<NumBlocks, BlockSize>& transaction) {
+        SerializeTraits<blob_store::Transaction>::Serialize(buffer, transaction);
+    }
+
+    static void Deserialize(const char* buffer, paged_file::Transaction<NumBlocks, BlockSize>* transaction) {
+        SerializeTraits<blob_store::Transaction>::Deserialize(buffer, transaction);
+    }
+};
+
 #endif  // PAGED_FILE_TRANSACTION_H_

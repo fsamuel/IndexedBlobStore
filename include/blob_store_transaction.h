@@ -6,6 +6,7 @@
 #include <unordered_set>
 
 #include "blob_store.h"
+#include "serialize_traits.h"
 
 namespace blob_store {
 
@@ -123,6 +124,11 @@ class Transaction {
     discarded_objects_.emplace(obj.Index());
   }
 
+  // Serializes this transaction to a Blob in the BlobStore.
+  BlobStoreObject<char[]> Serialize() {
+      return blob_store_->Serialize(*this);
+  }
+
  private:
   BlobStore* blob_store_;
   // Holding onto the old head ensures we retain a snapshot of the tree.
@@ -137,8 +143,45 @@ class Transaction {
   // This is a map from the old index to the new index.
   std::unordered_map<size_t, size_t> mutated_objects_;
   std::unordered_set<size_t> discarded_objects_;
+  friend struct SerializeTraits<Transaction>;
 };
 
 }  // namespace blob_store
+
+template<>
+struct SerializeTraits<blob_store::Transaction> {
+    static size_t Size(const blob_store::Transaction& transaction) {
+        return SerializeTraits<blob_store::BlobStoreObject<blob_store::HeadNode>>::Size(transaction.new_head_) +
+            SerializeTraits<std::unordered_set<size_t>>::Size(transaction.new_objects_) +
+            SerializeTraits<std::unordered_map<size_t, size_t>>::Size(transaction.mutated_objects_) +
+            SerializeTraits<std::unordered_set<size_t>>::Size(transaction.discarded_objects_);
+    }
+
+    static void Serialize(char* buffer, const blob_store::Transaction& transaction) {
+        SerializeTraits<blob_store::BlobStoreObject<blob_store::HeadNode>>::Serialize(buffer, transaction.new_head_);
+		buffer += SerializeTraits<blob_store::BlobStoreObject<blob_store::HeadNode>>::Size(transaction.new_head_);
+
+		SerializeTraits<std::unordered_set<size_t>>::Serialize(buffer, transaction.new_objects_);
+		buffer += SerializeTraits<std::unordered_set<size_t>>::Size(transaction.new_objects_);
+
+		SerializeTraits<std::unordered_map<size_t, size_t>>::Serialize(buffer, transaction.mutated_objects_);
+		buffer += SerializeTraits<std::unordered_map<size_t, size_t>>::Size(transaction.mutated_objects_);
+
+		SerializeTraits<std::unordered_set<size_t>>::Serialize(buffer, transaction.discarded_objects_);
+    }
+
+    static void Deserialize(const char* buffer, blob_store::Transaction* transaction) {
+        SerializeTraits<blob_store::BlobStoreObject<blob_store::HeadNode>>::Deserialize(buffer, &transaction->new_head_);
+		buffer += SerializeTraits<blob_store::BlobStoreObject<blob_store::HeadNode>>::Size(transaction->new_head_);
+
+        SerializeTraits<std::unordered_set<size_t>>::Deserialize(buffer, &transaction->new_objects_);
+		buffer += SerializeTraits<std::unordered_set<size_t>>::Size(transaction->new_objects_);
+
+		SerializeTraits<std::unordered_map<size_t, size_t>>::Deserialize(buffer, &transaction->mutated_objects_);
+        buffer += SerializeTraits<std::unordered_map<size_t, size_t>>::Size(transaction->mutated_objects_);
+
+        SerializeTraits<std::unordered_set<size_t>>::Deserialize(buffer, &transaction->discarded_objects_);
+    }
+};
 
 #endif  // BLOB_STORE_TRANSACTION_H_

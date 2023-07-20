@@ -79,11 +79,20 @@ TEST_F(PagedFileTest, SparseFileTransaction) {
   char buffer[16];
   memset(buffer, 2, sizeof(buffer));
 
-  Transaction transaction = file.CreateTransaction();
-  transaction.Write(&buffer[0], sizeof(buffer));
-  transaction.Seek(496);
-  transaction.Write(&buffer[0], sizeof(buffer));
-  std::move(transaction).Commit();
+  BlobStoreObject<char[]> serialized_transaction;
+
+  {
+      Transaction transaction = file.CreateTransaction();
+      transaction.Write(&buffer[0], sizeof(buffer));
+      transaction.Seek(496);
+      transaction.Write(&buffer[0], sizeof(buffer));
+
+      serialized_transaction = transaction.Serialize();
+      std::move(transaction).Commit();
+  }
+
+  Transaction deserialized_transaction = file.CreateTransaction();
+  serialized_transaction.Deserialize(&deserialized_transaction);
 
   file.Seek(0);
   char read_buffer[512];
